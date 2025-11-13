@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Design Showcase - Hebrew AI 2025</title>
+    <link rel="stylesheet" href="../css/variables.css">
+    <link rel="stylesheet" href="../css/animations.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/modern-design.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #0a0e27 0%, #141829 50%, #1f2a4a 100%);
+            background-attachment: fixed;
+        }
+
+        .page-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 32px;
+            margin-top: 48px;
+        }
+
+        .section-title:first-child {
+            margin-top: 0;
+        }
+
+        .warm-accent {
+            color: #ff6b35;
+        }
+
+        .teal-accent {
+            color: #00d4d4;
+        }
+
+        .lime-accent {
+            color: #7eff00;
+        }
+
+        .showcase-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .code-example {
+            background: rgba(10, 14, 39, 0.8);
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #7eff00;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #00d4d4;
+            text-decoration: none;
+            margin-bottom: 32px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #ff6b35;
+            transform: translateX(-4px);
+        }
+
+        .component-demo {
+            background: rgba(52, 73, 94, 0.12);
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 768px) {
+            .feature-grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-content">
+        <a href="../START_HERE.html" class="back-link">← Back to Start</a>
+
+        <h1 style="font-size: 3rem; margin-bottom: 16px;">
+            ✨ Modern Design <span class="warm-accent">Showcase</span>
+        </h1>
+        <p style="color: #9ca3af; font-size: 1.1rem; margin-bottom: 48px;">
+            Explore all the modernized components with warm colors, interactive effects, and smooth animations.
+        </p>
+
+        <!-- Modern Cards Section -->
+        <h2 class="section-title">Modern Cards</h2>
+        <div class="showcase-grid">
+            <div class="modern-card pop-in" style="animation-delay: 0s;">
+                <div style="font-size: 2.5rem; margin-bottom: 16px;">🎨</div>
+                <h3 style="font-size: 1.25rem; margin-bottom: 12px;">Glassmorphism</h3>
+                <p style="color: #9ca3af; margin-bottom: 16px;">
+                    Modern frosted glass effect with warm color accents and smooth transitions.
+                </p>
+                <a href="#" class="btn-warm">Learn More →</a>
+            </div>
+
+            <div class="modern-card pop-in" style="animation-delay: 0.1s;">
+                <div style="font-size: 2.5rem; margin-bottom: 16px;">🎬</div>
+                <h3 style="font-size: 1.25rem; margin-bottom: 12px;">Animations</h3>
+                <p style="color: #9ca3af; margin-bottom: 16px;">
+                    Smooth parallax, scroll reveals, and micro-interactions for engagement.
+                </p>
+                <a href="#" class="btn-teal">Discover →</a>
+            </div>
+
+            <div class="modern-card pop-in" style="animation-delay: 0.2s;">
+                <div style="font-size: 2.5rem; margin-bottom: 16px;">🌈</div>
+                <h3 style="font-size: 1.25rem; margin-bottom: 12px;">Colors</h3>
+                <p style="color: #9ca3af; margin-bottom: 16px;">
+                    Warm energetic palette with orange, teal, and lime green accents.
+                </p>
+                <a href="#" class="btn-lime">Explore →</a>
+            </div>
+        </div>
+
+        <!-- Buttons Section -->
+        <h2 class="section-title">Interactive Buttons</h2>
+        <div class="component-demo">
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px;">
+                <button class="btn-warm">Orange Button</button>
+                <button class="btn-teal">Teal Button</button>
+                <button class="btn-lime">Lime Button</button>
+            </div>
+            <div class="code-example">
+&lt;button class="btn-warm"&gt;Orange Button&lt;/button&gt;
+&lt;button class="btn-teal"&gt;Teal Button&lt;/button&gt;
+&lt;button class="btn-lime"&gt;Lime Button&lt;/button&gt;
+            </div>
+        </div>
+
+        <!-- Feature Badges -->
+        <h2 class="section-title">Feature Badges</h2>
+        <div class="component-demo">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;">
+                <span class="feature-badge">✨ Modern</span>
+                <span class="feature-badge teal">🎯 Fast</span>
+                <span class="feature-badge lime">⚡ Responsive</span>
+                <span class="feature-badge">🌙 Dark Theme</span>
+            </div>
+            <div class="code-example">
+&lt;span class="feature-badge"&gt;✨ Modern&lt;/span&gt;
+&lt;span class="feature-badge teal"&gt;🎯 Fast&lt;/span&gt;
+&lt;span class="feature-badge lime"&gt;⚡ Responsive&lt;/span&gt;
+            </div>
+        </div>
+
+        <!-- Stat Cards -->
+        <h2 class="section-title">Stat Cards with Animations</h2>
+        <div class="feature-grid-3">
+            <div class="stat-card-modern bounce-in">
+                <div class="stat-number-modern" data-counter="100">0</div>
+                <p style="color: #9ca3af;">Happy Users</p>
+            </div>
+            <div class="stat-card-modern bounce-in" style="animation-delay: 0.1s;">
+                <div class="stat-number-modern" data-counter="50">0</div>
+                <p style="color: #9ca3af;">Lessons</p>
+            </div>
+            <div class="stat-card-modern bounce-in" style="animation-delay: 0.2s;">
+                <div class="stat-number-modern" data-counter="1000">0</div>
+                <p style="color: #9ca3af;">Hours Learned</p>
+            </div>
+        </div>
+
+        <!-- Hero Section -->
+        <h2 class="section-title">Hero Section</h2>
+        <div class="hero-modern">
+            <h2 style="font-size: 2.5rem; margin-bottom: 16px;">
+                Welcome to the Future of <span class="warm-accent">Learning</span>
+            </h2>
+            <p style="color: #9ca3af; font-size: 1.1rem; margin-bottom: 24px; max-width: 600px;">
+                Experience modern design with warm energetic colors, smooth animations, and interactive elements. Built for tech-savvy teens who want to learn Hebrew the modern way.
+            </p>
+            <div style="display: flex; gap: 16px;">
+                <button class="btn-warm">Get Started</button>
+                <button class="btn-teal">Learn More</button>
+            </div>
+        </div>
+
+        <!-- Building Shapes -->
+        <h2 class="section-title">Accent Elements</h2>
+        <div class="component-demo">
+            <div class="building-shape">
+                <strong style="color: #ff6b35;">Orange Accent</strong>
+                <p style="color: #9ca3af;">Tech campus inspired left border accent</p>
+            </div>
+            <div class="building-shape teal">
+                <strong style="color: #00d4d4;">Teal Accent</strong>
+                <p style="color: #9ca3af;">Modern design with dynamic color shifts</p>
+            </div>
+            <div class="building-shape lime">
+                <strong style="color: #7eff00;">Lime Accent</strong>
+                <p style="color: #9ca3af;">Energetic highlight for important content</p>
+            </div>
+        </div>
+
+        <!-- Text Effects -->
+        <h2 class="section-title">Text Effects</h2>
+        <div class="component-demo">
+            <p class="neon-text" style="font-size: 1.5rem; margin-bottom: 16px;">
+                ✨ Neon Orange Text
+            </p>
+            <p class="neon-text teal" style="font-size: 1.5rem; margin-bottom: 16px;">
+                💎 Neon Teal Text
+            </p>
+            <p class="neon-text lime" style="font-size: 1.5rem; margin-bottom: 16px;">
+                ⚡ Neon Lime Text
+            </p>
+        </div>
+
+        <!-- Design Guidelines -->
+        <h2 class="section-title">Design Guidelines</h2>
+        <div class="component-demo">
+            <h3 style="margin-bottom: 16px;">Color Palette</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 32px;">
+                <div style="padding: 24px; background: #ff6b35; border-radius: 12px; text-align: center;">
+                    <p style="font-size: 0.9rem; margin-bottom: 8px;">Primary Orange</p>
+                    <code style="font-size: 0.8rem;">#ff6b35</code>
+                </div>
+                <div style="padding: 24px; background: #00d4d4; border-radius: 12px; text-align: center; color: #0a0e27;">
+                    <p style="font-size: 0.9rem; margin-bottom: 8px;">Teal Accent</p>
+                    <code style="font-size: 0.8rem;">#00d4d4</code>
+                </div>
+                <div style="padding: 24px; background: #7eff00; border-radius: 12px; text-align: center; color: #0a0e27;">
+                    <p style="font-size: 0.9rem; margin-bottom: 8px;">Lime Green</p>
+                    <code style="font-size: 0.8rem;">#7eff00</code>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 16px;">Animation Features</h3>
+            <ul style="color: #9ca3af; line-height: 1.8;">
+                <li><strong>Parallax Scroll:</strong> Elements shift based on scroll position</li>
+                <li><strong>Reveal on Scroll:</strong> Elements fade in as they enter viewport</li>
+                <li><strong>Belt Accent:</strong> Rotating circular decorative elements</li>
+                <li><strong>Neon Glow:</strong> Dynamic glow effects on hover</li>
+                <li><strong>Pop-In:</strong> Spring-loaded entrance animations</li>
+                <li><strong>Staggered Delays:</strong> Sequential animations for lists</li>
+            </ul>
+        </div>
+
+        <!-- Implementation Guide -->
+        <h2 class="section-title">Quick Implementation</h2>
+        <div class="component-demo">
+            <h3 style="margin-bottom: 16px;">Using Modern Cards</h3>
+            <div class="code-example">
+&lt;div class="modern-card"&gt;
+  &lt;h3&gt;Title&lt;/h3&gt;
+  &lt;p&gt;Description&lt;/p&gt;
+  &lt;button class="btn-warm"&gt;Action&lt;/button&gt;
+&lt;/div&gt;
+            </div>
+
+            <h3 style="margin-bottom: 16px;">Scroll Animations</h3>
+            <div class="code-example">
+&lt;div data-scroll class="reveal-on-scroll"&gt;
+  This will fade in when scrolled into view
+&lt;/div&gt;
+
+&lt;div data-parallax class="parallax"&gt;
+  This will move with parallax effect
+&lt;/div&gt;
+            </div>
+
+            <h3 style="margin-bottom: 16px;">Counter Animation</h3>
+            <div class="code-example">
+&lt;div data-counter="100"&gt;0&lt;/div&gt;
+
+// Initialize in JavaScript:
+new CounterAnimation();
+            </div>
+        </div>
+
+        <div class="divider-modern"></div>
+
+        <div style="text-align: center; padding: 40px 20px; margin-bottom: 40px;">
+            <h2 style="margin-bottom: 16px;">Ready to Modernize Your Site?</h2>
+            <p style="color: #9ca3af; margin-bottom: 24px;">
+                Use the CSS classes and components from this showcase in your pages.
+            </p>
+            <a href="../START_HERE.html" class="btn-warm">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script src="../js/scroll-animations.js"></script>
+</body>
+</html>

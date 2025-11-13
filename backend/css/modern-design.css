@@ -1,0 +1,466 @@
+/* Modern Design System - Teen-Focused with Warm Colors */
+
+/* Enhanced Background with Tech Campus SVG Overlay */
+body {
+    background: linear-gradient(135deg, #0a0e27 0%, #141829 50%, #1f2a4a 100%);
+    background-attachment: fixed;
+    position: relative;
+}
+
+/* Tech Campus Decorative Background */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        radial-gradient(circle at 20% 50%, rgba(255, 107, 53, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(0, 212, 212, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 50% 30%, rgba(126, 255, 0, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+    animation: techCampusShift 20s ease infinite;
+}
+
+@keyframes techCampusShift {
+    0%, 100% {
+        background:
+            radial-gradient(circle at 20% 50%, rgba(255, 107, 53, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(0, 212, 212, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 50% 30%, rgba(126, 255, 0, 0.05) 0%, transparent 50%);
+    }
+    50% {
+        background:
+            radial-gradient(circle at 80% 50%, rgba(255, 107, 53, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 20% 80%, rgba(0, 212, 212, 0.08) 0%, transparent 50%),
+            radial-gradient(circle at 50% 70%, rgba(126, 255, 0, 0.05) 0%, transparent 50%);
+    }
+}
+
+/* Modern Card with Warm Gradient */
+.modern-card {
+    background: linear-gradient(135deg, rgba(52, 73, 94, 0.12) 0%, rgba(52, 73, 94, 0.08) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1.5px solid rgba(255, 107, 53, 0.2);
+    border-radius: 24px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.modern-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 107, 53, 0.2) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.modern-card:hover {
+    border-color: rgba(255, 107, 53, 0.5);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 20px 40px rgba(255, 107, 53, 0.25),
+        0 0 40px rgba(255, 107, 53, 0.15);
+    background: linear-gradient(135deg, rgba(52, 73, 94, 0.18) 0%, rgba(52, 73, 94, 0.12) 100%);
+}
+
+.modern-card:hover::before {
+    opacity: 1;
+}
+
+/* Belt Accent Element - Circular Decorative */
+.belt-accent-container {
+    position: relative;
+    display: inline-block;
+}
+
+.belt-accent {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border: 3px solid var(--orange);
+    border-radius: 50%;
+    top: -30px;
+    right: -30px;
+    opacity: 0.3;
+    animation: rotateBelt 8s linear infinite;
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+}
+
+.belt-accent::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 3px dashed var(--teal);
+    border-radius: 50%;
+    top: 8px;
+    left: 8px;
+    opacity: 0.6;
+}
+
+/* Warm Gradient Button */
+.btn-warm {
+    background: linear-gradient(135deg, var(--orange) 0%, var(--orange-light) 100%);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 12px 28px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(255, 107, 53, 0.35);
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-warm::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.2);
+    transition: left 0.3s ease;
+}
+
+.btn-warm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 36px rgba(255, 107, 53, 0.5);
+}
+
+.btn-warm:hover::before {
+    left: 100%;
+}
+
+.btn-warm:active {
+    transform: translateY(0);
+}
+
+/* Teal Accent Button */
+.btn-teal {
+    background: linear-gradient(135deg, var(--teal) 0%, var(--teal-light) 100%);
+    color: #0a0e27;
+    border: none;
+    border-radius: 16px;
+    padding: 12px 28px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 212, 212, 0.35);
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-teal:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 36px rgba(0, 212, 212, 0.5);
+}
+
+.btn-teal:active {
+    transform: translateY(0);
+}
+
+/* Lime Accent Button */
+.btn-lime {
+    background: linear-gradient(135deg, var(--lime) 0%, var(--lime-light) 100%);
+    color: #0a0e27;
+    border: none;
+    border-radius: 16px;
+    padding: 12px 28px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(126, 255, 0, 0.35);
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-lime:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 36px rgba(126, 255, 0, 0.5);
+}
+
+.btn-lime:active {
+    transform: translateY(0);
+}
+
+/* Feature Badge with Warm Colors */
+.feature-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(255, 107, 53, 0.15);
+    border: 1px solid rgba(255, 107, 53, 0.3);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--orange-light);
+    backdrop-filter: blur(10px);
+}
+
+.feature-badge.teal {
+    background: rgba(0, 212, 212, 0.15);
+    border-color: rgba(0, 212, 212, 0.3);
+    color: var(--teal-light);
+}
+
+.feature-badge.lime {
+    background: rgba(126, 255, 0, 0.15);
+    border-color: rgba(126, 255, 0, 0.3);
+    color: var(--lime-light);
+}
+
+/* Tech Campus Building SVG-Style Shapes */
+.building-shape {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, transparent 100%);
+    border-left: 4px solid var(--orange);
+    padding-left: 20px;
+    margin-bottom: 16px;
+    border-radius: 8px;
+}
+
+.building-shape.teal {
+    border-left-color: var(--teal);
+    background: linear-gradient(135deg, rgba(0, 212, 212, 0.1) 0%, transparent 100%);
+}
+
+.building-shape.lime {
+    border-left-color: var(--lime);
+    background: linear-gradient(135deg, rgba(126, 255, 0, 0.1) 0%, transparent 100%);
+}
+
+/* Scrolling Text Animation */
+.scroll-text {
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.scroll-text span {
+    display: inline-block;
+    animation: scrollText 20s linear infinite;
+}
+
+@keyframes scrollText {
+    0% {
+        transform: translateX(100%);
+    }
+    100% {
+        transform: translateX(-100%);
+    }
+}
+
+/* Stat Card with Warm Accent */
+.stat-card-modern {
+    background: linear-gradient(135deg, rgba(52, 73, 94, 0.12) 0%, rgba(52, 73, 94, 0.08) 100%);
+    border: 1px solid rgba(255, 107, 53, 0.2);
+    border-radius: 20px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.stat-card-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--orange), var(--teal));
+    border-radius: 20px 0 0 20px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(255, 107, 53, 0.2);
+    border-color: rgba(255, 107, 53, 0.4);
+}
+
+.stat-card-modern:hover::before {
+    opacity: 1;
+}
+
+.stat-number-modern {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--orange), var(--teal));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+}
+
+/* Hero Section with Warm Gradient */
+.hero-modern {
+    background: linear-gradient(135deg,
+        rgba(255, 107, 53, 0.15) 0%,
+        rgba(0, 212, 212, 0.1) 50%,
+        rgba(126, 255, 0, 0.05) 100%);
+    border-radius: 32px;
+    padding: 48px;
+    margin-bottom: 40px;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 107, 53, 0.2);
+}
+
+.hero-modern::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(255, 107, 53, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: floatShape 6s ease-in-out infinite;
+}
+
+.hero-modern::after {
+    content: '';
+    position: absolute;
+    bottom: -50%;
+    left: -50%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 212, 212, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: floatShape 8s ease-in-out infinite;
+}
+
+@keyframes floatShape {
+    0%, 100% {
+        transform: translate(0, 0);
+    }
+    50% {
+        transform: translate(20px, -20px);
+    }
+}
+
+.hero-modern > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Responsive Grid with Modern Spacing */
+.modern-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-bottom: 40px;
+}
+
+@media (max-width: 768px) {
+    .modern-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
+/* Neon Text Effect */
+.neon-text {
+    color: var(--orange-light);
+    text-shadow:
+        0 0 10px rgba(255, 107, 53, 0.8),
+        0 0 20px rgba(255, 107, 53, 0.6);
+    letter-spacing: 2px;
+}
+
+.neon-text.teal {
+    color: var(--teal-light);
+    text-shadow:
+        0 0 10px rgba(0, 212, 212, 0.8),
+        0 0 20px rgba(0, 212, 212, 0.6);
+}
+
+.neon-text.lime {
+    color: var(--lime-light);
+    text-shadow:
+        0 0 10px rgba(126, 255, 0, 0.8),
+        0 0 20px rgba(126, 255, 0, 0.6);
+}
+
+/* Divider with Gradient */
+.divider-modern {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--orange), var(--teal), var(--lime), transparent);
+    margin: 40px 0;
+    border-radius: 1px;
+}
+
+/* Accent Line */
+.accent-line {
+    position: relative;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+}
+
+.accent-line::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    width: 60px;
+    background: linear-gradient(90deg, var(--orange), var(--teal));
+    border-radius: 3px;
+}
+
+/* Interactive Hover States */
+.interactive-element {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.interactive-element:hover {
+    transform: translateX(4px);
+}
+
+.interactive-element::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 3px;
+    background: var(--orange);
+    transition: width 0.3s ease;
+}
+
+.interactive-element:hover::after {
+    width: 20px;
+}

@@ -1,0 +1,38 @@
+{
+  "name": "hebrew-ai-2025",
+  "version": "2.0.0",
+  "description": "Hebrew AI 2025 - Modern Learning Platform with Neon Cyberpunk Design",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node tests/quick-test.js",
+    "test:full": "node tests/test-api.js",
+    "client": "cd client && npm install && npm start",
+    "build": "npm run lint && npm run test",
+    "lint": "echo 'Linting...'",
+    "seed": "node scripts/seed-data.js"
+  },
+  "keywords": [
+    "hebrew",
+    "learning",
+    "ai",
+    "education",
+    "interactive"
+  ],
+  "author": "Hebrew AI Team",
+  "license": "MIT",
+  "dependencies": {
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "node": "^18.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}

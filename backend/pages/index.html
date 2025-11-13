@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hebrew AI 2025 - Advanced AI-powered Hebrew learning platform with interactive lessons and personalized tracking.">
+    <title>Hebrew AI 2025 - Dashboard</title>
+
+    <!-- CSS Imports -->
+    <link rel="stylesheet" href="../css/variables.css">
+    <link rel="stylesheet" href="../css/animations.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <span>📚</span>
+                <span>Hebrew AI 2025</span>
+            </div>
+
+            <nav class="menu">
+                <div class="menu-item active" data-page="dashboard">
+                    <span class="menu-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="menu-item" data-page="lessons">
+                    <span class="menu-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="menu-item" data-page="dictionary">
+                    <span class="menu-item-icon">📚</span>
+                    <span>Dictionary</span>
+                </div>
+                <div class="menu-item" data-page="quizzes">
+                    <span class="menu-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="menu-item" data-page="progress">
+                    <span class="menu-item-icon">📊</span>
+                    <span>Progress</span>
+                </div>
+                <div class="menu-item" data-page="profile">
+                    <span class="menu-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </nav>
+
+            <div class="neural-toggle" id="neuralToggle">
+                <span>Neural Mode</span>
+                <div class="toggle-switch" id="toggleSwitch"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="welcome-section">
+                    <div class="welcome-title">Welcome back, אליך! 👋</div>
+                    <div class="welcome-subtitle">Let's continue your Hebrew learning journey</div>
+                </div>
+                <div class="ai-recommendation">
+                    <span class="ai-recommendation-icon">✨</span>
+                    <span>+115% learning speed</span>
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+
+                <!-- Neural XP Card -->
+                <div class="glass-card xp-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">⚡</span>
+                        <span>Neural XP</span>
+                    </div>
+                    <div class="xp-header">
+                        <div class="level-circle" id="levelCircle">8</div>
+                        <div class="xp-progress-section">
+                            <div class="xp-progress-label">XP Progress</div>
+                            <div class="xp-progress-value">3,247 / 5,000</div>
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" id="xpProgress" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="xp-stats">
+                        <div class="xp-stat">
+                            <div class="xp-stat-value">🔥 18</div>
+                            <div class="xp-stat-label">Day Streak</div>
+                        </div>
+                        <div class="xp-stat">
+                            <div class="xp-stat-value">⏱️ 47</div>
+                            <div class="xp-stat-label">Minutes Today</div>
+                        </div>
+                        <div class="xp-stat">
+                            <div class="xp-stat-value">🎯 92</div>
+                            <div class="xp-stat-label">Accuracy %</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Learning DNA Card -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🧬</span>
+                        <span>Learning DNA</span>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Visual Learner</span>
+                            <span>85%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="85"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Morning Person</span>
+                            <span>72%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="72"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Grammar Focused</span>
+                            <span>68%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="68"></div>
+                        </div>
+                    </div>
+
+                    <div class="optimal-time">
+                        ⏰ Optimal time: <strong>9:00-10:30 AM</strong>
+                    </div>
+                </div>
+
+                <!-- Achievement Stars Card -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🏆</span>
+                        <span>Achievement Stars</span>
+                    </div>
+                    <div class="achievements-grid">
+                        <div class="achievement-item unlocked">
+                            <div class="achievement-icon">⭐</div>
+                            <div class="achievement-label">First Step</div>
+                        </div>
+                        <div class="achievement-item unlocked">
+                            <div class="achievement-icon">🔥</div>
+                            <div class="achievement-label">Week Master</div>
+                        </div>
+                        <div class="achievement-item">
+                            <div class="achievement-icon">👑</div>
+                            <div class="achievement-label">Grammar King</div>
+                        </div>
+                        <div class="achievement-item">
+                            <div class="achievement-icon">💧</div>
+                            <div class="achievement-label">Vocabulary</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daily Challenges Card -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🎯</span>
+                        <span>Daily Challenges</span>
+                    </div>
+
+                    <div class="challenge-item">
+                        <div class="challenge-icon completed">✓</div>
+                        <div class="challenge-info">
+                            <div class="challenge-title">2 Lessons</div>
+                            <div class="challenge-progress">+150 XP</div>
+                        </div>
+                    </div>
+
+                    <div class="challenge-item">
+                        <div class="challenge-icon in-progress">🏅</div>
+                        <div class="challenge-info">
+                            <div class="challenge-title">15 Words (12/15)</div>
+                            <div class="challenge-progress">+100 XP • 80% complete</div>
+                        </div>
+                    </div>
+
+                    <div class="challenge-item">
+                        <div class="challenge-icon not-started">🎤</div>
+                        <div class="challenge-info">
+                            <div class="challenge-title">10 min pronunciation</div>
+                            <div class="challenge-progress">+75 XP • Start now</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Neural Actions Card -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🚀</span>
+                        <span>Neural Actions</span>
+                    </div>
+                    <div class="actions-grid">
+                        <button class="action-button" onclick="navigateTo('lessons')">
+                            <div class="action-icon">📚</div>
+                            <div class="action-title">Start Lesson</div>
+                        </button>
+                        <button class="action-button" onclick="navigateTo('dictionary')">
+                            <div class="action-icon">🧠</div>
+                            <div class="action-title">AI Dictionary</div>
+                        </button>
+                        <button class="action-button" onclick="navigateTo('quizzes')">
+                            <div class="action-icon">🎯</div>
+                            <div class="action-title">Quiz Time</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Learning Velocity Card -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">📈</span>
+                        <span>Learning Velocity</span>
+                    </div>
+                    <div class="velocity-badge">+115% 🚀</div>
+                    <div class="chart-container" id="chartContainer">
+                        <div class="chart-bar" style="height: 0%;" data-value="85" data-height="85"></div>
+                        <div class="chart-bar" style="height: 0%;" data-value="92" data-height="92"></div>
+                        <div class="chart-bar" style="height: 0%;" data-value="78" data-height="78"></div>
+                        <div class="chart-bar" style="height: 0%;" data-value="88" data-height="88"></div>
+                        <div class="chart-bar" style="height: 0%;" data-value="95" data-height="95"></div>
+                    </div>
+                    <div class="chart-label">📚 287 words mastered</div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Bottom Navigation (Mobile) -->
+        <nav class="bottom-nav">
+            <div class="bottom-nav-items">
+                <div class="bottom-nav-item active" onclick="setActivePage('dashboard')">
+                    <span class="bottom-nav-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('lessons')">
+                    <span class="bottom-nav-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('quizzes')">
+                    <span class="bottom-nav-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('profile')">
+                    <span class="bottom-nav-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </div>
+        </nav>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="../js/main.js"></script>
+</body>
+</html>

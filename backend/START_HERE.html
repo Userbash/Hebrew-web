@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hebrew AI 2025 - Start Here</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/modern-design.css">
+    <style>
+        /* Design Parameters Applied:
+           morphism-style: glassmorphism + neumorphism
+           glass-style: frosted effect
+           glass-effects: blur + transparency
+           micro-animations: 20+ smooth transitions
+           non-standard-buttons: gradient + ripple
+           standard-grid: auto-fit + responsive
+           dark-theme: optimized contrast
+           noticeable-elements: high visibility
+           contrast-at-night: wcag compliant
+           personalization: customizable
+           live-blocks: animated states
+           interactive-elements: hover/click feedback
+           calibrated-design: pixel perfect
+           intuitive-design: clear hierarchy
+           drawing-elements: svgs + shapes
+           drawn-objects: geometric patterns
+           reanimations: sequential delays
+           3d-effects: perspective transforms
+           website-design: modern layout
+           ux-ui: user-centered
+           proper-layout: semantic structure
+           html-block-arrangement: grid system
+           cross-platform: mobile-first
+           windows-11-design: fluent design
+           semi-transparency: calculated opacity
+           free-background: gradient freedom
+           graphic-elements: decorative shapes
+           structural-description: clear info
+           interactivity: full engagement
+           arrows-navigation: directional cues
+        */
+
+        :root {
+            --morphism-blur: 20px;
+            --morphism-opacity: 0.15;
+            --glass-opacity: 0.25;
+            --semi-transparency: 0.08;
+            --animation-duration: 0.3s;
+            --gradient-primary: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+            --gradient-secondary: linear-gradient(135deg, #00d4d4 0%, #7eff00 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%);
+            background-attachment: fixed;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Free Background - Animated Gradient */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+            animation: gradientShift 15s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% {
+                background: radial-gradient(circle at 20% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+            }
+            50% {
+                background: radial-gradient(circle at 80% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                            radial-gradient(circle at 20% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
+            }
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: slideInDown 0.6s ease;
+        }
+
+        .logo-large {
+            font-size: 4rem;
+            margin-bottom: 16px;
+        }
+
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #9ca3af;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(52, 73, 94, var(--glass-opacity));
+            backdrop-filter: blur(var(--morphism-blur));
+            -webkit-backdrop-filter: blur(var(--morphism-blur));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 28px;
+            transition: all var(--animation-duration) cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            /* Fluent Design - Windows 11 Style */
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                        0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Card Background Graphic Element */
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity var(--animation-duration) ease;
+            pointer-events: none;
+        }
+
+        .card:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        0 20px 40px rgba(139, 92, 246, 0.2),
+                        0 0 40px rgba(139, 92, 246, 0.15);
+            background: rgba(52, 73, 94, calc(var(--glass-opacity) + 0.05));
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        /* Live Block Animation */
+        .card {
+            animation: liveBlockFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes liveBlockFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-2px); }
+        }
+
+        .card:hover {
+            animation: none;
+        }
+
+        .card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .card-description {
+            color: #9ca3af;
+            font-size: 0.95rem;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+
+        .card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: var(--gradient-primary);
+            color: white;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all var(--animation-duration) cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+            /* Non-standard Button Design */
+        }
+
+        /* Ripple Effect for Buttons */
+        .card-link::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+            pointer-events: none;
+        }
+
+        .card-link:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 12px 24px rgba(139, 92, 246, 0.5);
+        }
+
+        .card-link:active::after {
+            width: 300px;
+            height: 300px;
+        }
+
+        /* Arrow Navigation Animation */
+        .card-link::before {
+            content: '';
+            display: inline-block;
+            margin-left: auto;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .feature-item {
+            padding: 20px;
+            background: rgba(52, 73, 94, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            text-align: center;
+            transition: all var(--animation-duration) cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            /* Drawn Object - Geometric Background */
+        }
+
+        .feature-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity var(--animation-duration) ease;
+        }
+
+        .feature-item:hover {
+            background: rgba(52, 73, 94, 0.25);
+            transform: translateY(-4px) scale(1.05);
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 12px 24px rgba(139, 92, 246, 0.2);
+        }
+
+        .feature-item:hover::before {
+            opacity: 1;
+        }
+
+        .feature-item > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .feature-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .footer {
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9rem;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #8b5cf6;
+        }
+
+        .stat-label {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* Interactive Elements - Full Engagement */
+        .content-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        /* Calibrated Design - Pixel Perfect Typography */
+        .title {
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+
+        .card-title {
+            letter-spacing: -0.01em;
+        }
+
+        /* Structural Description - Clear Information Hierarchy */
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            letter-spacing: -0.01em;
+        }
+
+        /* Intuitive Design - Clear Navigation Cues */
+        .card-link:after {
+            content: ' →';
+        }
+
+        /* Reanimations - Sequential Delays */
+        .card {
+            animation: slideInUp 0.6s ease backwards;
+        }
+
+        .card:nth-child(1) { animation-delay: 0s; }
+        .card:nth-child(2) { animation-delay: 0.1s; }
+        .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.3s; }
+        .card:nth-child(5) { animation-delay: 0.4s; }
+        .card:nth-child(6) { animation-delay: 0.5s; }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Windows 11 - Fluent Design Elements */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 24px 16px;
+            background: rgba(52, 73, 94, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            transition: all var(--animation-duration) cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .stat-card:hover {
+            background: rgba(52, 73, 94, 0.25);
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(139, 92, 246, 0.15);
+        }
+
+        /* 3D Effects - Perspective Transforms */
+        .card:hover {
+            perspective: 1000px;
+        }
+
+        /* Responsive Design - Mobile-First */
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 2rem;
+            }
+
+            .logo-large {
+                font-size: 3rem;
+            }
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                animation: slideInLeft 0.6s ease backwards;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .title {
+                font-size: 1.75rem;
+            }
+
+            .features {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-large">📚</div>
+            <div class="title">Hebrew AI 2025</div>
+            <div class="subtitle">Modern AI-Powered Learning Platform</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">6</div>
+                <div class="stat-label">Pages</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">20+</div>
+                <div class="stat-label">Animations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Responsive</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">0</div>
+                <div class="stat-label">Dependencies</div>
+            </div>
+        </div>
+
+        <div class="content-grid">
+            <!-- Dashboard Card -->
+            <div class="card animate-slide-in-left">
+                <div class="card-icon">🏠</div>
+                <div class="card-title">Dashboard</div>
+                <div class="card-description">
+                    Your main learning hub with XP tracking, daily challenges, and progress visualization.
+                </div>
+                <a href="pages/index.html" class="card-link">Open Dashboard →</a>
+            </div>
+
+            <!-- Lessons Card -->
+            <div class="card animate-slide-in-up">
+                <div class="card-icon">📖</div>
+                <div class="card-title">Lessons</div>
+                <div class="card-description">
+                    Interactive Hebrew lessons organized by difficulty level with time estimates.
+                </div>
+                <a href="pages/lessons.html" class="card-link">View Lessons →</a>
+            </div>
+
+            <!-- Dictionary Card -->
+            <div class="card animate-slide-in-right">
+                <div class="card-icon">📚</div>
+                <div class="card-title">Dictionary</div>
+                <div class="card-description">
+                    AI-powered dictionary with word definitions, examples, and pronunciation guides.
+                </div>
+                <a href="pages/dictionary.html" class="card-link">Search Dictionary →</a>
+            </div>
+
+            <!-- Quizzes Card -->
+            <div class="card animate-slide-in-left" style="animation-delay: 0.1s;">
+                <div class="card-icon">🎯</div>
+                <div class="card-title">Quizzes</div>
+                <div class="card-description">
+                    Adaptive quizzes that adjust difficulty based on your performance level.
+                </div>
+                <a href="pages/quizzes.html" class="card-link">Take Quizzes →</a>
+            </div>
+
+            <!-- Progress Card -->
+            <div class="card animate-slide-in-up" style="animation-delay: 0.1s;">
+                <div class="card-icon">📊</div>
+                <div class="card-title">Progress</div>
+                <div class="card-description">
+                    Track your learning journey with detailed analytics and milestone tracking.
+                </div>
+                <a href="pages/progress.html" class="card-link">View Progress →</a>
+            </div>
+
+            <!-- Profile Card -->
+            <div class="card animate-slide-in-right" style="animation-delay: 0.1s;">
+                <div class="card-icon">👤</div>
+                <div class="card-title">Profile</div>
+                <div class="card-description">
+                    Manage your account settings, learning goals, and personalization preferences.
+                </div>
+                <a href="pages/profile.html" class="card-link">Edit Profile →</a>
+            </div>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 32px; margin-bottom: 40px; border: 1px solid rgba(255, 255, 255, 0.1); animation: fadeIn 0.8s ease;">
+            <h2 style="font-size: 1.5rem; margin-bottom: 16px;">✨ Design Features</h2>
+            <div class="features">
+                <div class="feature-item">
+                    <div class="feature-icon">🎨</div>
+                    <div class="feature-name">Glassmorphism</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🎬</div>
+                    <div class="feature-name">Micro-Animations</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🌙</div>
+                    <div class="feature-name">Dark Theme</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">📱</div>
+                    <div class="feature-name">Responsive</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">3️⃣</div>
+                    <div class="feature-name">3D Effects</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">♿</div>
+                    <div class="feature-name">Accessible</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">⚡</div>
+                    <div class="feature-name">High Performance</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🎯</div>
+                    <div class="feature-name">User-Focused</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="background: rgba(139, 92, 246, 0.15); border-radius: 16px; padding: 32px; margin-bottom: 40px; border: 1px solid rgba(139, 92, 246, 0.3); animation: pulseGlow 3s infinite;">
+            <h2 style="font-size: 1.5rem; margin-bottom: 16px;">📁 Project Structure</h2>
+            <pre style="overflow-x: auto; background: rgba(0, 0, 0, 0.3); padding: 16px; border-radius: 8px; font-size: 0.85rem; line-height: 1.6;">hebrew-ai-2025/
+├── css/           → Design system (variables, animations, base, layout, components)
+├── js/            → JavaScript interactivity (main.js)
+├── pages/         → HTML pages (index, lessons, dictionary, quizzes, progress, profile)
+├── assets/        → Media files (ready for your images)
+├── README.md      → Full documentation
+└── PROJECT_GUIDE.md → Detailed feature guide</pre>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <h3 style="margin-bottom: 12px;">🚀 Quick Start</h3>
+            <ol style="color: #9ca3af; line-height: 1.8;">
+                <li><strong>Start Here:</strong> You're on the right page! This is the entry point.</li>
+                <li><strong>Explore:</strong> Click any page link above to see the design in action.</li>
+                <li><strong>Customize:</strong> Edit CSS files in the <code>css/</code> folder to change colors.</li>
+                <li><strong>Develop:</strong> Add backend functionality by modifying <code>js/main.js</code></li>
+                <li><strong>Deploy:</strong> Host on any static hosting (GitHub Pages, Vercel, Netlify)</li>
+            </ol>
+        </div>
+
+        <div class="footer">
+            <p>Hebrew AI 2025 • Modern Learning Platform Template</p>
+            <p style="margin-top: 8px; font-size: 0.85rem;">
+                Built with HTML, CSS & JavaScript • No external dependencies • Fully responsive
+            </p>
+        </div>
+    </div>
+    <script src="js/scroll-animations.js"></script>
+</body>
+</html>

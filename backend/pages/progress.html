@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hebrew AI 2025 - Track your learning progress with detailed analytics and visualizations.">
+    <title>Hebrew AI 2025 - Progress</title>
+
+    <!-- CSS Imports -->
+    <link rel="stylesheet" href="../css/variables.css">
+    <link rel="stylesheet" href="../css/animations.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <span>📚</span>
+                <span>Hebrew AI 2025</span>
+            </div>
+
+            <nav class="menu">
+                <div class="menu-item" data-page="dashboard">
+                    <span class="menu-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="menu-item" data-page="lessons">
+                    <span class="menu-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="menu-item" data-page="dictionary">
+                    <span class="menu-item-icon">📚</span>
+                    <span>Dictionary</span>
+                </div>
+                <div class="menu-item" data-page="quizzes">
+                    <span class="menu-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="menu-item active" data-page="progress">
+                    <span class="menu-item-icon">📊</span>
+                    <span>Progress</span>
+                </div>
+                <div class="menu-item" data-page="profile">
+                    <span class="menu-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </nav>
+
+            <div class="neural-toggle" id="neuralToggle">
+                <span>Neural Mode</span>
+                <div class="toggle-switch" id="toggleSwitch"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="welcome-section">
+                    <div class="welcome-title">Your Progress 📊</div>
+                    <div class="welcome-subtitle">Track your learning journey with detailed analytics</div>
+                </div>
+            </div>
+
+            <!-- Overall Progress -->
+            <div class="dashboard-grid">
+
+                <!-- Overall Stats -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">📈</span>
+                        <span>Overall Progress</span>
+                    </div>
+                    <div style="display: flex; gap: 32px; align-items: center; flex-wrap: wrap;">
+                        <div class="progress-ring">
+                            <div class="progress-ring-text">
+                                <div class="progress-ring-value">68%</div>
+                                <div class="progress-ring-label">Complete</div>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="margin-bottom: 24px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>Lessons Completed</span>
+                                    <span style="font-weight: 700;">12 / 18</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-bar-fill" style="width: 66%;"></div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 24px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>Words Learned</span>
+                                    <span style="font-weight: 700;">287 / 500</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-bar-fill" style="width: 57%;"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>Quiz Accuracy</span>
+                                    <span style="font-weight: 700;">92%</span>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-bar-fill" style="width: 92%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weekly Activity -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">📅</span>
+                        <span>Weekly Activity</span>
+                    </div>
+                    <div class="chart-container" style="height: 180px;">
+                        <div class="chart-bar" style="height: 0%;" data-height="60" data-value="60"></div>
+                        <div class="chart-bar" style="height: 0%;" data-height="85" data-value="85"></div>
+                        <div class="chart-bar" style="height: 0%;" data-height="70" data-value="70"></div>
+                        <div class="chart-bar" style="height: 0%;" data-height="90" data-value="90"></div>
+                        <div class="chart-bar" style="height: 0%;" data-height="75" data-value="75"></div>
+                        <div class="chart-bar" style="height: 0%;" data-height="95" data-value="95"></div>
+                        <div class="chart-bar" style="height: 0%;" data-height="80" data-value="80"></div>
+                    </div>
+                    <div class="chart-label">Mon • Tue • Wed • Thu • Fri • Sat • Sun</div>
+                </div>
+
+                <!-- Skill Breakdown -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🎯</span>
+                        <span>Skill Breakdown</span>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Reading</span>
+                            <span>85%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="85"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Writing</span>
+                            <span>72%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="72"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Listening</span>
+                            <span>78%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="78"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Speaking</span>
+                            <span>68%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="68"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time Invested -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">⏱️</span>
+                        <span>Time Invested</span>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">📚</div>
+                            <div class="stat-value">47</div>
+                            <div class="stat-label">Today (min)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📖</div>
+                            <div class="stat-value">285</div>
+                            <div class="stat-label">This Week (min)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📝</div>
+                            <div class="stat-value">1,240</div>
+                            <div class="stat-label">Total (hours)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Milestones -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🏅</span>
+                        <span>Recent Milestones</span>
+                    </div>
+
+                    <div class="challenge-item">
+                        <div class="challenge-icon completed">✓</div>
+                        <div class="challenge-info">
+                            <div class="challenge-title">100 Words Mastered</div>
+                            <div class="challenge-progress">3 days ago</div>
+                        </div>
+                    </div>
+
+                    <div class="challenge-item">
+                        <div class="challenge-icon completed">✓</div>
+                        <div class="challenge-info">
+                            <div class="challenge-title">7 Day Streak</div>
+                            <div class="challenge-progress">1 week ago</div>
+                        </div>
+                    </div>
+
+                    <div class="challenge-item">
+                        <div class="challenge-icon completed">✓</div>
+                        <div class="challenge-info">
+                            <div class="challenge-title">First Lesson Completed</div>
+                            <div class="challenge-progress">2 weeks ago</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Goals -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🎯</span>
+                        <span>Your Goals</span>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Complete All Lessons</span>
+                            <span>67%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="67"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>Learn 500 Words</span>
+                            <span>57%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="57"></div>
+                        </div>
+                    </div>
+
+                    <div class="dna-item">
+                        <div class="dna-header">
+                            <span>30 Day Streak</span>
+                            <span>60%</span>
+                        </div>
+                        <div class="dna-bar">
+                            <div class="dna-bar-fill" style="width: 0%;" data-width="60"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Bottom Navigation (Mobile) -->
+        <nav class="bottom-nav">
+            <div class="bottom-nav-items">
+                <div class="bottom-nav-item" onclick="setActivePage('dashboard')">
+                    <span class="bottom-nav-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('lessons')">
+                    <span class="bottom-nav-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('quizzes')">
+                    <span class="bottom-nav-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('profile')">
+                    <span class="bottom-nav-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </div>
+        </nav>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="../js/main.js"></script>
+    <script>
+        // Initialize animations for progress page
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                const dnaBars = document.querySelectorAll('.dna-bar-fill');
+                dnaBars.forEach(bar => {
+                    const width = bar.getAttribute('data-width');
+                    bar.style.width = width + '%';
+                });
+            }, 300);
+
+            setTimeout(() => {
+                const chartBars = document.querySelectorAll('.chart-bar');
+                chartBars.forEach((bar, index) => {
+                    setTimeout(() => {
+                        const height = bar.getAttribute('data-height');
+                        bar.style.height = height + '%';
+                    }, index * 100);
+                });
+            }, 500);
+        });
+    </script>
+</body>
+</html>

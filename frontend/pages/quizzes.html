@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hebrew AI 2025 - Test your knowledge with adaptive quizzes.">
+    <title>Hebrew AI 2025 - Quizzes</title>
+
+    <!-- CSS Imports -->
+    <link rel="stylesheet" href="../css/variables.css">
+    <link rel="stylesheet" href="../css/animations.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <span>📚</span>
+                <span>Hebrew AI 2025</span>
+            </div>
+
+            <nav class="menu">
+                <div class="menu-item" data-page="dashboard">
+                    <span class="menu-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="menu-item" data-page="lessons">
+                    <span class="menu-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="menu-item" data-page="dictionary">
+                    <span class="menu-item-icon">📚</span>
+                    <span>Dictionary</span>
+                </div>
+                <div class="menu-item active" data-page="quizzes">
+                    <span class="menu-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="menu-item" data-page="progress">
+                    <span class="menu-item-icon">📊</span>
+                    <span>Progress</span>
+                </div>
+                <div class="menu-item" data-page="profile">
+                    <span class="menu-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </nav>
+
+            <div class="neural-toggle" id="neuralToggle">
+                <span>Neural Mode</span>
+                <div class="toggle-switch" id="toggleSwitch"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="welcome-section">
+                    <div class="welcome-title">Adaptive Quizzes 🎯</div>
+                    <div class="welcome-subtitle">Test your knowledge with AI-powered adaptive tests</div>
+                </div>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div style="display: flex; gap: 12px; margin-bottom: 32px; flex-wrap: wrap;">
+                <button class="badge badge-success" style="cursor: pointer; border: none; padding: 10px 16px;">All Quizzes</button>
+                <button class="badge" style="cursor: pointer; border: none; padding: 10px 16px; background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">Vocabulary</button>
+                <button class="badge" style="cursor: pointer; border: none; padding: 10px 16px; background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">Grammar</button>
+                <button class="badge" style="cursor: pointer; border: none; padding: 10px 16px; background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">Listening</button>
+            </div>
+
+            <!-- Quizzes Grid -->
+            <div class="dashboard-grid">
+
+                <!-- Quiz 1 -->
+                <div class="glass-card lesson-card stagger">
+                    <div class="lesson-thumbnail">🔤</div>
+                    <div class="lesson-title">Alphabet Challenge</div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">Master Hebrew letters with interactive exercises</p>
+                    <div style="margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Your Score: 85%</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: 85%;"></div>
+                        </div>
+                    </div>
+                    <div class="lesson-meta">
+                        <div class="lesson-duration">
+                            <span>📊</span>
+                            <span>15 questions</span>
+                        </div>
+                        <div class="lesson-difficulty beginner">Beginner</div>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: auto;">Retake Quiz</button>
+                </div>
+
+                <!-- Quiz 2 -->
+                <div class="glass-card lesson-card stagger">
+                    <div class="lesson-thumbnail">📝</div>
+                    <div class="lesson-title">Vocabulary Builder</div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">Learn and practice essential Hebrew words</p>
+                    <div style="margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Your Score: 92%</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: 92%;"></div>
+                        </div>
+                    </div>
+                    <div class="lesson-meta">
+                        <div class="lesson-duration">
+                            <span>📊</span>
+                            <span>20 questions</span>
+                        </div>
+                        <div class="lesson-difficulty beginner">Beginner</div>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: auto;">Retake Quiz</button>
+                </div>
+
+                <!-- Quiz 3 -->
+                <div class="glass-card lesson-card stagger">
+                    <div class="lesson-thumbnail">🎯</div>
+                    <div class="lesson-title">Grammar Mastery</div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">Test your understanding of Hebrew grammar rules</p>
+                    <div style="margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Your Score: 78%</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: 78%;"></div>
+                        </div>
+                    </div>
+                    <div class="lesson-meta">
+                        <div class="lesson-duration">
+                            <span>📊</span>
+                            <span>25 questions</span>
+                        </div>
+                        <div class="lesson-difficulty intermediate">Intermediate</div>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: auto;">Retake Quiz</button>
+                </div>
+
+                <!-- Quiz 4 -->
+                <div class="glass-card lesson-card stagger">
+                    <div class="lesson-thumbnail">🎧</div>
+                    <div class="lesson-title">Listening Comprehension</div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">Improve your listening skills with audio exercises</p>
+                    <div style="margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">In Progress...</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: 40%;"></div>
+                        </div>
+                    </div>
+                    <div class="lesson-meta">
+                        <div class="lesson-duration">
+                            <span>📊</span>
+                            <span>10 questions</span>
+                        </div>
+                        <div class="lesson-difficulty intermediate">Intermediate</div>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: auto;">Continue Quiz</button>
+                </div>
+
+                <!-- Quiz 5 -->
+                <div class="glass-card lesson-card stagger">
+                    <div class="lesson-thumbnail">💬</div>
+                    <div class="lesson-title">Conversation Flow</div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">Practice natural Hebrew conversations</p>
+                    <div style="margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Not Started</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="lesson-meta">
+                        <div class="lesson-duration">
+                            <span>📊</span>
+                            <span>8 scenarios</span>
+                        </div>
+                        <div class="lesson-difficulty advanced">Advanced</div>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: auto;">Start Quiz</button>
+                </div>
+
+                <!-- Quiz 6 -->
+                <div class="glass-card lesson-card stagger">
+                    <div class="lesson-thumbnail">📚</div>
+                    <div class="lesson-title">Reading Fluency</div>
+                    <p style="font-size: 0.9rem; color: var(--text-secondary);">Build your reading speed and comprehension</p>
+                    <div style="margin-top: 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Not Started</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="lesson-meta">
+                        <div class="lesson-duration">
+                            <span>📊</span>
+                            <span>12 passages</span>
+                        </div>
+                        <div class="lesson-difficulty advanced">Advanced</div>
+                    </div>
+                    <button class="btn-primary" style="width: 100%; margin-top: auto;">Start Quiz</button>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Bottom Navigation (Mobile) -->
+        <nav class="bottom-nav">
+            <div class="bottom-nav-items">
+                <div class="bottom-nav-item" onclick="setActivePage('dashboard')">
+                    <span class="bottom-nav-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('lessons')">
+                    <span class="bottom-nav-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="bottom-nav-item active" onclick="setActivePage('quizzes')">
+                    <span class="bottom-nav-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('profile')">
+                    <span class="bottom-nav-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </div>
+        </nav>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="../js/main.js"></script>
+</body>
+</html>

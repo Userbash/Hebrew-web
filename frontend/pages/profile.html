@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hebrew AI 2025 - Manage your profile and learning preferences.">
+    <title>Hebrew AI 2025 - Profile</title>
+
+    <!-- CSS Imports -->
+    <link rel="stylesheet" href="../css/variables.css">
+    <link rel="stylesheet" href="../css/animations.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+
+    <style>
+        .profile-header {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .profile-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--purple), var(--pink));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 5rem;
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+        }
+
+        .profile-info h2 {
+            margin-bottom: 8px;
+        }
+
+        .profile-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .profile-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .profile-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .profile-stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--purple);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .preference-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+
+        .toggle-checkbox {
+            width: 50px;
+            height: 26px;
+            background: var(--green);
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-checkbox::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 3px;
+            right: 3px;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-checkbox.off {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-checkbox.off::after {
+            right: auto;
+            left: 3px;
+        }
+
+        .badge-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .profile-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .profile-avatar {
+                width: 120px;
+                height: 120px;
+                font-size: 4rem;
+            }
+
+            .profile-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebar">
+            <div class="logo">
+                <span>📚</span>
+                <span>Hebrew AI 2025</span>
+            </div>
+
+            <nav class="menu">
+                <div class="menu-item" data-page="dashboard">
+                    <span class="menu-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="menu-item" data-page="lessons">
+                    <span class="menu-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="menu-item" data-page="dictionary">
+                    <span class="menu-item-icon">📚</span>
+                    <span>Dictionary</span>
+                </div>
+                <div class="menu-item" data-page="quizzes">
+                    <span class="menu-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="menu-item" data-page="progress">
+                    <span class="menu-item-icon">📊</span>
+                    <span>Progress</span>
+                </div>
+                <div class="menu-item active" data-page="profile">
+                    <span class="menu-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </nav>
+
+            <div class="neural-toggle" id="neuralToggle">
+                <span>Neural Mode</span>
+                <div class="toggle-switch" id="toggleSwitch"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="welcome-section">
+                    <div class="welcome-title">Your Profile 👤</div>
+                    <div class="welcome-subtitle">Manage your account and learning preferences</div>
+                </div>
+            </div>
+
+            <!-- Profile Content -->
+            <div class="dashboard-grid">
+
+                <!-- Profile Overview -->
+                <div class="glass-card" style="grid-column: 1 / -1;">
+                    <div class="profile-header">
+                        <div class="profile-avatar">אליך</div>
+                        <div class="profile-info" style="flex: 1;">
+                            <h2>אליך (Eliach)</h2>
+                            <p style="color: var(--text-secondary);">Hebrew Enthusiast • Level 8 • 18 Day Streak</p>
+                            <div class="profile-stats">
+                                <div class="profile-stat">
+                                    <div class="profile-stat-value">287</div>
+                                    <div class="profile-stat-label">Words</div>
+                                </div>
+                                <div class="profile-stat">
+                                    <div class="profile-stat-value">4,582</div>
+                                    <div class="profile-stat-label">XP</div>
+                                </div>
+                                <div class="profile-stat">
+                                    <div class="profile-stat-value">92%</div>
+                                    <div class="profile-stat-label">Accuracy</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Personal Information -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">📋</span>
+                        <span>Personal Information</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" class="form-input" value="אליך" placeholder="Your name">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" value="eliach@example.com" placeholder="Your email">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Native Language</label>
+                        <select class="form-select">
+                            <option>English</option>
+                            <option>Spanish</option>
+                            <option>French</option>
+                            <option>German</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-primary" style="width: 100%;">Save Changes</button>
+                </div>
+
+                <!-- Learning Preferences -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">⚙️</span>
+                        <span>Learning Preferences</span>
+                    </div>
+
+                    <div class="preference-item">
+                        <div>
+                            <div style="font-weight: 500;">Email Notifications</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Receive progress updates</div>
+                        </div>
+                        <div class="toggle-checkbox" onclick="toggleCheckbox(this)"></div>
+                    </div>
+
+                    <div class="preference-item">
+                        <div>
+                            <div style="font-weight: 500;">Daily Reminders</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Get reminded to practice</div>
+                        </div>
+                        <div class="toggle-checkbox" onclick="toggleCheckbox(this)"></div>
+                    </div>
+
+                    <div class="preference-item">
+                        <div>
+                            <div style="font-weight: 500;">Sound Effects</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Audio feedback during lessons</div>
+                        </div>
+                        <div class="toggle-checkbox" onclick="toggleCheckbox(this)"></div>
+                    </div>
+
+                    <div class="preference-item">
+                        <div>
+                            <div style="font-weight: 500;">Dark Mode</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Use dark theme</div>
+                        </div>
+                        <div class="toggle-checkbox" onclick="toggleCheckbox(this)"></div>
+                    </div>
+                </div>
+
+                <!-- Learning Settings -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🎯</span>
+                        <span>Learning Goals</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Daily Practice Goal (minutes)</label>
+                        <input type="number" class="form-input" value="30" min="5" max="120">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Target Level</label>
+                        <select class="form-select">
+                            <option>Beginner</option>
+                            <option>Intermediate</option>
+                            <option selected>Advanced</option>
+                            <option>Fluent</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Learning Focus</label>
+                        <div class="badge-list">
+                            <span class="badge badge-success">Speaking</span>
+                            <span class="badge badge-success">Writing</span>
+                            <span class="badge" style="cursor: pointer; padding: 10px 16px; background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">Reading</span>
+                            <span class="badge" style="cursor: pointer; padding: 10px 16px; background: rgba(255, 255, 255, 0.1); color: var(--text-primary);">Grammar</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Security -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">🔒</span>
+                        <span>Account Security</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Current Password</label>
+                        <input type="password" class="form-input" placeholder="Enter your current password">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">New Password</label>
+                        <input type="password" class="form-input" placeholder="Enter new password">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Confirm Password</label>
+                        <input type="password" class="form-input" placeholder="Confirm new password">
+                    </div>
+
+                    <button class="btn-primary" style="width: 100%;">Update Password</button>
+                </div>
+
+                <!-- About -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span class="card-title-icon">ℹ️</span>
+                        <span>About</span>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <div style="font-weight: 500; margin-bottom: 4px;">App Version</div>
+                            <div style="color: var(--text-secondary);">v2025.1.0</div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 500; margin-bottom: 4px;">Last Updated</div>
+                            <div style="color: var(--text-secondary);">November 13, 2025</div>
+                        </div>
+                        <div>
+                            <div style="font-weight: 500; margin-bottom: 4px;">Member Since</div>
+                            <div style="color: var(--text-secondary);">October 15, 2025</div>
+                        </div>
+                    </div>
+
+                    <button class="btn-secondary" style="width: 100%; margin-top: 16px;">Sign Out</button>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Bottom Navigation (Mobile) -->
+        <nav class="bottom-nav">
+            <div class="bottom-nav-items">
+                <div class="bottom-nav-item" onclick="setActivePage('dashboard')">
+                    <span class="bottom-nav-item-icon">🏠</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('lessons')">
+                    <span class="bottom-nav-item-icon">📖</span>
+                    <span>Lessons</span>
+                </div>
+                <div class="bottom-nav-item" onclick="setActivePage('quizzes')">
+                    <span class="bottom-nav-item-icon">🎯</span>
+                    <span>Quizzes</span>
+                </div>
+                <div class="bottom-nav-item active" onclick="setActivePage('profile')">
+                    <span class="bottom-nav-item-icon">👤</span>
+                    <span>Profile</span>
+                </div>
+            </div>
+        </nav>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="../js/main.js"></script>
+    <script>
+        function toggleCheckbox(element) {
+            element.classList.toggle('off');
+        }
+    </script>
+</body>
+</html>
