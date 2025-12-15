@@ -1,14 +1,13 @@
 {
-  "name": "hebrew-ai-tests",
+  "name": "hebrew-web-app",
   "version": "1.0.0",
-  "description": "Test suite for the Hebrew AI project",
-  "main": "index.js",
+  "description": "A comprehensive web application for learning Hebrew, featuring an interactive frontend and a robust backend API.",
   "type": "module",
   "scripts": {
     "test": "node tests/run-all-tests.js"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Hebrew Web App Team",
+  "license": "MIT",
   "dependencies": {
     "yaml": "^2.4.1",
     "node-fetch": "^3.3.2"

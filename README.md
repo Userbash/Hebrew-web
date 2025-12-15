@@ -44,15 +44,15 @@ Follow these instructions to get a copy of the project up and running on your lo
 Ensure you have the following installed:
 *   **Git**: For cloning the repository.
 *   **Node.js**: v18.x or higher (includes `npm`).
-*   **Docker & Docker Compose**: For containerized development and running services.
+*   **Docker & Docker Compose**: For containerized development and running services (or **Podman & Podman Compose** if preferred, especially on Linux).
 *   **`jq`**: JSON processor (used by CI/CD scripts). `sudo apt-get install jq` on Debian/Ubuntu.
 
 ### Installation
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/your-username/Hebrew-web.git # Replace with actual repo URL
-    cd Hebrew-web
+    git clone https://github.com/your-organization/hebrew-web-app.git
+    cd hebrew-web-app
     ```
 
 2.  **Setup Environment Variables**:
@@ -62,15 +62,15 @@ Ensure you have the following installed:
     ```
     Edit the `.env` file and fill in the necessary environment variables, especially for the database connection and ports.
 
-3.  **Install Backend Dependencies**:
-    ```bash
-    npm install --prefix backend
-    ```
-
-4.  **Install Root Test Runner Dependencies**:
-    ```bash
-    npm install
-    ```
+3.  **Install Dependencies**:
+    *   **Backend**:
+        ```bash
+        npm install --prefix backend
+        ```
+    *   **Root (Test Runner & Utilities)**:
+        ```bash
+        npm install
+        ```
 
 ## Running the Project
 
@@ -106,12 +106,12 @@ npm run test:coverage --prefix backend # Run backend tests with coverage report
 
 ### System Verification Tests
 
-These tests verify the overall project setup, Docker Compose configuration, path integrity, and Nginx detection.
+These tests verify the overall project setup, Docker Compose (or Podman Compose) configuration, path integrity, Nginx detection, and full container deployment.
 
 ```bash
 npm test # Runs the master test runner at the root
 ```
-This command executes `tests/run-all-tests.js`, which orchestrates several checks.
+This command executes `tests/run-all-tests.js`, which orchestrates several checks, including the Podman deployment test (`tests/system/test-deployment-podman.sh`) if Podman and `podman-compose` are installed and configured.
 
 ### CI/CD Pipeline
 
@@ -168,4 +168,4 @@ Contributions are welcome! Please refer to `CONTRIBUTING.md` for guidelines.
 
 ## License
 
-This project is licensed under the [ISC License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

@@ -1,11 +1,11 @@
-# Contributing to Hebrew AI 2025
+# Contributing to Hebrew Web App
 
 Thank you for your interest in contributing! Here's how you can help.
 
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/your-username/hebrew-ai-2025.git`
+2. Clone your fork: `git clone https://github.com/your-username/hebrew-web-app.git`
 3. Create a feature branch: `git checkout -b feature/your-feature`
 4. Make your changes
 5. Test your changes
@@ -14,25 +14,28 @@ Thank you for your interest in contributing! Here's how you can help.
 ## Development Setup
 
 ```bash
-# Install dependencies
+# Install backend dependencies
 cd backend && npm install
-cd ../frontend && npm install
+# (Frontend is static; no npm install needed)
+
+# Install root test runner dependencies
+cd .. && npm install
 
 # Configure environment
 cp .env.example .env
 
-# Start development
-./deploy.sh
+# Start development services using Docker Compose
+docker compose up --build
 ```
 
 ## Testing
 
 ```bash
 # Run all tests before submitting PR
-node tests/run-all-tests.js
+npm test
 
-# Test specific component
-docker-compose logs -f backend
+# Test specific component (example: view backend logs)
+docker compose logs -f backend
 ```
 
 ## Code Standards
@@ -44,7 +47,7 @@ docker-compose logs -f backend
 
 ## Pull Request Process
 
-1. Ensure all tests pass: `node tests/run-all-tests.js`
+1. Ensure all tests pass: `npm test`
 2. Update README.md if needed
 3. Describe changes clearly in PR description
 4. Wait for review and address feedback

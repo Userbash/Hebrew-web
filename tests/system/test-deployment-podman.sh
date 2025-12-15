@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 ################################################################################
 #                      PODMAN DEPLOYMENT TEST SCRIPT                           #
@@ -27,7 +28,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 # Configuration
-PROJECT_ROOT="/home/sanya/crezy_project"
+PROJECT_ROOT="/var/home/sanya/Hebrew-web"
 COMPOSE_FILE="docker-compose-optimized.yml"
 TEST_DURATION=300  # 5 minutes max
 START_TIME=$(date +%s)
