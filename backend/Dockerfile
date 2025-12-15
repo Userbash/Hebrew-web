@@ -59,9 +59,6 @@ RUN apk add --no-cache \
     ca-certificates \
     bash \
     socat
-    
-# Install acme.sh
-RUN curl https://get.acme.sh | sh
 
 # Create non-root user
 RUN addgroup -g 1001 nodejs && \
