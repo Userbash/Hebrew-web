@@ -52,6 +52,10 @@ ssl/*.crt
 ssl/*.pem
 ssl/*.csr
 
-# Package manager lock files (optional - uncomment if you want to commit them)
-# package-lock.json
-# yarn.lock
+
+# Generated Files
+tests/.nginx-detection-results.json
+tests/.test-results.json
+
+# Backend specific node modules
+backend/node_modules/

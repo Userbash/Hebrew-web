@@ -12,12 +12,26 @@ echo -e "${BLUE}================================${NC}"
 echo -e "${BLUE}  Hebrew AI 2025 - Deploy${NC}"
 echo -e "${BLUE}================================${NC}\n"
 
-# Check Docker
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}✗ Docker not installed${NC}"
+CONTAINER_TOOL=""
+COMPOSE_CMD=""
+
+# Detect Docker
+if command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    CONTAINER_TOOL="Docker"
+    COMPOSE_CMD="docker compose"
+    echo -e "${GREEN}✓ Docker and docker compose plugin available${NC}"
+# Detect Podman
+elif command -v podman &> /dev/null && command -v podman-compose &> /dev/null; then
+    CONTAINER_TOOL="Podman"
+    COMPOSE_CMD="podman-compose"
+    echo -e "${GREEN}✓ Podman and podman-compose available${NC}"
+else
+    echo -e "${RED}✗ Neither Docker/docker compose nor Podman/podman-compose found.${NC}"
+    echo -e "${RED}Please install Docker Desktop or Podman and podman-compose to proceed.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✓ Docker available${NC}"
+
+echo -e "${BLUE}Using ${CONTAINER_TOOL} for deployment.${NC}\n"
 
 # Check .env
 if [ ! -f ".env" ]; then
@@ -30,9 +44,9 @@ echo -e "${GREEN}✓ .env configured${NC}\n"
 
 # Deploy
 echo "Deploying services..."
-docker-compose down 2>/dev/null || true
-docker-compose build --quiet || exit 1
-docker-compose up -d || exit 1
+$COMPOSE_CMD down 2>/dev/null || true
+$COMPOSE_CMD build --quiet || exit 1
+$COMPOSE_CMD up -d || exit 1
 echo -e "${GREEN}✓ Services started${NC}\n"
 
 # Wait for backend
@@ -53,6 +67,6 @@ echo "API:          http://localhost:3001"
 echo "Health:       http://localhost:3001/api/health"
 echo ""
 echo "Commands:"
-echo "  docker-compose logs -f              # View logs"
-echo "  docker-compose down                 # Stop services"
-echo "  docker stats                        # Resource usage"
+echo "  ${COMPOSE_CMD} logs -f              # View logs"
+echo "  ${COMPOSE_CMD} down                 # Stop services"
+echo "  ${CONTAINER_TOOL} stats                        # Resource usage"

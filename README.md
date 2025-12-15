@@ -8,15 +8,16 @@ A modern, production-ready Hebrew language learning platform with automated test
 - **Backend API** - Node.js Express server with modern middleware serving both the API and the frontend
 - **PostgreSQL** - Persistent data storage
 - **Redis** - Caching layer
-- **Nginx** - Reverse proxy & load balancing
-- **Automated Testing**
-- **Smart Deployment**
+- **Nginx** - Reverse proxy & load balancing for frontend and backend
+- **Automated Testing** - Comprehensive test suite for various components
+- **Smart Deployment** - Automated script for easy setup and deployment
 
 ## Quick Start
 
 ### Prerequisites
-- Docker & Docker Compose (or Podman & podman-compose)
-- Node.js 18+ (for testing)
+- **Containerization Tool:** Either Docker Desktop (includes `docker` and `docker compose` plugin) OR Podman (with `podman-compose` installed).
+    - If you need help installing these, please refer to the `installation_recommendations.md` file in the project root.
+- Node.js 18+ (for local development and running specific tests)
 - A deSEC.io account and API token. Get one at [desec.io](https://desec.io/).
 - 2GB free disk space
 
@@ -32,43 +33,58 @@ cp .env.example .env
 # Open .env and set your DESEC_TOKEN, DOMAIN_NAME, and ACME_EMAIL.
 
 # 3. Deploy
+# This script will auto-detect Docker or Podman and use the appropriate compose commands.
 ./deploy.sh
 ```
 
 ### Access the Application
 
-- **Application:** https://your-domain-name
-- **Backend API:** https://your-domain-name/api/
-- **Health Check:** https://your-domain-name/api/health
+- **Application:** `https://your-domain-name`
+- **Backend API:** `https://your-domain-name/api/`
+- **Health Check:** `https://your-domain-name/api/health`
 
 ## Project Structure
 
 ```
 hebrew-ai-2025/
-├── backend/                 # Node.js API
-│   ├── api/
-│   │   ├── routes/         # API endpoints
-│   │   ├── middleware/     # Express middleware
-│   │   └── data/           # Data storage
-│   ├── server.js           # Main server file
-│   └── package.json
-├── public/                # Web UI
-│   ├── pages/             # HTML pages
-│   ├── css/               # Stylesheets
-│   └── js/                # Client-side scripts
-├── scripts/
-│   └── entrypoint.sh      # Entrypoint script for domain and certificate automation
-├── tests/                 # Test suite
+├── .github/                       # GitHub Actions workflows
+├── docker-compose.yml             # Docker Compose configuration (primary deployment)
+├── .env.example                   # Environment variables example
+├── .gitignore                     # Git ignore rules
+├── LICENSE                        # Project license
+├── README.md                      # Project documentation (this file)
+├── CONTRIBUTING.md                # Contribution guidelines
+├── deploy.sh                      # Deployment script
+├── installation_recommendations.md # Auto-generated recommendations for container tools
+├── tests/                         # Top-level project tests
 │   ├── run-all-tests.js
 │   ├── nginx-detection.test.js
 │   ├── backend-verification.test.js
 │   └── test-deployment-podman.sh
-├── docker-compose.yml     # Container orchestration
-├── backend.Dockerfile
-├── nginx.Dockerfile
-├── nginx.conf.template
-├── .env                   # Environment variables (create from .env.example)
-└── README.md
+│
+├── backend/                       # Backend service (Node.js Express API)
+│   ├── Dockerfile                 # Dockerfile for the backend service
+│   ├── package.json               # Backend dependencies and scripts
+│   ├── server.js                  # Main backend application file
+│   ├── api/                       # API routes, middleware, data
+│   │   ├── data/
+│   │   ├── middleware/
+│   │   └── routes/
+│   └── tests/                     # Backend specific tests
+│       ├── quick-test.js
+│       └── test-api.js
+│
+├── frontend/                      # Frontend static assets (served by Nginx)
+│   ├── Dockerfile                 # Dockerfile for the Nginx frontend server
+│   ├── nginx.conf.template        # Nginx configuration template for frontend
+│   ├── public/                    # Actual static files (HTML, CSS, JS)
+│   │   ├── css/
+│   │   ├── js/
+│   │   └── pages/
+│   └── package.json               # Frontend specific package.json (if used for build process)
+│
+└── scripts/                       # Utility scripts
+    └── entrypoint.sh              # Entrypoint script for cert-manager
 ```
 
 ## Configuration
@@ -107,9 +123,10 @@ NGINX_HTTPS_PORT=443
 EXTERNAL_NGINX=false
 ```
 
-## Deployment Options
+## Deployment
 
-### Option 1: Standard Deployment (Recommended)
+The `deploy.sh` script automates the build and deployment process. It will automatically detect if Docker or Podman are installed and use the appropriate `compose` commands.
+
 ```bash
 ./deploy.sh
 ```
@@ -118,39 +135,14 @@ EXTERNAL_NGINX=false
 - Runs health checks
 - Automatically registers a domain and obtains an SSL certificate.
 
-### Option 2: With Testing
+### Running with Tests
+
+You can run the deployment followed by the comprehensive test suite:
+
 ```bash
 ./deploy.sh
 node tests/run-all-tests.js
 ```
-
-### Option 3: External Nginx
-If you have system-wide Nginx running:
-```bash
-node tests/nginx-detection.test.js
-# System will auto-detect and configure appropriately
-./deploy.sh
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - User login
-
-### Users
-- `GET /api/users/profile` - Get user profile
-
-### Content
-- `GET /api/lessons` - Get all lessons
-- `GET /api/quizzes` - Get all quizzes
-- `GET /api/dictionary/:word` - Search dictionary
-
-### Progress
-- `GET /api/progress/:userId` - Get user progress
-
-### Health
-- `GET /api/health` - Service health check
 
 ## Development
 
@@ -164,37 +156,37 @@ node tests/nginx-detection.test.js
 node tests/backend-verification.test.js
 node tests/docker-compose-validator.test.js
 
-# Full Podman deployment test
+# Full Podman deployment test (requires Podman & podman-compose installed)
+# Ensure PROJECT_ROOT is correctly set in test-deployment-podman.sh if running directly.
 ./tests/test-deployment-podman.sh
 ```
 
 ### View Logs
 ```bash
-# All services
-docker-compose logs -f
+# All services (command determined by deploy.sh)
+<compose_command> logs -f
 
-# Specific service
-docker-compose logs -f backend
-docker-compose logs -f cert-manager
-docker-compose logs -f postgres
+# Specific service (e.g., backend)
+<compose_command> logs -f backend
 ```
+*(Replace `<compose_command>` with `docker compose` or `podman-compose` depending on your setup)*
 
 ### Manage Services
 ```bash
 # Stop services
-docker-compose down
+<compose_command> down
 
 # Stop and remove volumes
-docker-compose down -v
+<compose_command> down -v
 
 # Restart specific service
-docker-compose restart backend
+<compose_command> restart backend
 
 # View service status
-docker-compose ps
+<compose_command> ps
 
-# Resource usage
-docker stats
+# Resource usage (replace <container_tool> with 'docker' or 'podman')
+<container_tool> stats
 ```
 
 ## Troubleshooting
@@ -205,35 +197,35 @@ docker stats
 ss -tuln | grep :80
 
 # Change port in .env and restart
-docker-compose down
-docker-compose up -d
+<compose_command> down
+<compose_command> up -d
 ```
 
 ### Backend Connection Error
 ```bash
 # Check logs
-docker-compose logs backend
+<compose_command> logs backend
 
 # Verify health
 curl https://your-domain-name/api/health
 
 # Restart service
-docker-compose restart backend
+<compose_command> restart backend
 ```
 
 ### Build Issues
 ```bash
 # Force rebuild
-docker-compose build --no-cache
+<compose_command> build --no-cache
 
 # Check build logs
-docker-compose build --progress=plain
+<compose_command> build --progress=plain
 ```
 
 ## Production Deployment
 
 ### Prerequisites
-1. Server with Docker installed
+1. Server with Docker installed (or Podman)
 2. Domain name configured in your `.env` file.
 3. At least 2GB free disk space
 
@@ -248,10 +240,10 @@ docker-compose build --progress=plain
 curl https://your-domain-name/api/health
 
 # Monitor logs
-docker-compose logs -f backend
+<compose_command> logs -f backend
 
 # Check system resources
-docker stats
+<container_tool> stats
 ```
 
 ## Performance Metrics
@@ -274,17 +266,17 @@ docker stats
 
 ### Backup
 ```bash
-docker-compose exec postgres pg_dump -U postgres hebrew_ai_db > backup.sql
+<compose_command> exec postgres pg_dump -U postgres hebrew_ai_db > backup.sql
 ```
 
 ### Restore
 ```bash
-docker-compose exec -T postgres psql -U postgres hebrew_ai_db < backup.sql
+<compose_command> exec -T postgres psql -U postgres hebrew_ai_db < backup.sql
 ```
 
 ### Access Database
 ```bash
-docker-compose exec postgres psql -U postgres -d hebrew_ai_db
+<compose_command> exec postgres psql -U postgres -d hebrew_ai_db
 ```
 
 ## External Nginx Configuration
@@ -322,7 +314,7 @@ Then reload: `sudo systemctl reload nginx`
 ## Testing
 - All tests must pass before PR merge
 - Run: `node tests/run-all-tests.js`
-- Full deployment test: `./tests/test-deployment-podman.sh`
+- Full deployment test: `./tests/test-deployment-podman.sh` (Requires Podman and podman-compose)
 
 ## License
 
@@ -336,13 +328,13 @@ MIT License - see LICENSE file for details
 A: Run `node tests/nginx-detection.test.js` - system auto-detects and configures
 
 **Q: Can I scale the backend?**
-A: Yes: `docker-compose up -d --scale backend=3`
+A: Yes: `<compose_command> up -d --scale backend=3`
 
 **Q: How do I view logs?**
-A: Run: `docker-compose logs -f [service]`
+A: Run: `<compose_command> logs -f [service]`
 
 **Q: How do I backup the database?**
-A: Run: `docker-compose exec postgres pg_dump -U postgres hebrew_ai_db > backup.sql`
+A: Run: `<compose_command> exec postgres pg_dump -U postgres hebrew_ai_db > backup.sql`
 
 ## Contact
 
