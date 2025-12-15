@@ -23,6 +23,11 @@ This repository now includes a comprehensive, automated system for managing DNS 
     *   **`podman-compose` Compatibility:** The entire setup is verified and optimized for `podman-compose`.
     *   **Secure Credential Handling:** Best practices for managing sensitive environment variables (like API tokens) are highlighted.
 
+## CI/CD Pipeline Reliability Improvements:
+
+*   **Resolved Backend Test Failures:** Addressed "mocha: not found" errors during backend testing by explicitly adding \`mocha\` as a development dependency in \`backend/package.json\`. This ensures all necessary test tools are available during CI/CD runs.
+*   **Fixed Docker Image Build Failures:** Corrected \`COPY\` commands within \`backend/Dockerfile\` to properly reference \`package*.json\` files and the application code relative to the build context. This ensures the backend Docker image builds successfully without pathing errors.
+
 ## Verification:
 
 The comprehensive pipeline verification cycle using `podman-compose` confirmed that all services build, start, and run correctly. The `cert-manager` service successfully executes the `acme.sh` dry-run logic, demonstrating proper communication with Let's Encrypt staging and policy enforcement for placeholder domains. Frontend Nginx access on port 80 was also verified.
