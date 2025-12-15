@@ -20,20 +20,20 @@ This project is a full-stack web application designed for learning Hebrew, featu
 ### Backend
 *   **Node.js**: JavaScript runtime.
 *   **Express.js**: Web application framework.
-*   **Mongoose**: MongoDB object modeling.
-*   **MongoDB**: NoSQL database.
+*   **PostgreSQL**: Relational database for persistent data storage.
+*   **Redis**: In-memory data store, used for caching and session management.
 *   **Pino**: Fast Node.js logger.
 *   **Jest & Supertest**: Unit, integration, and API testing.
 
 ### Frontend
 *   **HTML5, CSS3, JavaScript**: Core web technologies.
-*   **Nginx**: Web server for serving static files and acting as a reverse proxy.
+*   **Nginx**: Web server for serving static files and acting as a reverse proxy for the backend API.
 
 ### DevOps & Tools
 *   **Docker & Docker Compose**: Containerization.
 *   **GitHub Actions**: CI/CD pipeline automation.
 *   **`jq`**: JSON processor for script analysis.
-*   **`yaml` & `node-fetch`**: Used by the root test runner for verification.
+*   **`yaml` & `node-fetch`**: Dependencies for project-wide utilities and system tests, used by the root test runner for verification.
 
 ## Getting Started
 
@@ -153,7 +153,7 @@ The project is configured with a GitHub Actions workflow (`.github/workflows/ci-
 ├── .gitignore               # Git ignored files
 ├── CONTRIBUTING.md          # Contribution guidelines
 ├── LICENSE                  # Project license
-├── package.json             # Root package.json for system-level tests and tools
+├── package.json             # Root package.json for project-wide utilities, system-level tests, and tools.
 ├── package-lock.json        # Lock file for root dependencies
 └── README.md                # Project README (this file)
 ```

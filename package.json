@@ -8,7 +8,8 @@
   },
   "author": "Hebrew Web App Team",
   "license": "MIT",
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "yaml": "^2.4.1",
     "node-fetch": "^3.3.2"
   }

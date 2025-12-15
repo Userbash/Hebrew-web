@@ -9,10 +9,8 @@
     "dev": "node --watch server.js",
     "test": "node tests/quick-test.js",
     "test:full": "node tests/test-api.js",
-    "client": "cd client && npm install && npm start",
     "build": "npm run lint && npm run test",
-    "lint": "echo 'Linting...'",
-    "seed": "node scripts/seed-data.js"
+    "lint": "echo 'Linting...'"
   },
   "keywords": [
     "hebrew",
