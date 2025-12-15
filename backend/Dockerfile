@@ -17,8 +17,7 @@ RUN apk add --no-cache \
 
 WORKDIR /build
 
-# Copy package files
-COPY backend/package*.json ./
+COPY package*.json ./
 
 # Install dependencies with production optimizations
 RUN npm ci --only=production && \
@@ -32,7 +31,7 @@ FROM node:20-alpine AS security-scanner
 WORKDIR /scan
 
 COPY --from=builder /build/node_modules ./node_modules
-COPY backend/package*.json ./
+COPY package*.json ./
 
 # Run security audit
 RUN npm audit --audit-level=moderate && \
@@ -74,7 +73,7 @@ RUN mkdir -p /app/uploads /var/log/app /etc/letsencrypt /etc/letsencrypt/backup 
 COPY --from=builder --chown=nodejs:nodejs /build/node_modules ./node_modules
 
 # Copy application code
-COPY --chown=nodejs:nodejs ./backend .
+COPY --chown=nodejs:nodejs . .
 
 # Copy and make entrypoint script executable
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh

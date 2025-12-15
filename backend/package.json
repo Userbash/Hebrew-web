@@ -32,6 +32,7 @@
   "devDependencies": {
     "eslint": "^9.39.2",
     "node": "^18.0.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "mocha": "^11.7.5"
   }
 }
