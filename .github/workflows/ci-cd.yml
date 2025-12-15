@@ -30,12 +30,17 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'backend/package-lock.json'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y jq bc
         
       - name: Make ci_utils.sh executable
         run: chmod +x ./scripts/ci_utils.sh
+
+      - name: Install Backend Dependencies
+        run: |
+          source ./scripts/ci_utils.sh
+          install_npm_deps "backend"
 
       - name: Start Backend Server
         run: |
@@ -43,10 +48,25 @@ jobs:
           echo "SERVER_PID=$!" >> $GITHUB_ENV
           sleep 5 # Give the server some time to start up
 
+      - name: Wait for Backend Server to be Ready
+        run: |
+          echo "Waiting for backend server to be ready..."
+          for i in $(seq 1 10); do
+            response=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/api/health)
+            if [ "$response" -eq 200 ]; then
+              echo "Backend server is ready!"
+              exit 0
+            else
+              echo "Backend server not ready yet (status: $response). Retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+          echo "Backend server did not become ready within the timeout."
+          exit 1
+
       - name: Build and Test Backend
         run: |
           source ./scripts/ci_utils.sh
-          install_npm_deps "backend"
           run_npm_test "backend"
       
       - name: Stop Backend Server

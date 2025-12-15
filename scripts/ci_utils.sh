@@ -20,13 +20,17 @@ run_command() {
     log "ERROR" "Command failed: $cmd_desc. Exit code: $exit_code. Output:"
     echo "$output" | tee -a pipeline.log
     echo "result=failure" >> $GITHUB_OUTPUT
-    echo "output=$output" >> $GITHUB_OUTPUT
+    echo "output<<EOF" >> $GITHUB_OUTPUT
+    echo "$output" >> $GITHUB_OUTPUT
+    echo "EOF" >> $GITHUB_OUTPUT
     return 1
   else
     log "INFO" "Command successful: $cmd_desc. Output:"
     echo "$output" | tee -a pipeline.log
     echo "result=success" >> $GITHUB_OUTPUT
-    echo "output=$output" >> $GITHUB_OUTPUT
+    echo "output<<EOF" >> $GITHUB_OUTPUT
+    echo "$output" >> $GITHUB_OUTPUT
+    echo "EOF" >> $GITHUB_OUTPUT
     return 0
   fi
 }
