@@ -13,7 +13,7 @@ This project is a full-stack web application designed for learning Hebrew, featu
 *   **RESTful API**: Node.js/Express backend providing data and logic.
 *   **Containerized Development & Deployment**: Full Docker and Docker Compose support for isolated environments.
 *   **Automated CI/CD**: GitHub Actions pipeline for continuous integration, testing, and potential deployment, incorporating AI-driven analysis and self-healing.
-*   **Automated Verification Tests**: Comprehensive system tests to ensure environment and service readiness.
+*   **Automated DNS+SSL Certificate Management**: Integrates `acme.sh` with `cert-manager` service for automated certificate issuance, renewal, and DNS record updates.
 
 ## Technologies Used
 
@@ -60,7 +60,16 @@ Ensure you have the following installed:
     ```bash
     cp .env.example .env
     ```
-    Edit the `.env` file and fill in the necessary environment variables, especially for the database connection and ports.
+    Edit the `.env` file and fill in the necessary environment variables. Below is a guide for the critical DNS/SSL related variables:
+
+    *   **`DESEC_TOKEN`**: Your API token for deSEC.io. Required for `dns_desec` provider. Obtain from [deSEC.io](https://desec.io/).
+    *   **`DOMAIN_LIST`**: A space-separated list of domain(s) for which you want to manage certificates (e.g., `"yourdomain.com www.yourdomain.com"`). Ensure these domains are configured to use your chosen DNS provider's nameservers.
+    *   **`ACME_EMAIL`**: A valid email address for Let's Encrypt notifications.
+    *   **`LE_STAGING`**: Set to `1` to use the Let's Encrypt staging environment for testing (recommended). Set to `0` for production certificates.
+    *   **`DRY_RUN`**: Set to `1` to simulate `acme.sh` operations and deSEC API calls without making actual changes (recommended for testing). Set to `0` to enable actual certificate issuance/updates.
+    *   **`DNS_PROVIDERS`**: A space-separated list of `acme.sh` DNS API providers to use, in order of preference (e.g., `"dns_desec dns_cf"`). Defaults to `dns_desec`.
+    *   **`CF_Key`**, **`CF_Email`**: Required if using `dns_cf` (Cloudflare) as a DNS provider.
+    *   Also, ensure database connection and ports are configured as needed.
 
 3.  **Install Dependencies**:
     *   **Backend**:
@@ -72,22 +81,75 @@ Ensure you have the following installed:
         npm install
         ```
 
+## Automated DNS+SSL Certificate Management
+
+This project now includes a comprehensive, automated system for managing DNS records and SSL/TLS certificates, designed to enhance the reliability, security, and automation of the Hebrew-web project's infrastructure. This system replaces manual certificate handling with a robust, containerized solution built around \`acme.sh\` and orchestrated via \`podman-compose\` (or \`docker-compose\`).
+
+### How it Works:
+
+A dedicated \`cert-manager\` Docker service (using the official \`neilpang/acme.sh:latest\` image) runs the \`scripts/run_cert_manager.sh\` script. This script handles:
+1.  **IP Change Detection**: Monitors the server's public IP and updates DNS A/AAAA records via your configured DNS provider (e.g., deSEC).
+2.  **Domain Setup**: Ensures your domain is registered with the DNS provider's API.
+3.  **Certificate Issuance/Renewal**: Uses \`acme.sh\` to obtain or renew SSL/TLS certificates from Let's Encrypt (or other ACME CAs) using DNS challenges.
+4.  **Automatic Backups**: Creates timestamped backups of certificates.
+5.  **Graceful Error Handling**: Includes retry logic for failed API calls.
+6.  **Dry-Run Mode**: Allows testing the entire process without actual changes.
+
+### Essential Setup Steps for Certificate Management:
+
+To obtain real, trusted SSL certificates and ensure your application is accessible via HTTPS, follow these steps:
+
+1.  **Configure DNS Provider**:
+    *   **deSEC (Recommended)**: Go to [deSEC.io](https://desec.io/), create an account, register your domain(s), and configure them to use deSEC's nameservers. Generate an API token (\`DESEC_TOKEN\`).
+    *   **Other Providers**: If using a different DNS provider supported by \`acme.sh\` (e.g., Cloudflare), ensure you have the necessary API credentials (e.g., \`CF_Key\`, \`CF_Email\`).
+
+2.  **Update \`.env\` file (Project Root)**:
+    Ensure the following environment variables are correctly set in your \`.env\` file:
+    *   \`DESEC_TOKEN\`: Your deSEC API token (or equivalent for your chosen DNS provider).
+    *   \`DOMAIN_LIST\`: Your actual domain(s) (e.g., \`"yourdomain.com www.yourdomain.com"\`).
+    *   \`ACME_EMAIL\`: A valid email address for Let's Encrypt notifications.
+    *   \`LE_STAGING\`: Set to \`0\` for production certificates. (Keep as \`1\` for initial testing to avoid rate limits).
+    *   \`DRY_RUN\`: Set to \`0\` to enable actual certificate issuance/updates. (Keep as \`1\` for initial testing).
+    *   \`DNS_PROVIDERS\`: Specify your preferred DNS providers, e.g., \`"dns_desec"\` or \`"dns_desec dns_cf"\`.
+
+3.  **Enable HTTPS for Nginx**:
+    *   The \`frontend/nginx.conf.template\` includes a commented-out \`server\` block for HTTPS (listening on port \`443\`). Uncomment this block and its related SSL directives once you have obtained certificates. This typically happens after the first successful run of the \`cert-manager\`.
+    *   Ensure the \`ports\` section for the \`nginx\` service in \`docker-compose.yml\` has \`- "8443:443"\` uncommented.
+
+4.  **Initial Certificate Issuance (One-time Setup)**:
+    *   Run your services using \`podman-compose up -d\` (or \`docker-compose up -d\`).
+    *   The \`cert-manager\` service will automatically attempt to obtain certificates.
+    *   Monitor the \`cert-manager\` logs: \`podman-compose logs -f cert-manager\`.
+    *   Once successful, your certificates will be stored in the \`certs\` Docker volume.
+
+5.  **Continuous Renewal**:
+    The \`cert-manager\` service is configured to restart on failure, and its internal script is designed to check and renew certificates automatically when they are nearing expiration. You can implement a separate cron job or systemd timer to periodically trigger the \`cert-manager\` service to run its script.
+
+    **Note**: For production environments, consider using Docker/Podman secrets or a dedicated secrets management solution for sensitive credentials like \`DESEC_TOKEN\` and other API keys.
+
 ## Running the Project
 
 ### Development Mode (using Docker Compose)
 
-The easiest way to run the full application (backend, frontend/Nginx, and MongoDB) in a development environment is using Docker Compose.
+The easiest way to run the full application (backend, frontend/Nginx, and all supporting services like Postgres, Redis, and the `cert-manager`) in a development environment is using Docker Compose.
 
 1.  **Start Services**:
     ```bash
-    docker compose up --build
+    docker compose up --build -d
     ```
-    This will build the Docker images (if not already built or if Dockerfiles have changed) and start all services defined in `docker-compose.yml`.
+    This will build the Docker images (if not already built or if Dockerfiles have changed) and start all services defined in `docker-compose.yml` in detached mode.
 
-2.  **Access the Application**:
-    Once services are running, the frontend should be accessible via your browser, typically at `http://localhost:80` or the `NGINX_PORT` specified in your `.env` file.
+2.  **Monitor `cert-manager` (Optional, but Recommended)**:
+    For the first run, it's highly recommended to monitor the `cert-manager` logs to ensure certificates are being processed as expected:
+    ```bash
+    docker compose logs -f cert-manager
+    ```
+    Once certificates are issued (or dry-run completes), you can stop monitoring.
 
-3.  **Stop Services**:
+3.  **Access the Application**:
+    Once services are running, the frontend should be accessible via your browser, typically at `http://localhost:8080` (or the `NGINX_PORT` specified in your `.env` file) for HTTP. For HTTPS, it will be `https://localhost:8443` (or `NGINX_HTTPS_PORT`).
+
+4.  **Stop Services**:
     ```bash
     docker compose down
     ```
@@ -147,7 +209,8 @@ The project is configured with a GitHub Actions workflow (`.github/workflows/ci-
 │   └── run-all-tests.js     # Master test runner script
 ├── docs/                    # Project documentation
 │   ├── agent/               # AI Agent internal documentation (Commands, Testing Guide, Quick Start)
-│   └── NGINX_CONFIG.md      # Nginx configuration notes
+│   ├── NGINX_CONFIG.md      # Nginx configuration notes
+│   └── acme_sh_instructions.md # Instructions for enabling acme.sh and external domain access
 ├── docker-compose.yml       # Defines multi-service Docker application
 ├── .env.example             # Example environment variables
 ├── .gitignore               # Git ignored files
