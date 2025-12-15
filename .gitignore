@@ -37,6 +37,8 @@ tmp/
 temp/
 *.tmp
 *.bak
+backend_pid.txt
+log/
 
 # Test coverage
 coverage/
