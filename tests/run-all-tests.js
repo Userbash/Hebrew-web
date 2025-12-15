@@ -14,9 +14,9 @@
 
 import { promises as fs } from 'fs';
 import { spawn } from 'child_process';
-import NginxDetectionTest from './nginx-detection.test.js';
-import DockerComposeValidator from './docker-compose-validator.test.js';
-import BackendVerificationTest from './backend-verification.test.js';
+import NginxDetectionTest from './system/nginx-detection.test.js';
+import DockerComposeValidator from './system/docker-compose-validator.test.js';
+import BackendVerificationTest from './system/backend-verification.test.js';
 
 class MasterTestRunner {
     constructor() {
@@ -86,11 +86,11 @@ class MasterTestRunner {
 
         const pathsToCheck = [
             { path: `${this.projectRoot}/backend`, type: 'dir', name: 'Backend directory' },
-            { path: `${this.projectRoot}/public`, type: 'dir', name: 'Public directory' },
+            { path: `${this.projectRoot}/frontend/public`, type: 'dir', name: 'Frontend Public directory' },
             { path: `${this.projectRoot}/backend/server.js`, type: 'file', name: 'Backend server.js' },
             { path: `${this.projectRoot}/backend/package.json`, type: 'file', name: 'Backend package.json' },
             { path: `${this.projectRoot}/docker-compose.yml`, type: 'file', name: 'docker-compose.yml' },
-            { path: `${this.projectRoot}/backend.Dockerfile`, type: 'file', name: 'backend.Dockerfile' },
+            { path: `${this.projectRoot}/backend/Dockerfile`, type: 'file', name: 'Backend Dockerfile' },
             { path: `${this.projectRoot}/.env`, type: 'file', name: '.env file' }
         ];
 
@@ -124,8 +124,8 @@ class MasterTestRunner {
         this.log('\nChecking Dockerfile contents...', 'cyan');
 
         const files = [
-            { path: `${this.projectRoot}/backend.Dockerfile`, name: 'backend.Dockerfile' },
-            { path: `${this.projectRoot}/nginx.Dockerfile`, name: 'nginx.Dockerfile' }
+            { path: `${this.projectRoot}/backend/Dockerfile`, name: 'Backend Dockerfile' },
+            { path: `${this.projectRoot}/frontend/Dockerfile`, name: 'Frontend Dockerfile (Nginx)' }
         ];
 
         const results = { total: 0, valid: 0, errors: [] };
