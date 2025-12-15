@@ -23,61 +23,48 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '${{ env.NODE_VERSION }}'
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
       - name: Install Dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y jq bc
         
-      - name: Define Utility Functions
-        id: utility_functions
+      - name: Make ci_utils.sh executable
+        run: chmod +x ./scripts/ci_utils.sh
+
+      - name: Build and Test Backend
         run: |
-          # --- Logging Utilities ---
-          echo 'log() {
-            local level=$1
-            shift
-            local message="$@"
-            echo "[$(date +"%Y-%m-%dT%H:%M:%SZ")] [$level] $message" | tee -a ${{ env.LOG_FILE }}
-          }' >> "$GITHUB_OUTPUT"
-          
-          echo 'run_command() {
-            local cmd_desc=$1
-            local cmd=$2
-            log "INFO" "Running: $cmd_desc (Command: $cmd)"
-            
-            output=$(eval "$cmd" 2>&1)
-            exit_code=$?
-            
-            if [ $exit_code -ne 0 ]; then
-              log "ERROR" "Command failed: $cmd_desc. Exit code: $exit_code. Output:"
-              echo "$output" | tee -a ${{ env.LOG_FILE }}
-              echo "::set-output name=result::failure" >> $GITHUB_OUTPUT
-              echo "::set-output name=output::$output" >> $GITHUB_OUTPUT
-              return 1
-            else
-              log "INFO" "Command successful: $cmd_desc. Output:"
-              echo "$output" | tee -a ${{ env.LOG_FILE }}
-              echo "::set-output name=result::success" >> $GITHUB_OUTPUT
-              echo "::set-output name=output::$output" >> $GITHUB_OUTPUT
-              return 0
-            fi
-          }' >> "$GITHUB_OUTPUT"
-          
-          # --- Error Analysis Functions (from AI-Agent-Commands.md) ---
-          echo 'parse_logs() {
-            local log_content="$1"
-            local error_log_file="$2"
-            
-            echo "$log_content" | while IFS= read -r line; do
-              # Try to parse as JSON if it looks like JSON
-              if echo "$line" | jq -e . > /dev/null 2>&1; then
-                local timestamp=$(echo "$line" | jq -r ".timestamp // empty")
-                local level=$(echo "$line" | jq -r ".level // empty")
-                local message=$(echo "$line" | jq -r ".msg // empty")
-                
-                # Check for error levels (Pino levels 50 is error)
-                if [[ "$level" = "50" || "$level" = "ERROR" ]]; then
-                  echo "{\"timestamp\": \"$timestamp\", \"level\": \"$level\", \"message\": \"$message\"}" >> "$error_log_file"
-                fi
-              else
-                # Fallback for non-JSON lines, simplistic error detection
-                if echo "$line" | grep -iqE "error|fail|failed|exception|denied|refused|timeout|fatal|critical"; then
-                  echo "{\"timestamp\": \"$(date +
+          source ./scripts/ci_utils.sh
+          install_npm_deps "backend"
+          run_npm_test "backend"
+
+      - name: Build Backend Docker Image
+        run: |
+          source ./scripts/ci_utils.sh
+          build_docker_image "hebrew-web-backend" "./backend"
+
+      - name: Build Frontend Docker Image
+        run: |
+          source ./scripts/ci_utils.sh
+          build_docker_image "hebrew-web-frontend" "./frontend"
+
+      - name: Run System Tests
+        run: |
+          source ./scripts/ci_utils.sh
+          run_command "Run all system tests" "node tests/run-all-tests.js" # Assuming tests/package.json exists with test script
+
+      - name: Push Docker Images (Placeholder)
+        if: github.ref == 'refs/heads/main' # Only push on main branch
+        run: |
+          source ./scripts/ci_utils.sh
+          log "INFO" "Skipping Docker image push for now. Configure your registry login and push commands here."
+          # Example:
+          # echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          # docker push your-docker-repo/hebrew-web-backend:latest
+          # docker push your-docker-repo/hebrew-web-frontend:latest
+        
