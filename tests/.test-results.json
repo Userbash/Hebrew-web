@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-12-15T08:17:03.289Z",
+  "total_suites": 2,
+  "passed_suites": 2,
+  "failed_suites": 0,
+  "test_results": [
+    {
+      "suite": "Nginx Detection",
+      "success": true,
+      "result": {
+        "nginx_found": false,
+        "external_nginx": false,
+        "ports_in_use": [],
+        "recommendations": [
+          "✓ No external Nginx detected",
+          "✓ Docker-Compose will run WITH internal Nginx",
+          "✓ All services will be available through Nginx reverse proxy",
+          "✓ Access application at: http://localhost"
+        ],
+        "config_file": "docker-compose.yml"
+      }
+    },
+    {
+      "suite": "Docker-Compose Validation",
+      "success": true,
+      "result": {
+        "valid": true,
+        "warnings": [],
+        "errors": [],
+        "checks": {
+          "yaml_syntax": true,
+          "version": true,
+          "services": true,
+          "volumes": true,
+          "services_detail": true,
+          "build_contexts": true,
+          "networks": true
+        },
+        "services": [
+          "postgres",
+          "redis",
+          "backend",
+          "cert-manager",
+          "nginx"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "hebrew-ai-tests",
+  "version": "1.0.0",
+  "description": "Test suite for the Hebrew AI project",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run-all-tests.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "yaml": "^2.4.1",
+    "node-fetch": "^3.3.2"
+  }
+}

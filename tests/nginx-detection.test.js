@@ -198,7 +198,7 @@ class NginxDetectionTest {
     }
 
     async saveResults() {
-        const resultsFile = '/home/sanya/crezy_project/tests/.nginx-detection-results.json';
+        const resultsFile = '/var/home/sanya/Hebrew-web/tests/.nginx-detection-results.json';
         try {
             await fs.writeFile(
                 resultsFile,

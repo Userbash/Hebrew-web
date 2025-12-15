@@ -2,11 +2,22 @@
 
 A modern, production-ready Hebrew language learning platform with automated testing and deployment infrastructure.
 
+## Features
+
+- **Automated Domain and SSL:** Automatically registers a free domain with deSEC.io and obtains an SSL certificate from Let's Encrypt.
+- **Backend API** - Node.js Express server with modern middleware serving both the API and the frontend
+- **PostgreSQL** - Persistent data storage
+- **Redis** - Caching layer
+- **Nginx** - Reverse proxy & load balancing
+- **Automated Testing**
+- **Smart Deployment**
+
 ## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose (or Podman & podman-compose)
 - Node.js 18+ (for testing)
+- A deSEC.io account and API token. Get one at [desec.io](https://desec.io/).
 - 2GB free disk space
 
 ### Deploy in 30 Seconds
@@ -16,8 +27,9 @@ A modern, production-ready Hebrew language learning platform with automated test
 git clone https://github.com/your-username/hebrew-ai-2025.git
 cd hebrew-ai-2025
 
-# 2. Copy environment configuration
+# 2. Copy and configure environment variables
 cp .env.example .env
+# Open .env and set your DESEC_TOKEN, DOMAIN_NAME, and ACME_EMAIL.
 
 # 3. Deploy
 ./deploy.sh
@@ -25,31 +37,9 @@ cp .env.example .env
 
 ### Access the Application
 
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:3001
-- **Health Check:** http://localhost:3001/api/health
-
-## Features
-
-### Core Services
-- **Backend API** - Node.js Express server with modern middleware
-- **Frontend** - Static HTML/JavaScript web interface
-- **PostgreSQL** - Persistent data storage
-- **Redis** - Caching layer
-- **Nginx** - Reverse proxy & load balancing
-
-### Automated Testing
-- Path and configuration verification
-- Dockerfile syntax validation
-- docker-compose configuration checking
-- Backend API health checks
-- Complete deployment testing with Podman/Docker
-
-### Smart Deployment
-- Automatic external Nginx detection
-- Zero-manual configuration needed
-- Health checks with automatic retry
-- Graceful error handling and rollback
+- **Application:** https://your-domain-name
+- **Backend API:** https://your-domain-name/api/
+- **Health Check:** https://your-domain-name/api/health
 
 ## Project Structure
 
@@ -62,10 +52,12 @@ hebrew-ai-2025/
 │   │   └── data/           # Data storage
 │   ├── server.js           # Main server file
 │   └── package.json
-├── frontend/               # Web UI
+├── public/                # Web UI
 │   ├── pages/             # HTML pages
 │   ├── css/               # Stylesheets
 │   └── js/                # Client-side scripts
+├── scripts/
+│   └── entrypoint.sh      # Entrypoint script for domain and certificate automation
 ├── tests/                 # Test suite
 │   ├── run-all-tests.js
 │   ├── nginx-detection.test.js
@@ -73,8 +65,8 @@ hebrew-ai-2025/
 │   └── test-deployment-podman.sh
 ├── docker-compose.yml     # Container orchestration
 ├── backend.Dockerfile
-├── frontend.Dockerfile
-├── nginx.conf
+├── nginx.Dockerfile
+├── nginx.conf.template
 ├── .env                   # Environment variables (create from .env.example)
 └── README.md
 ```
@@ -83,9 +75,20 @@ hebrew-ai-2025/
 
 ### Environment Variables
 
-Create `.env` from `.env.example`:
+Create `.env` from `.env.example` and fill in the values:
 
 ```bash
+# Domain and SSL Configuration
+# Get your deSEC.io token from https://desec.io/
+DESEC_TOKEN=
+# Your domain name. It will be created if it doesn't exist.
+# Must be a sub-domain of a domain you own in deSEC.io (e.g. myapp.dedyn.io)
+DOMAIN_NAME=
+# Your email address for Let's Encrypt
+ACME_EMAIL=
+# Set to 1 to use Let's Encrypt staging environment for testing
+LE_STAGING=0
+
 # Database
 DB_USER=postgres
 DB_PASSWORD=secure_password_here
@@ -95,9 +98,6 @@ DB_PORT=5432
 # Backend
 BACKEND_PORT=3001
 NODE_ENV=production
-
-# Frontend
-FRONTEND_PORT=3000
 
 # Nginx
 NGINX_PORT=80
@@ -116,6 +116,7 @@ EXTERNAL_NGINX=false
 - Builds images
 - Starts containers
 - Runs health checks
+- Automatically registers a domain and obtains an SSL certificate.
 
 ### Option 2: With Testing
 ```bash
@@ -174,7 +175,7 @@ docker-compose logs -f
 
 # Specific service
 docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f cert-manager
 docker-compose logs -f postgres
 ```
 
@@ -201,7 +202,7 @@ docker stats
 ### Port Already in Use
 ```bash
 # Check which process is using the port
-ss -tuln | grep :3000
+ss -tuln | grep :80
 
 # Change port in .env and restart
 docker-compose down
@@ -214,7 +215,7 @@ docker-compose up -d
 docker-compose logs backend
 
 # Verify health
-curl http://localhost:3001/api/health
+curl https://your-domain-name/api/health
 
 # Restart service
 docker-compose restart backend
@@ -233,20 +234,18 @@ docker-compose build --progress=plain
 
 ### Prerequisites
 1. Server with Docker installed
-2. SSL certificates (optional, for HTTPS)
-3. Domain name configured
-4. At least 2GB free disk space
+2. Domain name configured in your `.env` file.
+3. At least 2GB free disk space
 
 ### Steps
 1. Clone repository on server
 2. Configure `.env` with production values
 3. Run: `./deploy.sh`
-4. Configure Nginx/SSL (if needed) - see NGINX_CONFIG.md
 
 ### Health Monitoring
 ```bash
 # Check service health
-curl https://your-domain.com/api/health
+curl https://your-domain-name/api/health
 
 # Monitor logs
 docker-compose logs -f backend
@@ -257,10 +256,10 @@ docker stats
 
 ## Performance Metrics
 
-- **Build Time:** ~75 seconds
-- **Startup Time:** ~15 seconds
-- **Memory Usage:** 600-800 MB
-- **Disk Space:** ~500 MB
+- **Build Time:** ~60 seconds
+- **Startup Time:** ~10 seconds
+- **Memory Usage:** 500-700 MB
+- **Disk Space:** ~400 MB
 
 ## Security
 
@@ -297,23 +296,14 @@ upstream backend {
     server localhost:3001;
 }
 
-upstream frontend {
-    server localhost:3000;
-}
-
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name your-domain-name;
 
-    location /api/ {
+    location / {
         proxy_pass http://backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location / {
-        proxy_pass http://frontend;
-        proxy_set_header Host $host;
     }
 }
 ```
@@ -366,3 +356,5 @@ A: Run: `docker-compose exec postgres pg_dump -U postgres hebrew_ai_db > backup.
 - Redis - Caching
 - Nginx - Web server
 - Docker - Containerization
+- deSEC.io - Free DNS hosting
+- Let's Encrypt - Free SSL/TLS Certificates

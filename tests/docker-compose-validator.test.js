@@ -14,9 +14,9 @@ import { resolve } from 'path';
 import YAML from 'yaml';
 
 class DockerComposeValidator {
-    constructor(composePath = '/home/sanya/crezy_project/docker-compose.yml') {
+    constructor(composePath = '/var/home/sanya/Hebrew-web/docker-compose.yml') {
         this.composePath = composePath;
-        this.projectRoot = '/home/sanya/crezy_project';
+        this.projectRoot = '/var/home/sanya/Hebrew-web';
         this.results = {
             valid: true,
             warnings: [],
@@ -149,7 +149,7 @@ class DockerComposeValidator {
         this.log(`   Defined volumes: ${Object.keys(config.volumes).length}`, 'cyan');
 
         for (const [volumeName, volumeConfig] of Object.entries(config.volumes)) {
-            if (volumeConfig.driver_opts && volumeConfig.driver_opts.device) {
+            if (volumeConfig && volumeConfig.driver_opts && volumeConfig.driver_opts.device) {
                 const device = volumeConfig.driver_opts.device;
                 const actualPath = device.replace('${DOCKER_DATA_PATH:-./data}', `${this.projectRoot}/data`);
 
@@ -224,7 +224,7 @@ class DockerComposeValidator {
 
                 // Check Dockerfile
                 if (serviceConfig.build.dockerfile) {
-                    const dockerfilePath = resolve(this.projectRoot, serviceConfig.build.dockerfile);
+                    const dockerfilePath = resolve(contextPath, serviceConfig.build.dockerfile);
                     try {
                         await fs.access(dockerfilePath);
                         this.log(`     ✓ Dockerfile: ${serviceConfig.build.dockerfile}`, 'green');

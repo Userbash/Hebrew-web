@@ -57,7 +57,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Static files
-app.use(express.static(join(__dirname, 'public')));
+app.use(express.static(join(__dirname, '..', 'public')));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HEALTH CHECK ENDPOINT
@@ -99,12 +99,16 @@ app.use('/api/progress', progressRoutes);
 // ═══════════════════════════════════════════════════════════════════════════
 
 app.get('/', (req, res) => {
-    res.sendFile(join(__dirname, 'public', 'START_HERE.html'));
+    res.sendFile(join(__dirname, '..', 'public', 'pages', 'index.html'));
 });
 
 app.get('/pages/:page', (req, res) => {
     const page = req.params.page.replace(/\.\./g, ''); // Security: prevent directory traversal
-    res.sendFile(join(__dirname, 'public', 'pages', `${page}.html`));
+    res.sendFile(join(__dirname, '..', 'public', 'pages', `${page}.html`));
+});
+
+app.get('/index.html', (req, res) => {
+    res.sendFile(join(__dirname, '..', 'public', 'pages', 'index.html'));
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

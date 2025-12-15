@@ -56,7 +56,12 @@ RUN apk add --no-cache \
     curl \
     dumb-init \
     tini \
-    ca-certificates
+    ca-certificates \
+    bash \
+    socat
+    
+# Install acme.sh
+RUN curl https://get.acme.sh | sh
 
 # Create non-root user
 RUN addgroup -g 1001 nodejs && \
@@ -116,9 +121,3 @@ ENV NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=2048" \
     LOG_LEVEL=info \
     PORT=3001
-
-# Use dumb-init as entrypoint to handle signals properly
-ENTRYPOINT ["/sbin/dumb-init", "--"]
-
-# Start application
-CMD ["node", "server.js"]

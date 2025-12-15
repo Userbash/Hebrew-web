@@ -20,7 +20,7 @@ import BackendVerificationTest from './backend-verification.test.js';
 
 class MasterTestRunner {
     constructor() {
-        this.projectRoot = '/home/sanya/crezy_project';
+        this.projectRoot = '/var/home/sanya/Hebrew-web';
         this.results = {
             timestamp: new Date().toISOString(),
             total_suites: 0,
@@ -86,12 +86,11 @@ class MasterTestRunner {
 
         const pathsToCheck = [
             { path: `${this.projectRoot}/backend`, type: 'dir', name: 'Backend directory' },
-            { path: `${this.projectRoot}/frontend`, type: 'dir', name: 'Frontend directory' },
+            { path: `${this.projectRoot}/public`, type: 'dir', name: 'Public directory' },
             { path: `${this.projectRoot}/backend/server.js`, type: 'file', name: 'Backend server.js' },
             { path: `${this.projectRoot}/backend/package.json`, type: 'file', name: 'Backend package.json' },
             { path: `${this.projectRoot}/docker-compose.yml`, type: 'file', name: 'docker-compose.yml' },
             { path: `${this.projectRoot}/backend.Dockerfile`, type: 'file', name: 'backend.Dockerfile' },
-            { path: `${this.projectRoot}/frontend.Dockerfile`, type: 'file', name: 'frontend.Dockerfile' },
             { path: `${this.projectRoot}/.env`, type: 'file', name: '.env file' }
         ];
 
@@ -126,7 +125,7 @@ class MasterTestRunner {
 
         const files = [
             { path: `${this.projectRoot}/backend.Dockerfile`, name: 'backend.Dockerfile' },
-            { path: `${this.projectRoot}/frontend.Dockerfile`, name: 'frontend.Dockerfile' }
+            { path: `${this.projectRoot}/nginx.Dockerfile`, name: 'nginx.Dockerfile' }
         ];
 
         const results = { total: 0, valid: 0, errors: [] };
@@ -167,8 +166,10 @@ class MasterTestRunner {
                 'DB_NAME',
                 'DB_PORT',
                 'BACKEND_PORT',
-                'FRONTEND_PORT',
-                'NGINX_PORT'
+                'NGINX_PORT',
+                'DESEC_TOKEN',
+                'DOMAIN_NAME',
+                'ACME_EMAIL'
             ];
 
             const results = { total: 0, found: 0, errors: [] };
