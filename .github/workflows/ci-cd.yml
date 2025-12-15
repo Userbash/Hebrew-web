@@ -37,11 +37,25 @@ jobs:
       - name: Make ci_utils.sh executable
         run: chmod +x ./scripts/ci_utils.sh
 
+      - name: Start Backend Server
+        run: |
+          npm start --prefix backend &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          sleep 5 # Give the server some time to start up
+
       - name: Build and Test Backend
         run: |
           source ./scripts/ci_utils.sh
           install_npm_deps "backend"
           run_npm_test "backend"
+      
+      - name: Stop Backend Server
+        if: always() # Ensure this runs even if tests fail
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            kill $SERVER_PID
+            echo "Backend server (PID $SERVER_PID) stopped."
+          fi
 
       - name: Build Backend Docker Image
         run: |

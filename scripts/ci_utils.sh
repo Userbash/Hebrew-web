@@ -19,14 +19,14 @@ run_command() {
   if [ $exit_code -ne 0 ]; then
     log "ERROR" "Command failed: $cmd_desc. Exit code: $exit_code. Output:"
     echo "$output" | tee -a pipeline.log
-    echo "::set-output name=result::failure"
-    echo "::set-output name=output::$output"
+    echo "result=failure" >> $GITHUB_OUTPUT
+    echo "output=$output" >> $GITHUB_OUTPUT
     return 1
   else
     log "INFO" "Command successful: $cmd_desc. Output:"
     echo "$output" | tee -a pipeline.log
-    echo "::set-output name=result::success"
-    echo "::set-output name=output::$output"
+    echo "result=success" >> $GITHUB_OUTPUT
+    echo "output=$output" >> $GITHUB_OUTPUT
     return 0
   fi
 }
