@@ -6,75 +6,36 @@ if [ -f /app/.env ]; then
     source /app/.env
 fi
 
-# Log function
-log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
+# IMPORTANT SECURITY NOTE:
+# Sensitive environment variables (like API tokens, e.g., DESEC_TOKEN, CF_Key)
+# should ideally be managed securely. In production, consider using Docker/Podman secrets,
+# Kubernetes secrets, or a dedicated secrets management solution instead of
+# plain .env files or directly exposing them in docker-compose.yml.
+# Ensure .env files are excluded from version control (.gitignore) and have restricted access permissions.
 
-# Function to setup domain
-setup_domain() {
-    log "🔍 Checking for domain..."
-    
-    if [ -f /etc/letsencrypt/.domain ]; then
-        DOMAIN_NAME=$(cat /etc/letsencrypt/.domain)
-        log "✅ Domain found: $DOMAIN_NAME"
-        return 0
-    fi
-    
-    log "📝 Creating new domain via API..."
-    
-    # API call to deSEC
-    RESPONSE=$(curl -s -X POST \
-        -H "Authorization: Token ${DESEC_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d "{\"name\": \"${DOMAIN_NAME}\"}" \
-        https://desec.io/api/v1/domains/)
-    
-    if echo "$RESPONSE" | grep -q '"name"'; then
-        log "✅ Domain created: $DOMAIN_NAME"
-        echo "$DOMAIN_NAME" > /etc/letsencrypt/.domain
-    else
-        log "⚠️  Domain already exists or error: $RESPONSE"
-        echo "$DOMAIN_NAME" > /etc/letsencrypt/.domain
+# ========================================
+# Logging Functions
+# ========================================
+log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] INFO: $*"; }
+log_warn() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARN: $*" >&2; }
+log_error() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; }
+log_debug() {
+    if [ "${DEBUG_MODE}" == "1" ]; then
+        echo "[$(date +'%Y-%m-%d %H:%M:%S')] DEBUG: $*" >&2;
     fi
 }
 
-# Function to issue SSL certificate
-setup_certificate() {
-    log "🔐 Issuing SSL certificate..."
-    
-    DOMAIN=$(cat /etc/letsencrypt/.domain)
-    
-    if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then
-        log "✅ Certificate already exists."
-        return 0
-    fi
-    
-    # Issue certificate via Let's Encrypt
-    STAGING_FLAG=""
-    if [ "${LE_STAGING}" == "1" ]; then
-        STAGING_FLAG="--staging"
-    fi
-    
-    /acme.sh/acme.sh \
-        --issue \
-        -d "$DOMAIN" \
-        -d "*.$DOMAIN" \
-        --dns dns_desec \
-        --dnssleep 20 \
-        --cert-file /etc/letsencrypt/live/$DOMAIN/cert.pem \
-        --key-file /etc/letsencrypt/live/$DOMAIN/privkey.pem \
-        --fullchain-file /etc/letsencrypt/live/$DOMAIN/fullchain.pem \
-        $STAGING_FLAG
-    
-    log "✅ Certificate issued successfully."
-}
-
-# Main process
+# ========================================
+# Main Process
+# ========================================
 main() {
-    setup_domain
-    setup_certificate
     log "🚀 Application ready!"
     # Start the node server
-    exec node server.js
+    node server.js || { log_error "Node.js server failed to start! Exiting."; exit 1; }
+    # Keep the container running if the node server exits, to allow inspection
+    # If the Node.js server is meant to be the main process, 'exec' is typically used.
+    # For debugging, we remove 'exec' to see if Node.js exits on its own.
+    sleep infinity
 }
 
 main "$@"

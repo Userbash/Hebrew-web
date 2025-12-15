@@ -13,16 +13,12 @@ LABEL description="Node.js Backend API Builder"
 RUN apk add --no-cache \
     python3 \
     make \
-    g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev
+    g++
 
 WORKDIR /build
 
 # Copy package files
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Install dependencies with production optimizations
 RUN npm ci --only=production && \
@@ -36,10 +32,10 @@ FROM node:20-alpine AS security-scanner
 WORKDIR /scan
 
 COPY --from=builder /build/node_modules ./node_modules
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Run security audit
-RUN npm audit --audit-level=moderate || true && \
+RUN npm audit --audit-level=moderate && \
     npm ls 2>/dev/null || true
 
 # ============================================================================
@@ -58,63 +54,37 @@ RUN apk add --no-cache \
     tini \
     ca-certificates \
     bash \
-    socat
+    socat \
+    jq \
+    openssl \
+    coreutils \
+    tar # tar for backup function
 
 # Create non-root user
 RUN addgroup -g 1001 nodejs && \
     adduser -S nodejs -u 1001 -G nodejs
-
 WORKDIR /app
 
-# Create necessary directories
-RUN mkdir -p /app/uploads /var/log/app && \
-    chown -R nodejs:nodejs /app /var/log/app
+# Create necessary directories and set permissions as root
+RUN mkdir -p /app/uploads /var/log/app /etc/letsencrypt /etc/letsencrypt/backup && \
+    chown -R nodejs:nodejs /app /var/log/app /etc/letsencrypt && \
+    chmod -R 700 /etc/letsencrypt
 
 # Copy node_modules from builder stage
 COPY --from=builder --chown=nodejs:nodejs /build/node_modules ./node_modules
 
 # Copy application code
-COPY --chown=nodejs:nodejs . .
+COPY --chown=nodejs:nodejs ./backend .
 
-# Create health check script
-RUN cat > /app/healthcheck.js << 'EOF'
-const http = require('http');
-
-const options = {
-  hostname: 'localhost',
-  port: process.env.PORT || 3001,
-  path: '/api/health',
-  method: 'GET',
-  timeout: 5000
-};
-
-const req = http.request(options, (res) => {
-  if (res.statusCode === 200) {
-    process.exit(0);
-  } else {
-    process.exit(1);
-  }
-});
-
-req.on('error', () => {
-  process.exit(1);
-});
-
-req.end();
-EOF
-
-# Switch to non-root user
-USER nodejs
-
-# Expose port
-EXPOSE 3001
-
-# Health check
-HEALTHCHECK --interval=10s --timeout=5s --retries=5 --start-period=20s \
-    CMD node /app/healthcheck.js
+# Copy and make entrypoint script executable
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 # Set environment variables
 ENV NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=2048" \
     LOG_LEVEL=info \
     PORT=3001
+
+# Set the entrypoint to the executable script
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

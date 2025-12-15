@@ -42,6 +42,11 @@ jobs:
           source ./scripts/ci_utils.sh
           install_npm_deps "backend"
 
+      - name: Run Backend Lint
+        run: |
+          source ./scripts/ci_utils.sh
+          run_command "Run ESLint on backend code" "npm run lint --prefix backend"
+
       - name: Start Backend Server
         run: |
           npm start --prefix backend &

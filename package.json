@@ -4,7 +4,7 @@
   "description": "A comprehensive web application for learning Hebrew, featuring an interactive frontend and a robust backend API.",
   "type": "module",
   "scripts": {
-    "test": "node tests/run-all-tests.js"
+    "test": "node --experimental-specifier-resolution=node tests/run-all-tests.js"
   },
   "author": "Hebrew Web App Team",
   "license": "MIT",

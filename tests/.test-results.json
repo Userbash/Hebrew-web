@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-12-15T10:25:10.221Z",
+  "timestamp": "2025-12-15T14:14:53.537Z",
   "total_suites": 2,
   "passed_suites": 2,
   "failed_suites": 0,
@@ -8,16 +8,39 @@
       "suite": "Nginx Detection",
       "success": true,
       "result": {
-        "nginx_found": false,
-        "external_nginx": false,
-        "ports_in_use": [],
-        "recommendations": [
-          "✓ No external Nginx detected",
-          "✓ Docker-Compose will run WITH internal Nginx",
-          "✓ All services will be available through Nginx reverse proxy",
-          "✓ Access application at: http://localhost"
+        "nginx_found": true,
+        "external_nginx": true,
+        "ports_in_use": [
+          80
         ],
-        "config_file": "docker-compose.yml"
+        "recommendations": [
+          "✓ External Nginx detected on ports: 80",
+          "✓ Docker-Compose will run WITHOUT internal Nginx",
+          "✓ Configure external Nginx to proxy to Docker containers:",
+          "  - Backend API: http://localhost:3001",
+          "  - Frontend: http://localhost:3000",
+          "",
+          "Example Nginx configuration:",
+          "  upstream backend { server localhost:3001; }",
+          "  upstream frontend { server localhost:3000; }",
+          "",
+          "  server {",
+          "    listen 80;",
+          "    server_name _;",
+          "",
+          "    location /api/ {",
+          "      proxy_pass http://backend;",
+          "      proxy_set_header Host $host;",
+          "      proxy_set_header X-Real-IP $remote_addr;",
+          "    }",
+          "",
+          "    location / {",
+          "      proxy_pass http://frontend;",
+          "      proxy_set_header Host $host;",
+          "    }",
+          "  }"
+        ],
+        "config_file": "docker-compose.minimal.yml"
       }
     },
     {
@@ -40,7 +63,6 @@
           "postgres",
           "redis",
           "backend",
-          "cert-manager",
           "nginx"
         ]
       }

@@ -1,0 +1,40 @@
+[Unit]
+Description=Certificate Manager Service for Hebrew-web
+After=network-online.target
+
+[Service]
+# User and Group under which the service will run
+User=root # Or a dedicated user for certificate management
+Group=root # Or a dedicated group
+
+# Set working directory to the project root
+WorkingDirectory=/path/to/Hebrew-web/scripts
+
+# Path to the environment file (e.g., .env in the project root)
+# Ensure this file is accessible and contains DESEC_TOKEN, DOMAIN_LIST, etc.
+EnvironmentFile=-/path/to/Hebrew-web/.env
+
+# The command to execute. 
+# This assumes entrypoint.sh is modified to run indefinitely or as a cronjob.
+# For a systemd service, you might want a separate script that runs check_and_update_ip
+# and setup_certificate periodically, rather than starting the node server.
+#
+# Option 1: Run entrypoint.sh once at startup (suitable if entrypoint.sh manages a loop or a cron-like schedule internally)
+ExecStart=/bin/bash /path/to/Hebrew-web/scripts/entrypoint.sh
+
+# Option 2: Run a dedicated certificate renewal script periodically using a systemd timer (preferred for renewals)
+# You would create a separate script (e.g., `scripts/run_cert_tasks.sh`) that calls 
+# check_and_update_ip and setup_certificate and then exits.
+# This ExecStart would be for a systemd service that *only* does the initial setup.
+# For periodic renewal, a systemd timer unit would be more appropriate.
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+
+# Standard output and error logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

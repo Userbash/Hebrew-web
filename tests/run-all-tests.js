@@ -20,7 +20,7 @@ import BackendVerificationTest from './system/backend-verification.test.js';
 
 class MasterTestRunner {
     constructor() {
-        this.projectRoot = '/var/home/sanya/Hebrew-web';
+        this.projectRoot = process.cwd();
         this.results = {
             timestamp: new Date().toISOString(),
             total_suites: 0,

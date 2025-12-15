@@ -49,6 +49,8 @@ coverage/
 *.dump
 
 # SSL certificates (for production use only)
+certs/
+acme-data/
 ssl/*.key
 ssl/*.crt
 ssl/*.pem

@@ -14,9 +14,9 @@ import { resolve } from 'path';
 import YAML from 'yaml';
 
 class DockerComposeValidator {
-    constructor(composePath = '/var/home/sanya/Hebrew-web/docker-compose.yml') {
+    constructor(composePath = 'docker-compose.yml') {
         this.composePath = composePath;
-        this.projectRoot = '/var/home/sanya/Hebrew-web';
+        this.projectRoot = process.cwd();
         this.results = {
             valid: true,
             warnings: [],

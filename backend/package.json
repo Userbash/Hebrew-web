@@ -10,7 +10,7 @@
     "test": "node tests/quick-test.js",
     "test:full": "node tests/test-api.js",
     "build": "npm run lint && npm run test",
-    "lint": "echo 'Linting...'"
+    "lint": "eslint . --ignore-pattern public/"
   },
   "keywords": [
     "hebrew",
@@ -30,6 +30,7 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "eslint": "^9.39.2",
     "node": "^18.0.0",
     "node-fetch": "^2.7.0"
   }

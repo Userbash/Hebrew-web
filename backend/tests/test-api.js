@@ -81,7 +81,7 @@ class APITester {
 
     summary() {
         this.log('\n' + '═'.repeat(60), 'blue');
-        this.log(`\nTest Summary`, 'blue');
+        this.log('\nTest Summary', 'blue');
         this.log(`  Total:  ${this.testCount}`, 'cyan');
         this.log(`  Passed: ${this.passedCount}`, 'green');
         this.log(`  Failed: ${this.failedCount}`, this.failedCount > 0 ? 'red' : 'green');
