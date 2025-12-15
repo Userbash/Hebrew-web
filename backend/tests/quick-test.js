@@ -5,7 +5,9 @@
  * Tests all major endpoints
  */
 
-const BASE_URL = 'http://localhost:3000/api';
+import fetch from 'node-fetch';
+
+const BASE_URL = 'http://127.0.0.1:3001/api';
 
 const colors = {
     reset: '\x1b[0m',

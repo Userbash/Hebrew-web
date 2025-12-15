@@ -6,7 +6,7 @@
 
 import fetch from 'node-fetch';
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://127.0.0.1:3001';
 const API_URL = `${BASE_URL}/api`;
 
 // Colors for console output

@@ -12,12 +12,12 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from 'dotenv';
 
-// Load environment variables
-config();
-
 // Get current directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Load environment variables
+config({ path: join(__dirname, '..', '.env') });
 
 // Import routes
 import authRoutes from './api/routes/auth.js';
@@ -32,7 +32,7 @@ import { errorHandler, notFound } from './api/middleware/errorHandler.js';
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.BACKEND_PORT || 3001;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MIDDLEWARE

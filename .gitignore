@@ -16,7 +16,7 @@ dist/
 *.so
 
 # Data and logs
-data/
+/data/
 logs/
 *.log
 
