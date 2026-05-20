@@ -76,7 +76,7 @@ COPY --from=builder --chown=nodejs:nodejs /build/node_modules ./node_modules
 COPY --chown=nodejs:nodejs . .
 
 # Copy and make entrypoint script executable
-COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 # Set environment variables

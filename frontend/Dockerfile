@@ -1,8 +1,7 @@
 FROM nginx:alpine
-
-RUN apk add --no-cache gettext
-
-COPY nginx.conf.template /etc/nginx/nginx.conf.template
-COPY public /usr/share/nginx/html
-
-CMD ["/bin/sh", "-c", "envsubst < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]
+RUN rm -rf /usr/share/nginx/html/*
+COPY public/ /usr/share/nginx/html/
+# The Nginx config needs to be at /etc/nginx/nginx.conf, not in conf.d/default.conf, since the template provided is a full nginx.conf file.
+COPY nginx.conf.template /etc/nginx/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

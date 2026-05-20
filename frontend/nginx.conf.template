@@ -3,13 +3,24 @@ events {
 }
 
 http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    
     server {
         listen 80;
         server_name $DOMAIN_NAME;
 
         location / {
-            root /usr/share/nginx/html;
+            root /usr/share/nginx/html/pages;
             index index.html;
+        }
+
+        location /css/ {
+            root /usr/share/nginx/html;
+        }
+
+        location /js/ {
+            root /usr/share/nginx/html;
         }
 
         # Deny access to hidden files and directories
