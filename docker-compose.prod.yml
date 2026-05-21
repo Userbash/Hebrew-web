@@ -1,0 +1,12 @@
+version: '3.9'
+services:
+  backend:
+    environment:
+      NODE_ENV: production
+    deploy:
+      restart_policy:
+        condition: on-failure
+  frontend:
+    deploy:
+      restart_policy:
+        condition: on-failure

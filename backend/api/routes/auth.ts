@@ -1,0 +1,100 @@
+import { Router } from 'express';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import { db } from '../data/db.js';
+
+const router = Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_2025';
+const SALT_ROUNDS = 12; // High security factor
+
+// POST /api/auth/register
+router.post('/register', async (req, res) => {
+  const { email, password, firstName, lastName } = req.body;
+  
+  try {
+    const existingUser = await db.getUserByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ message: 'Пользователь уже существует' });
+    }
+
+    // Secure Hashing
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const newUser = await db.createUser(
+      email,
+      passwordHash,
+      firstName || '',
+      lastName || ''
+    );
+
+    const token = jwt.sign({ id: newUser.id }, JWT_SECRET, { expiresIn: '24h' });
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+
+    res.status(201).json(newUser);
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+// POST /api/auth/login
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    const user = await db.getUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ message: 'Неверные учетные данные' });
+    }
+
+    // Secure comparison
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Неверные учетные данные' });
+    }
+
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '24h' });
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+
+    res.json({ id: user.id, email: user.email, first_name: user.first_name });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+// GET /api/auth/me
+router.get('/me', async (req, res) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: 'Не авторизован' });
+
+  try {
+    const decoded: any = jwt.verify(token, JWT_SECRET);
+    const user = await db.getUserById(decoded.id);
+    if (!user) return res.status(401).json({ message: 'Пользователь не найден' });
+    
+    res.json(user);
+  } catch (err) {
+    res.status(401).json({ message: 'Невалидный токен' });
+  }
+});
+
+// POST /api/auth/logout
+router.post('/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ message: 'Вышли из системы' });
+});
+
+export default router;

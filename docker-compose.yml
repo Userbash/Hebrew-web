@@ -1,6 +1,24 @@
 version: '3.9'
 
 services:
+  traefik:
+    image: traefik:v3.3
+    container_name: hebrew_ai_traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - web
+
   postgres:
     image: postgres:16-alpine
     container_name: hebrew_ai_postgres
@@ -8,8 +26,6 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
       POSTGRES_DB: ${DB_NAME:-hebrew_ai_db}
-    ports:
-      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,12 +34,12 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - web
 
   redis:
     image: redis:7-alpine
     container_name: hebrew_ai_redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -32,6 +48,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - web
 
   backend:
     build:
@@ -40,92 +58,71 @@ services:
     container_name: hebrew_ai_backend
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${BACKEND_PORT:-3001}
+      PORT: 3001
       DB_HOST: postgres
-      DB_PORT: ${DB_PORT:-5432}
+      DB_PORT: 5432
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres123}
       DB_NAME: ${DB_NAME:-hebrew_ai_db}
       REDIS_HOST: redis
-      REDIS_PORT: ${REDIS_port:-6379}
+      REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      DESEC_TOKEN: ${DESEC_TOKEN}
-      DOMAIN_LIST: ${DOMAIN_LIST}
-      ACME_EMAIL: ${ACME_EMAIL}
-      LE_STAGING: ${LE_STAGING}
-      DEBUG_MODE: ${DEBUG_MODE}
-      DRY_RUN: ${DRY_RUN}
-      CF_Key: ${CF_Key} # Optional: For Cloudflare DNS provider
-      CF_Email: ${CF_Email} # Optional: For Cloudflare DNS provider
-    ports:
-      - "${BACKEND_PORT:-3001}:3001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT:-3001}/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 20s
-    volumes:
-      - certs:/etc/letsencrypt
+    networks:
+      - web
 
-    entrypoint: ["bash", "/usr/local/bin/entrypoint.sh"]
-    restart: unless-stopped
-
-  cert-manager:
-    image: neilpang/acme.sh:latest
-    container_name: hebrew_ai_cert_manager
-    environment:
-      # Pass necessary environment variables for acme.sh operation
-      DESEC_TOKEN: ${DESEC_TOKEN}
-      DOMAIN_LIST: ${DOMAIN_LIST}
-      ACME_EMAIL: ${ACME_EMAIL}
-      LE_STAGING: ${LE_STAGING}
-      DEBUG_MODE: ${DEBUG_MODE}
-      DRY_RUN: ${DRY_RUN}
-      DNS_PROVIDERS: ${DNS_PROVIDERS} # Specify desired DNS providers, space separated
-      CF_Key: ${CF_Key} # Optional: For Cloudflare DNS provider
-      CF_Email: ${CF_Email} # Optional: For Cloudflare DNS provider
-    volumes:
-      - certs:/etc/letsencrypt # Certificates
-      - acme-data:/acme.sh     # acme.sh working directory
-      - ./scripts/run_cert_manager.sh:/app/run_cert_manager.sh # Custom script to execute
-    # command: ["bash", "/app/run_cert_manager.sh"] # Use custom script
-    # For initial testing, we'll use a simple command to confirm startup
-    command: ["sh", "-c", "/app/run_cert_manager.sh && sleep infinity"] # Use custom script
-    restart: on-failure
-    depends_on:
-      # Cert manager does not directly depend on backend, but runs alongside
-      # Ensure network is available
-      - postgres # Arbitrary dependency to ensure network is up
-
-  nginx:
+  frontend:
     build:
-      context: ./frontend
+      context: ./frontend-react
       dockerfile: Dockerfile
-    container_name: hebrew_ai_nginx
-    ports:
-      - "8080:80"
-      - "8443:443"
-    environment:
-      - DOMAIN_NAME=${DOMAIN_NAME}
-      - NGINX_PORT=${NGINX_PORT:-8080}
-      - NGINX_HTTPS_PORT=${NGINX_HTTPS_PORT:-8443}
-
+    container_name: hebrew_ai_frontend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME}`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
     depends_on:
       - backend
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - web
+
+networks:
+  web:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   certs:
   acme-data:
-
-networks:
-  default:
-    name: hebrew_ai_network
