@@ -288,3 +288,106 @@ Low quality results are routed into the feedback loop, which creates `fix` tasks
 - Add async task execution and worker pools.
 - Add authenticated REST server implementation for agents.
 - Add real CI adapters for npm, pytest, ruff, mypy, and container checks.
+
+## P2P Agent Messaging and Smart Scheduler
+
+`SmartScheduler` supports a hybrid control model:
+
+```text
+Orchestrator -> strategic, high-risk, multi-system work
+Scheduler -> priority, dependency, readiness, retry, escalation decisions
+Agents -> local execution and low-risk P2P feedback
+MessageBus -> direct or relayed P2P delivery with ACK history
+```
+
+Use orchestrator routing for architecture, API, database, auth, security, rollback, audit, and critical tasks. Low-risk local feedback can use P2P, for example:
+
+```text
+tester_agent -> coder_agent: test_failed
+reviewer_agent -> coder_agent: fix_required
+docs_agent -> coder_agent: request_context
+monitor_agent -> scheduler_agent: agent_overloaded
+```
+
+### Readiness States
+
+Agents can report detailed lifecycle states:
+
+```text
+offline, starting, warming_up, loading_context, loading_task_context,
+ready, idle, assigned, busy, blocked, waiting_dependency, waiting_input,
+reviewing, testing, degraded, overloaded, cooling_down, standby, sleeping,
+unreachable, failed, recovering, draining, maintenance, disabled
+```
+
+`SmartScheduler.readiness(agent)` normalizes these into `cold`, `warm`, or `hot` start decisions using active tasks, queue depth, limits, latency, and last heartbeat.
+
+### Task Weight
+
+Tasks are ranked by:
+
+```text
+task_score =
+  priority * 0.30
+  + urgency * 0.20
+  + business_value * 0.20
+  + risk * 0.15
+  + dependency_count * 0.10
+  + complexity * 0.05
+```
+
+P0/P1-style critical work should stay under orchestrator governance. P3-P5 local tasks can use direct P2P when no architecture, security, API, database, rollback, or human approval risk is detected.
+
+### Agent Selection
+
+Scheduler agent scoring uses:
+
+```text
+agent_score =
+  capability_match * 0.35
+  + availability * 0.25
+  + low_latency * 0.15
+  + low_load * 0.15
+  + success_rate * 0.10
+```
+
+Overloaded, failed, disabled, unreachable, draining, and maintenance agents are excluded from routing. Busy agents only receive low-cost docs/research work.
+
+### P2P Message Example
+
+```python
+from ai_bridge.core.message_bus import MessageBus
+from ai_bridge.core.models import P2PMessage, P2PMessageType
+
+bus = MessageBus()
+message = P2PMessage(
+    task_id="task-123",
+    from_agent="tester_agent",
+    to_agent="coder_agent",
+    message_type=P2PMessageType.TEST_FAILED,
+    priority="high",
+    payload={
+        "failed_tests": ["test_auth_login"],
+        "error": "Expected 200, got 401",
+        "suggested_action": "check auth middleware",
+    },
+)
+
+bus.send_p2p(message)
+received = bus.receive_for_agent("coder_agent")
+```
+
+Important messages get ACK states:
+
+```text
+sent -> received -> accepted -> processing -> completed
+failed | timeout
+```
+
+If direct delivery fails, use relay routing:
+
+```text
+tester_agent -> reviewer_agent -> coder_agent
+```
+
+When retry limits are exceeded, architecture changes, security is affected, or agent conflicts are detected, `SmartScheduler.should_escalate(...)` returns `True` and the task should return to orchestrator governance.

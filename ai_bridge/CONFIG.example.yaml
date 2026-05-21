@@ -78,3 +78,61 @@ lifecycle:
   idle_shutdown_sec: 900
   critical_agent_types: ["planner", "codex"]
   critical_capabilities: ["security", "orchestrator"]
+
+scheduler:
+  strategy: "hybrid_orchestrator_p2p"
+  retry_limit: 3
+  timeout_sec: 900
+  p0_p1_require_orchestrator: true
+  p2_allow_senior_agent: true
+  p3_p4_p5_allow_p2p: true
+  scoring:
+    task:
+      priority: 0.30
+      urgency: 0.20
+      business_value: 0.20
+      risk: 0.15
+      dependency_count: 0.10
+      complexity: 0.05
+    agent:
+      capability_match: 0.35
+      availability: 0.25
+      low_latency: 0.15
+      low_load: 0.15
+      success_rate: 0.10
+
+p2p:
+  enabled: true
+  requires_ack: true
+  retry_limit: 3
+  ack_timeout_sec: 30
+  allow_relay: true
+  escalate_to_orchestrator_on:
+    - retry_limit_exceeded
+    - risk_threshold_exceeded
+    - architecture_changed
+    - security_affected
+    - agent_conflict_detected
+  message_types:
+    - status_update
+    - heartbeat
+    - task_handoff
+    - request_context
+    - provide_context
+    - test_failed
+    - review_failed
+    - fix_required
+    - dependency_ready
+    - dependency_blocked
+    - agent_overloaded
+    - agent_unavailable
+    - fallback_request
+    - result_ready
+    - retry_request
+    - approval_required
+
+readiness:
+  hot_load_threshold: 0.20
+  overload_threshold: 0.85
+  cold_start_states: ["offline", "sleeping", "disabled"]
+  warm_start_states: ["standby", "starting", "warming_up"]

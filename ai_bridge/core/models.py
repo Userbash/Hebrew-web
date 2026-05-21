@@ -20,13 +20,29 @@ class AgentType(str, Enum):
 class AgentStatus(str, Enum):
     OFFLINE = "offline"
     STARTING = "starting"
+    WARMING_UP = "warming_up"
+    LOADING_CONTEXT = "loading_context"
+    LOADING_TASK_CONTEXT = "loading_task_context"
     READY = "ready"
-    BUSY = "busy"
-    OVERLOADED = "overloaded"
     IDLE = "idle"
+    ASSIGNED = "assigned"
+    BUSY = "busy"
+    BLOCKED = "blocked"
+    WAITING_DEPENDENCY = "waiting_dependency"
+    WAITING_INPUT = "waiting_input"
+    REVIEWING = "reviewing"
+    TESTING = "testing"
     DEGRADED = "degraded"
-    DISABLED = "disabled"
+    OVERLOADED = "overloaded"
+    COOLING_DOWN = "cooling_down"
+    STANDBY = "standby"
+    SLEEPING = "sleeping"
+    UNREACHABLE = "unreachable"
     FAILED = "failed"
+    RECOVERING = "recovering"
+    DRAINING = "draining"
+    MAINTENANCE = "maintenance"
+    DISABLED = "disabled"
 
 
 class TaskType(str, Enum):
@@ -329,3 +345,176 @@ class ExecutionPlan:
 
     def ready_tasks(self, completed: set[str]) -> list[Task]:
         return [task for task in self.atomic_tasks if all(dep in completed for dep in task.dependencies)]
+
+
+class ReadinessLevel(str, Enum):
+    COLD = "cold"
+    WARM = "warm"
+    HOT = "hot"
+
+
+class P2PMessageType(str, Enum):
+    STATUS_UPDATE = "status_update"
+    HEARTBEAT = "heartbeat"
+    TASK_HANDOFF = "task_handoff"
+    REQUEST_CONTEXT = "request_context"
+    PROVIDE_CONTEXT = "provide_context"
+    TEST_FAILED = "test_failed"
+    REVIEW_FAILED = "review_failed"
+    FIX_REQUIRED = "fix_required"
+    DEPENDENCY_READY = "dependency_ready"
+    DEPENDENCY_BLOCKED = "dependency_blocked"
+    AGENT_OVERLOADED = "agent_overloaded"
+    AGENT_UNAVAILABLE = "agent_unavailable"
+    FALLBACK_REQUEST = "fallback_request"
+    RESULT_READY = "result_ready"
+    RETRY_REQUEST = "retry_request"
+    APPROVAL_REQUIRED = "approval_required"
+
+
+class AckStatus(str, Enum):
+    SENT = "sent"
+    RECEIVED = "received"
+    ACCEPTED = "accepted"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    TIMEOUT = "timeout"
+
+
+@dataclass(slots=True)
+class AgentReadiness:
+    agent_id: str
+    status: AgentStatus
+    readiness: ReadinessLevel
+    current_tasks: int
+    max_tasks: int
+    load: float
+    capabilities: list[str]
+    latency_ms: float
+    last_heartbeat: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "agent_id": self.agent_id,
+            "status": self.status.value,
+            "readiness": self.readiness.value,
+            "current_tasks": self.current_tasks,
+            "max_tasks": self.max_tasks,
+            "load": self.load,
+            "capabilities": self.capabilities,
+            "latency_ms": self.latency_ms,
+            "last_heartbeat": self.last_heartbeat,
+        }
+
+
+@dataclass(slots=True)
+class TaskWeight:
+    task_id: str
+    priority: int = 5
+    risk: int = 1
+    complexity: int = 1
+    urgency: int = 5
+    business_value: int = 5
+    dependency_count: int = 0
+    estimated_cost: int = 1
+    requires_review: bool = False
+
+    @property
+    def task_score(self) -> float:
+        return (
+            self.priority * 0.30
+            + self.urgency * 0.20
+            + self.business_value * 0.20
+            + self.risk * 0.15
+            + self.dependency_count * 0.10
+            + self.complexity * 0.05
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "priority": self.priority,
+            "risk": self.risk,
+            "complexity": self.complexity,
+            "urgency": self.urgency,
+            "business_value": self.business_value,
+            "dependency_count": self.dependency_count,
+            "estimated_cost": self.estimated_cost,
+            "requires_review": self.requires_review,
+            "task_score": self.task_score,
+        }
+
+
+@dataclass(slots=True)
+class P2PMessage:
+    task_id: str
+    from_agent: str
+    to_agent: str
+    message_type: P2PMessageType
+    priority: str = "normal"
+    requires_orchestrator: bool = False
+    payload: dict[str, Any] = field(default_factory=dict)
+    route: list[str] = field(default_factory=list)
+    delivery_mode: str = "p2p_direct"
+    requires_ack: bool = True
+    message_id: str = field(default_factory=lambda: str(uuid4()))
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "message_id": self.message_id,
+            "task_id": self.task_id,
+            "from_agent": self.from_agent,
+            "to_agent": self.to_agent,
+            "message_type": self.message_type.value,
+            "priority": self.priority,
+            "requires_orchestrator": self.requires_orchestrator,
+            "payload": self.payload,
+            "timestamp": self.timestamp,
+            "route": self.route,
+            "delivery_mode": self.delivery_mode,
+            "requires_ack": self.requires_ack,
+        }
+
+
+@dataclass(slots=True)
+class MessageAck:
+    message_id: str
+    ack_status: AckStatus
+    received_by: str
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    reason: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "message_id": self.message_id,
+            "ack_status": self.ack_status.value,
+            "received_by": self.received_by,
+            "timestamp": self.timestamp,
+            "reason": self.reason,
+        }
+
+
+@dataclass(slots=True)
+class SchedulerDecision:
+    task_id: str
+    route_mode: str
+    assigned_agent: str | None
+    requires_orchestrator: bool
+    reason: str
+    task_score: float
+    agent_score: float = 0.0
+    readiness: ReadinessLevel | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "route_mode": self.route_mode,
+            "assigned_agent": self.assigned_agent,
+            "requires_orchestrator": self.requires_orchestrator,
+            "reason": self.reason,
+            "task_score": self.task_score,
+            "agent_score": self.agent_score,
+            "readiness": self.readiness.value if self.readiness else None,
+        }

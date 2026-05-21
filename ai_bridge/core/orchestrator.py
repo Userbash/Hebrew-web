@@ -10,10 +10,12 @@ from .healthcheck import HealthChecker
 from .kpi import KPIEvaluator
 from .load_balancer import LoadBalancer
 from .metrics import MetricsCollector
+from .message_bus import MessageBus
 from .model_selector import ModelSelector
 from .models import AgentResult, ExecutionPlan, Task, TaskStatus
 from .quality_analyzer import QualityAnalyzer
 from .result_merger import ResultMerger
+from .smart_scheduler import SmartScheduler
 from .task_decomposer import TaskDecomposer
 from .task_router import CAPABILITY_BY_TASK_TYPE, TaskRouter
 from .user_console import UserConsole
@@ -28,6 +30,8 @@ class Orchestrator:
         self.model_selector = ModelSelector()
         self.decomposer = TaskDecomposer(self.model_selector)
         self.router = TaskRouter(self.registry, self.load_balancer)
+        self.scheduler = SmartScheduler(self.registry)
+        self.message_bus = MessageBus()
         self.healthcheck = HealthChecker(self.registry)
         self.feedback = FeedbackLoop(retry_limit=retry_limit)
         self.metrics = MetricsCollector()
@@ -53,6 +57,11 @@ class Orchestrator:
     def run_task(self, task: Task) -> AgentResult:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
         self.autoscaler.ensure_capacity(capability)
+        decision = self.scheduler.schedule(task)
+        if decision.requires_orchestrator:
+            self.console.emit("SCHEDULER", f"Orchestrator route: {decision.reason}")
+        else:
+            self.console.emit("SCHEDULER", f"P2P route allowed: {decision.reason}")
         acceptance = self.router.route(task)
         if acceptance.status == TaskStatus.REJECTED or not acceptance.assigned_agent:
             self.console.emit("ROUTING", acceptance.message)
@@ -109,9 +118,9 @@ class Orchestrator:
                 final_results.append(result)
                 if result.status != TaskStatus.DONE:
                     merged = self.merger.merge(final_results)
-                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events}
+                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
                 completed.add(task.task_id)
                 pending.pop(task.task_id)
         merged = self.merger.merge(final_results)
         self.console.emit("DONE", "Все критерии выполнены")
-        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents}
+        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
