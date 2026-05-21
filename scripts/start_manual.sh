@@ -33,6 +33,7 @@ $BRIDGE_CMD podman run -d --pull=never \
   -p 3001:3001 \
   -e NODE_ENV=production \
   -e PORT=3001 \
+  -e JWT_SECRET="${JWT_SECRET:-dev_local_jwt_secret_2026_change_me}" \
   -e DB_HOST=hebrew_ai_postgres \
   -e DB_PORT=5432 \
   -e DB_USER=postgres \

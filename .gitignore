@@ -67,3 +67,6 @@ backend/node_modules/
 
 # Keep backend schema migrations in git
 !backend/database/migrations/*.sql
+
+# Generated email blocklist cache
+backend/database/email-domain-blocklist.cache.txt

@@ -87,3 +87,33 @@ npm test
 
 ## Security
 All communication with the host machine is audited. Direct execution is disabled. To allow new host commands, update `scripts/bridge/whitelist.txt`.
+
+## Registration Security (Email)
+
+Backend registration now includes:
+- duplicate checks for both `email` and `username`
+- 8 semantic username suggestions when only `username` is already taken
+- disposable/throwaway email detection
+- domain blocklist/allowlist checks
+- automatic periodic blocklist updates from open sources
+
+### Configure
+Use `.env` keys:
+- `CORS_ORIGINS`
+- `EMAIL_DOMAIN_BLOCKLIST`
+- `EMAIL_DOMAIN_ALLOWLIST`
+- `EMAIL_DOMAIN_BLOCKLIST_SOURCES`
+- `EMAIL_DOMAIN_BLOCKLIST_AUTO_UPDATE`
+- `EMAIL_DOMAIN_BLOCKLIST_UPDATE_INTERVAL_MINUTES`
+- `EMAIL_DOMAIN_BLOCKLIST_CACHE_FILE`
+- `EMAIL_DOMAIN_BLOCKLIST_CUSTOM_FILE`
+
+### Manual blocklist refresh
+```bash
+cd backend
+npm run blocklist:update
+```
+
+### Custom blocked domains
+Add one domain per line in:
+- `backend/database/email-domain-blocklist.custom.txt`

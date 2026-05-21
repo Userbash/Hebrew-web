@@ -9,6 +9,7 @@ FROM node:20-alpine
 WORKDIR /app
 RUN apk add --no-cache curl tini
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/database ./database
 COPY --from=builder /app/node_modules ./node_modules
 COPY package.json ./
 ENV NODE_ENV=production

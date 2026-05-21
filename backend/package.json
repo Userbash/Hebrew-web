@@ -10,7 +10,8 @@
     "dev": "nodemon server.ts",
     "test": "node tests/quick-test.js",
     "test:full": "node tests/test-api.js",
-    "lint": "eslint . --ignore-pattern public/"
+    "lint": "eslint . --ignore-pattern public/",
+    "blocklist:update": "npm run build && node dist/scripts/update-email-domain-blocklists.js"
   },
   "keywords": [
     "hebrew",
@@ -32,6 +33,7 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^7.2.0",
     "jsonwebtoken": "^9.0.2",
+    "mailchecker": "^6.0.20",
     "pg": "^8.21.0",
     "redis": "^4.7.1",
     "uuid": "^9.0.0"

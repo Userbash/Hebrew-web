@@ -34,20 +34,30 @@ const registrationSchema = z.object({
 
 type RegistrationForm = z.infer<typeof registrationSchema>;
 
+interface RegisterErrorResponse {
+  message?: string;
+  field?: 'email' | 'username' | 'both';
+  code?: string;
+  suggestions?: string[];
+}
+
 const RegistrationPage: React.FC = () => {
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
+  const [usernameSuggestions, setUsernameSuggestions] = React.useState<string[]>([]);
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { setUser } = useAuth();
   const navigate = useNavigate();
 
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<RegistrationForm>({
+  const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = useForm<RegistrationForm>({
     resolver: zodResolver(registrationSchema),
     defaultValues: { acceptTerms: true }
   });
 
   const onSubmit = async (data: RegistrationForm) => {
+    setUsernameSuggestions([]);
+
     try {
       const response = await api.post('/auth/register', {
         email: data.email,
@@ -58,11 +68,31 @@ const RegistrationPage: React.FC = () => {
       setUser(response.data);
       navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
-      const message = axios.isAxiosError<{ message?: string }>(err)
-        ? err.response?.data?.message
+      const payload = axios.isAxiosError<RegisterErrorResponse>(err)
+        ? err.response?.data
         : undefined;
 
-      setError('email', { message: message || t.registerErrorDefault });
+      const message = payload?.message || t.registerErrorDefault;
+      const hasSuggestions = Array.isArray(payload?.suggestions) && payload.suggestions.length > 0;
+
+      if (payload?.field === 'both') {
+        setError('email', { message });
+        setError('username', { message });
+        return;
+      }
+
+      if (payload?.field === 'username') {
+        setError('username', { message });
+        setUsernameSuggestions(hasSuggestions ? payload.suggestions!.slice(0, 8) : []);
+        return;
+      }
+
+      if (payload?.field === 'email') {
+        setError('email', { message });
+        return;
+      }
+
+      setError('email', { message });
     }
   };
 
@@ -108,6 +138,20 @@ const RegistrationPage: React.FC = () => {
                 <input {...register('username')} type="text" placeholder={t.usernamePlaceholder} autoComplete="username" />
               </div>
               {errors.username && <p className="login-error">{errors.username.message}</p>}
+              {usernameSuggestions.length > 0 && (
+                <div className="login-card-kicker">
+                  Варианты username: {usernameSuggestions.map((suggestion, index) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setValue('username', suggestion, { shouldDirty: true, shouldValidate: true })}
+                      className="underline decoration-dotted mx-1"
+                    >
+                      {suggestion}{index < usernameSuggestions.length - 1 ? ',' : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
             </label>
 
             <label className="login-field">

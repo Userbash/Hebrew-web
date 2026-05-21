@@ -32,11 +32,32 @@ import userRoutes from './api/routes/users.js';
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
 import { telemetryMiddleware } from './api/middleware/telemetry.js';
 import { apiLimiter } from './api/middleware/security.js';
+import {
+    initEmailDomainBlocklistAutomation,
+    getEmailDomainBlocklistStatus,
+} from './api/security/emailDomainBlocklist.js';
+import { runMigrations } from './api/data/migrations.js';
 
 // Initialize Express app
 const app = express();
 app.set('trust proxy', 1);
 const PORT: string | number = process.env.BACKEND_PORT || 3001;
+
+const normalizeOrigin = (origin: string) => {
+    try {
+        const parsed = new URL(origin);
+        return `${parsed.protocol}//${parsed.host}`.toLowerCase();
+    } catch {
+        return origin.trim().toLowerCase().replace(/\/+$/, '');
+    }
+};
+
+const wildcardPatternToRegExp = (pattern: string) => {
+    const escaped = pattern
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*');
+    return new RegExp(`^${escaped}$`, 'i');
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MIDDLEWARE
@@ -49,7 +70,13 @@ app.use(helmet({
             scriptSrc: ["'self'", "'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "http://localhost:3001", "http://localhost:8081"]
+            connectSrc: [
+                "'self'",
+                'http://localhost:3001',
+                'http://127.0.0.1:3001',
+                'http://localhost:8081',
+                'http://127.0.0.1:8081',
+            ]
         }
     }
 }));
@@ -62,24 +89,48 @@ const configuredOrigins = (process.env.CORS_ORIGINS || '')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-const defaultOrigins = process.env.NODE_ENV === 'production'
-    ? [process.env.DOMAIN_NAME ? `https://${process.env.DOMAIN_NAME}` : ''].filter(Boolean)
-    : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:8081'];
+const fallbackOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+];
 
-const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins;
+const productionOrigins = [
+    process.env.DOMAIN_NAME ? `https://${process.env.DOMAIN_NAME}` : '',
+].filter(Boolean);
+
+const defaultOrigins = process.env.NODE_ENV === 'production'
+    ? (productionOrigins.length > 0 ? productionOrigins : fallbackOrigins)
+    : fallbackOrigins;
+
+const allowedOriginPatterns = (configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins)
+    .map((origin) => normalizeOrigin(origin));
+
+const allowedOriginRegexes = allowedOriginPatterns.map((pattern) => wildcardPatternToRegExp(pattern));
+
+const isAllowedOrigin = (origin: string) => {
+    const normalizedOrigin = normalizeOrigin(origin);
+    return allowedOriginRegexes.some((regex) => regex.test(normalizedOrigin));
+};
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || isAllowedOrigin(origin)) {
             callback(null, true);
             return;
         }
 
-        callback(new Error('CORS origin denied'));
+        const error = new Error(`CORS origin denied: ${origin}`) as Error & { status?: number };
+        error.status = 403;
+        callback(error);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 204,
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -92,7 +143,10 @@ app.use(express.static(join(__dirname, '..', 'public')));
 // ═══════════════════════════════════════════════════════════════════════════
 
 app.get('/api/health', (req: Request, res: Response) => {
-    res.status(200).json({ status: 'OK' });
+    res.status(200).json({
+        status: 'OK',
+        emailBlocklist: getEmailDomainBlocklistStatus(),
+    });
 });
 
 app.use('/api/auth', authRoutes);
@@ -106,8 +160,21 @@ app.use('/api/progress', progressRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-const server = app.listen(PORT, () => {
-    console.log(`Backend Server Started on http://localhost:${PORT}`);
-});
+const bootstrap = async () => {
+    try {
+        await runMigrations();
+        await initEmailDomainBlocklistAutomation();
+
+        app.listen(PORT, () => {
+            console.log(`Backend Server Started on http://localhost:${PORT}`);
+            console.log('[CORS] Allowed origin patterns:', allowedOriginPatterns);
+        });
+    } catch (error) {
+        console.error('[BOOTSTRAP] Startup failed:', error);
+        process.exit(1);
+    }
+};
+
+void bootstrap();
 
 export default app;

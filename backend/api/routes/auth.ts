@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import MailChecker from 'mailchecker';
 import { randomUUID, timingSafeEqual } from 'crypto';
 import { db } from '../data/db.js';
 import {
@@ -27,11 +28,148 @@ import {
   validatePassword,
   PASSWORD_RULES_TEXT
 } from '../security/credentials.js';
+import { isBlockedEmailByDomainPolicy } from '../security/emailDomainBlocklist.js';
 
 const router = Router();
 const SALT_ROUNDS = 12;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const LOCK_WINDOW_MINUTES = 15;
+const USERNAME_SUGGESTION_COUNT = 8;
+
+const isBlockedEmailForRegistration = (email: string) => {
+  if (!MailChecker.isValid(email)) {
+    return true;
+  }
+
+  return isBlockedEmailByDomainPolicy(email);
+};
+
+const sanitizeUsernameSeed = (value: string) => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, '')
+    .replace(/[_.-]{2,}/g, '.')
+    .replace(/^[_.-]+|[_.-]+$/g, '');
+
+  if (normalized.length >= 3) {
+    return normalized.slice(0, 50);
+  }
+
+  return 'user';
+};
+
+const applyUsernameLength = (candidate: string) => {
+  const trimmed = candidate.slice(0, 50).replace(/[_.-]+$/g, '');
+  if (trimmed.length >= 3) {
+    return trimmed;
+  }
+
+  return 'user001';
+};
+
+const buildUsernameSuggestions = async (requestedUsername: string, email: string) => {
+  const localPart = email.split('@')[0] || 'user';
+  const baseVariants = Array.from(new Set([
+    sanitizeUsernameSeed(requestedUsername),
+    sanitizeUsernameSeed(localPart),
+  ]));
+
+  const semanticTokens = [
+    'learn',
+    'ivrit',
+    'mentor',
+    'focus',
+    'guide',
+    'craft',
+    'quest',
+    'spark',
+    'atlas',
+    'pilot',
+    'study',
+    'pro',
+  ];
+
+  const yearSuffix = String(new Date().getUTCFullYear());
+  const candidatePool: string[] = [];
+
+  for (const base of baseVariants) {
+    candidatePool.push(
+      `${base}.learn`,
+      `${base}_ivrit`,
+      `${base}-mentor`,
+      `${base}.guide`,
+      `${base}${yearSuffix}`,
+      `${base}.study`,
+      `learn.${base}`,
+      `${base}_craft`,
+      `${base}.quest`,
+      `${base}_spark`,
+      `${base}.atlas`,
+      `${base}.pilot`,
+      `${base}.pro`,
+    );
+  }
+
+  for (const base of baseVariants) {
+    for (const token of semanticTokens) {
+      candidatePool.push(`${base}.${token}`);
+      candidatePool.push(`${base}_${token}`);
+      candidatePool.push(`${token}.${base}`);
+    }
+  }
+
+  const uniqueCandidates = Array.from(new Set(candidatePool.map((candidate) => applyUsernameLength(candidate))));
+
+  const suggestions: string[] = [];
+
+  for (const candidate of uniqueCandidates) {
+    if (!isValidUsername(candidate)) {
+      continue;
+    }
+
+    const existing = await db.getUserByUsername(candidate);
+    if (existing) {
+      continue;
+    }
+
+    suggestions.push(candidate);
+    if (suggestions.length >= USERNAME_SUGGESTION_COUNT) {
+      break;
+    }
+  }
+
+  if (suggestions.length >= USERNAME_SUGGESTION_COUNT) {
+    return suggestions.slice(0, USERNAME_SUGGESTION_COUNT);
+  }
+
+  let numericSuffix = 101;
+  const reserved = new Set(suggestions);
+  while (suggestions.length < USERNAME_SUGGESTION_COUNT && numericSuffix < 9999) {
+    for (const base of baseVariants) {
+      const candidate = applyUsernameLength(`${base}${numericSuffix}`);
+      numericSuffix += 1;
+
+      if (reserved.has(candidate) || !isValidUsername(candidate)) {
+        continue;
+      }
+
+      const existing = await db.getUserByUsername(candidate);
+      if (existing) {
+        continue;
+      }
+
+      suggestions.push(candidate);
+      reserved.add(candidate);
+
+      if (suggestions.length >= USERNAME_SUGGESTION_COUNT) {
+        break;
+      }
+    }
+  }
+
+  return suggestions.slice(0, USERNAME_SUGGESTION_COUNT);
+};
 
 const secureEquals = (a: string, b: string) => {
   const aBuffer = Buffer.from(a);
@@ -134,6 +272,14 @@ router.post('/register', loginLimiter, async (req, res) => {
     return res.status(400).json({ message: 'Некорректный username. Разрешены: буквы, цифры, ., _, - (3-50 символов)' });
   }
 
+  if (isBlockedEmailForRegistration(normalizedEmail)) {
+    return res.status(400).json({
+      message: 'Регистрация с этим email запрещена: одноразовая или заблокированная почта',
+      field: 'email',
+      code: 'EMAIL_DOMAIN_NOT_ALLOWED',
+    });
+  }
+
   if (String(password) !== String(confirmPassword)) {
     return res.status(400).json({ message: 'Пароли не совпадают' });
   }
@@ -151,14 +297,35 @@ router.post('/register', loginLimiter, async (req, res) => {
   }
 
   try {
-    const existingUserByEmail = await db.getUserByEmail(normalizedEmail);
-    if (existingUserByEmail) {
-      return res.status(409).json({ message: 'Пользователь с таким email уже существует' });
+    const [existingUserByEmail, existingUserByUsername] = await Promise.all([
+      db.getUserByEmail(normalizedEmail),
+      db.getUserByUsername(normalizedUsername),
+    ]);
+
+    if (existingUserByEmail && existingUserByUsername) {
+      return res.status(409).json({
+        message: 'Пользователь с таким email и username уже существует',
+        field: 'both',
+        code: 'EMAIL_AND_USERNAME_EXISTS',
+      });
     }
 
-    const existingUserByUsername = await db.getUserByUsername(normalizedUsername);
+    if (existingUserByEmail) {
+      return res.status(409).json({
+        message: 'Пользователь с таким email уже существует',
+        field: 'email',
+        code: 'EMAIL_EXISTS',
+      });
+    }
+
     if (existingUserByUsername) {
-      return res.status(409).json({ message: 'Пользователь с таким username уже существует' });
+      const suggestions = await buildUsernameSuggestions(normalizedUsername, normalizedEmail);
+      return res.status(409).json({
+        message: 'Пользователь с таким username уже существует',
+        field: 'username',
+        code: 'USERNAME_EXISTS',
+        suggestions,
+      });
     }
 
     const passwordHash = await bcrypt.hash(String(password), SALT_ROUNDS);
@@ -183,7 +350,29 @@ router.post('/register', loginLimiter, async (req, res) => {
       ...toPublicUser(user),
       token: accessToken,
     });
-  } catch (err) {
+  } catch (err: unknown) {
+    const conflict = err as { code?: string; constraint?: string };
+
+    if (conflict?.code === '23505') {
+      if (conflict.constraint?.includes('email')) {
+        return res.status(409).json({
+          message: 'Пользователь с таким email уже существует',
+          field: 'email',
+          code: 'EMAIL_EXISTS',
+        });
+      }
+
+      if (conflict.constraint?.includes('username')) {
+        const suggestions = await buildUsernameSuggestions(normalizedUsername, normalizedEmail);
+        return res.status(409).json({
+          message: 'Пользователь с таким username уже существует',
+          field: 'username',
+          code: 'USERNAME_EXISTS',
+          suggestions,
+        });
+      }
+    }
+
     console.error('Registration error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }
