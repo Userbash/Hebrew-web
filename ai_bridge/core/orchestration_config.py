@@ -1,8 +1,50 @@
 from __future__ import annotations
 
 import os
+from enum import Enum
 from dataclasses import dataclass, field
 from typing import Any
+
+class ExecutionMode(Enum):
+    MANUAL = "manual"
+    ASSISTED = "assisted"
+    AUTO_SAFE = "auto_safe"
+    FULL_AUTO = "full_auto"
+    CI = "ci"
+
+class RiskLevel(Enum):
+    SAFE = "safe"
+    MODERATE = "moderate"
+    HIGH = "high"
+    DESTRUCTIVE = "destructive"
+    EXTERNAL_SIDE_EFFECT = "external_side_effect"
+    PRODUCTION_CRITICAL = "production_critical"
+
+class RiskClassifier:
+    @staticmethod
+    def classify(task: Any) -> RiskLevel:
+        markers = set(_get_value(task, "markers", []) or [])
+        action = str(_get_value(task, "action", "") or _get_value(task, "type", "")).lower()
+
+        if "production_critical" in markers or action in {"production_deploy"}:
+            return RiskLevel.PRODUCTION_CRITICAL
+        if "destructive" in markers or action in {"database_delete", "force_push"}:
+            return RiskLevel.DESTRUCTIVE
+        if "external" in markers or action in {"external_api_calls"}:
+            return RiskLevel.EXTERNAL_SIDE_EFFECT
+        if action in {"security", "secret_rotation"}:
+            return RiskLevel.HIGH
+        if action in {"code_generation", "test", "refactor"}:
+            return RiskLevel.SAFE
+        return RiskLevel.MODERATE
+
+class PolicyEngine:
+    @staticmethod
+    def evaluate(task: Any) -> bool:
+        risk = RiskClassifier.classify(task)
+        if risk in {RiskLevel.DESTRUCTIVE, RiskLevel.PRODUCTION_CRITICAL}:
+            return False
+        return True
 
 SAFE_STANDARD_TASK_TYPES = {
     "code_generation",
@@ -18,6 +60,7 @@ SAFE_STANDARD_TASK_TYPES = {
     "metrics",
     "task_routing",
 }
+...
 
 DESTRUCTIVE_MARKERS = {
     "production_deploy",

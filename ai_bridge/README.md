@@ -471,3 +471,115 @@ config = OrchestrationConfig.from_env()
 assert not config.should_ask_confirmation({"type": "test", "risk_level": "low"})
 assert config.should_ask_confirmation({"action": "database_delete"})
 ```
+
+## Проверка доступности сторонних AI-модулей
+
+AI Bridge должен уметь проверять, доступен ли сторонний AI-модуль перед назначением задачи.
+
+Сторонний AI-модуль считается доступным, если:
+
+1. endpoint отвечает на healthcheck;
+2. API key или token валиден;
+3. модуль возвращает список capabilities;
+4. latency не превышает лимит;
+5. error_rate ниже допустимого порога;
+6. quota/rate limit не исчерпаны;
+7. модуль поддерживает нужный task_type;
+8. модуль не находится в состоянии disabled, failed, overloaded или unreachable.
+
+Каждый внешний AI-модуль обязан поддерживать endpoint:
+
+GET /health
+
+Ожидаемый ответ:
+
+{
+  "agent_id": "external-ai-1",
+  "provider": "openai|anthropic|local|custom",
+  "model_name": "string",
+  "status": "ready|busy|degraded|offline|overloaded",
+  "readiness": "cold|warm|hot",
+  "capabilities": ["code", "review", "test", "docs", "research"],
+  "active_tasks": 0,
+  "max_tasks": 5,
+  "queue_depth": 0,
+  "avg_latency_ms": 250,
+  "success_rate": 0.98,
+  "error_rate": 0.02,
+  "rate_limit_remaining": 1000,
+  "quota_remaining": 100000,
+  "last_error": null,
+  "last_seen": "ISO-8601",
+  "timestamp": "ISO-8601"
+}
+
+Если модуль не поддерживает /health, AI Bridge должен выполнить fallback-проверку:
+
+1. отправить минимальный ping-запрос;
+2. проверить HTTP status;
+3. измерить latency;
+4. проверить формат ответа;
+5. проверить наличие ошибок авторизации;
+6. определить capabilities из config;
+7. записать результат в metrics и audit trail.
+
+Пример fallback ping:
+
+POST /v1/ping
+
+{
+  "message": "healthcheck",
+  "max_tokens": 1
+}
+
+AI Bridge не должен передавать секреты, приватный код или полный контекст во время healthcheck. Проверка должна использовать минимальный безопасный payload.
+
+Перед назначением задачи Scheduler обязан выполнить:
+
+1. найти AI-модули с нужной capability;
+2. проверить readiness;
+3. проверить quota/rate limit;
+4. проверить latency;
+5. проверить error_rate;
+6. проверить risk policy;
+7. выбрать лучший модуль через load_balancer;
+8. если модуль недоступен — выбрать fallback;
+9. если fallback отсутствует — эскалировать в Orchestrator.
+
+Статусы доступности:
+
+ready       — можно назначать задачи
+busy        — можно назначать только низкоприоритетные задачи
+degraded    — использовать только если нет fallback
+overloaded  — не назначать новые задачи
+offline     — недоступен
+unreachable — endpoint не отвечает
+failed      — исключить из routing pool
+disabled    — отключён политикой
+quota_empty — нельзя использовать до восстановления quota
+auth_failed — требуется обновить credentials
+
+Для каждого внешнего AI-модуля должны собираться метрики:
+
+- availability
+- latency_ms
+- success_rate
+- error_rate
+- rate_limit_remaining
+- quota_remaining
+- failed_healthchecks
+- last_successful_call
+- last_error
+- current_status
+- readiness
+- estimated_cost
+
+Если healthcheck падает несколько раз подряд, AI Bridge должен:
+
+1. пометить модуль как degraded;
+2. уменьшить его routing priority;
+3. после retry_limit пометить как failed;
+4. исключить из выбора агента;
+5. записать событие в audit trail;
+6. попробовать fallback-модуль;
+7. при отсутствии fallback — запросить вмешательство Orchestrator.

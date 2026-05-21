@@ -15,20 +15,17 @@ echo -e "${BLUE}================================${NC}\n"
 CONTAINER_TOOL=""
 COMPOSE_CMD=""
 
-# Detect Docker
-if command -v docker &> /dev/null && docker compose version &> /dev/null; then
-    CONTAINER_TOOL="Docker"
-    COMPOSE_CMD="docker compose"
-    echo -e "${GREEN}✓ Docker and docker compose plugin available${NC}"
 # Detect Podman
-elif command -v podman &> /dev/null && command -v podman-compose &> /dev/null; then
+if command -v podman &> /dev/null && command -v podman-compose &> /dev/null; then
     CONTAINER_TOOL="Podman"
     COMPOSE_CMD="podman-compose"
     echo -e "${GREEN}✓ Podman and podman-compose available${NC}"
 else
-    echo -e "${RED}✗ Neither Docker/docker compose nor Podman/podman-compose found.${NC}"
-    echo -e "${RED}Please install Docker Desktop or Podman and podman-compose to proceed.${NC}"
+    echo -e "${RED}✗ Podman and podman-compose NOT found.${NC}"
+    echo -e "${RED}Please install Podman and podman-compose to proceed.${NC}"
     exit 1
+fi
+
 fi
 
 echo -e "${BLUE}Using ${CONTAINER_TOOL} for deployment.${NC}\n"

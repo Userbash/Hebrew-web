@@ -74,6 +74,6 @@ run_npm_test() {
 build_docker_image() {
   local tag=$1
   local path=$2
-  run_command "Build Docker image $tag from $path" "docker build -t $tag $path"
+  run_command "Build Podman image $tag from $path" "podman build -t $tag $path"
 }
 

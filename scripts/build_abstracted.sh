@@ -5,9 +5,9 @@ BRIDGE_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bridge/exec.sh"
 echo "Attempting to build project using BridgeOS..."
 
 echo "Building Backend..."
-$BRIDGE_CMD podman build --no-cache -t hebrew-backend -f backend/Dockerfile backend
+$BRIDGE_CMD podman build --no-cache -t hebrew-backend -f $(pwd)/backend/Dockerfile $(pwd)/backend
 
 echo "Building Frontend..."
-$BRIDGE_CMD podman build --no-cache -t hebrew-frontend -f frontend-react/Dockerfile frontend-react
+$BRIDGE_CMD podman build --no-cache -t hebrew-frontend -f $(pwd)/frontend-react/Dockerfile $(pwd)/frontend-react
 
 echo "Build complete."

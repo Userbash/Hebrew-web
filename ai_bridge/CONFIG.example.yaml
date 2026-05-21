@@ -168,3 +168,31 @@ safety_guards:
     - external_email
     - public_api_mutation
     - force_push
+
+external_ai_modules:
+  - id: "external-ai-main"
+    provider: "custom"
+    endpoint: "https://example.com"
+    healthcheck_path: "/health"
+    task_path: "/task"
+    auth_type: "bearer_token"
+    api_key_env: "EXTERNAL_AI_API_KEY"
+    capabilities:
+      - code
+      - review
+      - research
+    timeout_sec: 30
+    max_retries: 3
+    max_latency_ms: 3000
+    max_error_rate: 0.15
+    allow_sensitive_context: false
+    enabled: true
+
+external_ai_healthcheck:
+  enabled: true
+  interval_sec: 30
+  timeout_sec: 10
+  retry_limit: 3
+  fallback_ping_enabled: true
+  disable_after_failures: 5
+

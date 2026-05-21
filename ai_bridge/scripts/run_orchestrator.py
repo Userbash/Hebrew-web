@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 
 from ai_bridge.agents.codex_agent import CodexAgent
+from ai_bridge.agents.gemini_agent import GeminiAgent
+from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.reviewer_agent import ReviewerAgent
 from ai_bridge.agents.tester_agent import TesterAgent
 from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskType
 from ai_bridge.core.orchestration_config import OrchestrationConfig
 from ai_bridge.core.orchestrator import Orchestrator
+from ai_bridge.core.security import SecurityManager, SecurityPolicy
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,10 +30,15 @@ def main(argv: list[str] | None = None) -> None:
 
     orchestrator = Orchestrator()
     orchestrator.orchestration_config = config
+    
+    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["npx @google/gemini-cli generate"]))
+    
     orchestrator.attach_local_agent("planner-1", PlannerAgent("planner-1"), agent_type="planner", critical=True, model_name="gpt-planner", provider="openai")
     orchestrator.attach_local_agent("codex-main", CodexAgent("codex-main"), agent_type="codex", critical=True, model_name="gpt-coding-large", provider="openai")
+    orchestrator.attach_local_agent("gemini-cli-1", GeminiCLIAgent("gemini-cli-1", security_manager), agent_type="external_ai", critical=False, model_name="gemini-cli", provider="google")
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", model_name="gpt-test-standard", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", model_name="gpt-review-large", provider="openai")
+    
     task = Task(TaskType.PLAN, TaskInput("Create a small feature", acceptance_criteria=["tests pass"]), TaskContext("demo", ".", "main"))
     print(orchestrator.run(task))
 

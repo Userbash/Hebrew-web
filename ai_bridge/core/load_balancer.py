@@ -12,18 +12,29 @@ class LoadBalancer:
     def score(self, agent: AgentRecord, capability: str) -> float:
         if agent.status in {AgentStatus.OFFLINE, AgentStatus.DISABLED, AgentStatus.FAILED}:
             return float("-inf")
+        
+        # Calibration formula (Section 6): 
+        # quality * 0.30 + success * 0.25 + review * 0.15 + avail * 0.10 + latency * 0.10 + cost * 0.05 + spec * 0.05
+        
+        quality_score = max(0.0, min(1.0, agent.metrics.quality_score))
         success_rate = max(0.0, min(1.0, agent.metrics.success_rate))
+        review_pass_rate = max(0.0, min(1.0, agent.metrics.review_score))
+        
         availability = self._availability(agent)
         speed_score = self._speed_score(agent.metrics.avg_latency_ms)
         cost_score = self._cost_score(agent.metrics.estimated_cost or agent.metrics.token_cost)
         specialization_score = 1.0 if capability in agent.capabilities else 0.0
+        
         overload_penalty = self._overload_penalty(agent)
+        
         return (
-            success_rate * 0.35
-            + availability * 0.25
-            + speed_score * 0.20
-            + cost_score * 0.10
-            + specialization_score * 0.10
+            quality_score * 0.30
+            + success_rate * 0.25
+            + review_pass_rate * 0.15
+            + availability * 0.10
+            + speed_score * 0.10
+            + cost_score * 0.05
+            + specialization_score * 0.05
             - overload_penalty
         ) * agent.metrics.priority_score
 
