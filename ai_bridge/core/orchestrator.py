@@ -13,6 +13,7 @@ from .metrics import MetricsCollector
 from .message_bus import MessageBus
 from .model_selector import ModelSelector
 from .models import AgentResult, ExecutionPlan, Task, TaskStatus
+from .orchestration_config import OrchestrationConfig
 from .quality_analyzer import QualityAnalyzer
 from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
@@ -30,6 +31,7 @@ class Orchestrator:
         self.model_selector = ModelSelector()
         self.decomposer = TaskDecomposer(self.model_selector)
         self.router = TaskRouter(self.registry, self.load_balancer)
+        self.orchestration_config = OrchestrationConfig.from_env()
         self.scheduler = SmartScheduler(self.registry)
         self.message_bus = MessageBus()
         self.healthcheck = HealthChecker(self.registry)

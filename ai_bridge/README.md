@@ -391,3 +391,83 @@ tester_agent -> reviewer_agent -> coder_agent
 ```
 
 When retry limits are exceeded, architecture changes, security is affected, or agent conflicts are detected, `SmartScheduler.should_escalate(...)` returns `True` and the task should return to orchestrator governance.
+
+## Default Orchestration Mode
+
+AI Bridge is the default orchestration core for standard safe tasks. The system should not ask `Use AI Bridge? y/n` for routine work such as code generation, tests, review, docs, refactor, local scripts, healthchecks, metrics, and task routing.
+
+Default behavior:
+
+```text
+User task -> AI Bridge Core -> Planner -> Scheduler -> Agent Registry
+-> Task Router -> Agents -> Tests -> Review -> Result Aggregation -> Done
+```
+
+Confirmation is still required for destructive, production, security-sensitive, and external side-effect operations.
+
+### Config
+
+```yaml
+orchestration:
+  enabled_by_default: true
+  ask_confirmation: false
+  default_mode: ai_bridge
+  auto_route_tasks: true
+  auto_start_agents: true
+  auto_retry: true
+  auto_review: true
+  auto_test: true
+
+confirmation_policy:
+  ask_for_low_risk_tasks: false
+  ask_for_medium_risk_tasks: false
+  ask_for_high_risk_tasks: true
+  ask_for_destructive_actions: true
+  ask_for_external_api_calls: true
+```
+
+### CLI
+
+```bash
+python3 -m ai_bridge.scripts.run_orchestrator \
+  --use-bridge \
+  --auto \
+  --yes \
+  --non-interactive
+```
+
+### Environment
+
+```bash
+export AI_BRIDGE_ENABLED=true
+export AI_BRIDGE_DEFAULT=true
+export AI_BRIDGE_AUTO_APPROVE=true
+export AI_BRIDGE_NON_INTERACTIVE=true
+export AI_BRIDGE_CONFIRMATION_POLICY=safe-only
+```
+
+### Confirmation Rules
+
+No prompt for safe standard tasks:
+
+```text
+code generation, tests, review, docs, refactor, local scripts,
+healthcheck, metrics, task routing
+```
+
+Prompt required for guarded operations:
+
+```text
+production deploy, database delete, secret changes, key rotation,
+payment or billing actions, external email, public API mutation, force push
+```
+
+Programmatic check:
+
+```python
+from ai_bridge.core.orchestration_config import OrchestrationConfig
+
+config = OrchestrationConfig.from_env()
+assert not config.should_ask_confirmation({"type": "test", "risk_level": "low"})
+assert config.should_ask_confirmation({"action": "database_delete"})
+```

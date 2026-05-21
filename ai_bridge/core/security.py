@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
+
+from .orchestration_config import OrchestrationConfig
 
 SECRET_PATTERNS = [
     re.compile(r'(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*["\']?[^"\'\s]+'),
@@ -17,8 +20,9 @@ class SecurityPolicy:
 
 
 class SecurityManager:
-    def __init__(self, policy: SecurityPolicy | None = None) -> None:
+    def __init__(self, policy: SecurityPolicy | None = None, orchestration: OrchestrationConfig | None = None) -> None:
         self.policy = policy or SecurityPolicy()
+        self.orchestration = orchestration or OrchestrationConfig.from_env()
 
     def validate_shell_command(self, command: str) -> bool:
         if not self.policy.allow_shell:
@@ -31,6 +35,9 @@ class SecurityManager:
     def require_dry_run(self, command: str) -> bool:
         dangerous_tokens = ("rm ", "mv ", "chmod ", "chown ", "docker ", "podman ", "systemctl ")
         return any(token in f" {command} " for token in dangerous_tokens)
+
+    def should_ask_confirmation(self, task: Any) -> bool:
+        return self.orchestration.should_ask_confirmation(task)
 
     def redact_secrets(self, text: str) -> str:
         redacted = text

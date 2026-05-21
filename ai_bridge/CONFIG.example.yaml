@@ -67,6 +67,7 @@ modules:
   quality_analyzer: true
   feedback_loop: true
   user_console: true
+  orchestration_config: true
 
 models:
   low_complexity: "local-small"
@@ -136,3 +137,34 @@ readiness:
   overload_threshold: 0.85
   cold_start_states: ["offline", "sleeping", "disabled"]
   warm_start_states: ["standby", "starting", "warming_up"]
+
+orchestration:
+  enabled_by_default: true
+  ask_confirmation: false
+  default_mode: ai_bridge
+  auto_route_tasks: true
+  auto_start_agents: true
+  auto_retry: true
+  auto_review: true
+  auto_test: true
+
+confirmation_policy:
+  ask_for_low_risk_tasks: false
+  ask_for_medium_risk_tasks: false
+  ask_for_high_risk_tasks: true
+  ask_for_destructive_actions: true
+  ask_for_external_api_calls: true
+
+safety_guards:
+  allow_auto_code_changes: true
+  allow_auto_tests: true
+  allow_auto_docs: true
+  allow_auto_refactor: true
+  require_confirmation_for:
+    - production_deploy
+    - database_delete
+    - secret_change
+    - payment_action
+    - external_email
+    - public_api_mutation
+    - force_push
