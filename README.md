@@ -1,74 +1,89 @@
-# Hebrew AI 2025
+# Hebrew AI Platform
 
-Hebrew AI is a modern learning platform designed for high-performance and secure Hebrew language education. This project features a React-based frontend and a robust Node.js/TypeScript backend, backed by a replicated PostgreSQL database and Redis caching.
+A learning workspace for the Hebrew language, integrated with a multi-agent AI orchestration layer.
 
-## Key Features
+![UI Preview](images/images.png)
 
-- **Secure Architecture**: All host operations are abstracted through a secure bridge (BridgeOS), allowing the project to run safely in isolated development environments.
-- **Data Integrity**: Replicated PostgreSQL setup with Master-Replica architecture ensures data durability and high availability.
-- **Optimized Search**: Blazing fast full-text search using PostgreSQL GIN indexes and `tsvector`.
-- **Modern Security**: 
-  - JWT-based session management.
-  - High-security password hashing using `bcrypt` (factor 12).
-  - Strict SQL parameterization to prevent injection attacks.
-  - UUID-based entity identification.
+## Architecture Overview
+
+The platform consists of four primary components designed for performance, security, and scalability:
+
+### 1. AI Bridge Orchestration
+A Python-based multi-agent runtime that manages task decomposition and execution across multiple LLM providers.
+- **Capability Routing**: Directs tasks to specialized agents (Codex, Reviewer, Tester, Planner).
+- **Quality Gates**: Iterative feedback loops to ensure result accuracy.
+- **Smart Scheduling**: Priority-aware load balancing based on agent health, latency, and success rates.
+
+### 2. Data Layer
+- **Replicated PostgreSQL**: Master-Replica setup to ensure data durability and separate write operations from high-volume reads.
+- **Full-Text Search**: Optimized Hebrew search using PostgreSQL GIN indexes and `tsvector`.
+- **Performance Caching**: Redis-backed session management.
+
+### 3. Secure Isolation (BridgeOS)
+Designed for execution within isolated development environments (Flatpak/Containers).
+- **Host Bridge**: A secure gateway for interacting with host-level utilities like Docker and Podman.
+- **Command Whitelisting**: Strict audit trails and security policies governing host-to-container communication.
+
+### 4. Frontend
+- **React + TypeScript**: Type-safe, component-driven UI.
+- **Tailwind CSS**: A dark-themed, minimal interface focused on distraction-free learning.
+- **Vite**: Fast development and build toolchain.
+
+---
 
 ## Project Structure
 
 ```text
-├── backend/            # TypeScript Node.js API
-│   ├── database/       # Migrations and schema
-│   └── api/            # Routes, middleware, and controllers
-├── frontend-react/     # Vite + React + Tailwind CSS
-├── scripts/            # DevOps and orchestration scripts
-│   ├── bridge/         # Secure host-to-IDE bridge (BridgeOS)
-│   └── start_manual.sh # Manual container orchestration
-└── docker-compose.yml  # Deployment configuration
+├── ai_bridge/          # Python AI Orchestration Layer
+│   ├── core/           # Routing, Load Balancing, Security
+│   └── agents/         # LLM Provider Abstractions
+├── backend/            # TypeScript / Node.js API
+│   ├── database/       # Migrations & Master-Replica logic
+│   └── api/            # Security Middleware & Controllers
+├── frontend-react/     # Vite / React / Tailwind Frontend
+├── scripts/            # Infrastructure & BridgeOS scripts
+└── infra/              # Observability (Grafana, Loki)
 ```
+
+---
 
 ## Getting Started
 
-### 1. Prerequisites
-
-Ensure you have `podman` or `docker` installed on your host machine.
-
-### 2. Initialize BridgeOS
-
-Since the development environment is isolated, you must initialize the bridge to grant access to host utilities:
-
+### 1. Initialize Secure Bridge
+Grant the isolated environment access to required host utilities:
 ```bash
 bash scripts/bridge/auto_bridge.sh
 ```
 
-### 3. Setup Database
-
-Initialize the replicated database infrastructure:
-
+### 2. Setup Data Infrastructure
+Provision the replicated database and Redis:
 ```bash
 bash scripts/start_replicated_db.sh
 ```
 
-### 4. Build and Launch
-
+### 3. Build & Launch
 Build the container images and start the services:
-
 ```bash
 bash scripts/build_abstracted.sh
 bash scripts/start_manual.sh
 ```
 
-The application will be available at:
-- **Frontend**: [http://localhost:8081](http://localhost:8081)
-- **Backend API**: [http://localhost:3001](http://localhost:3001)
+- **Web Interface**: `http://localhost:8081`
+- **Backend API**: `http://localhost:3001`
 
-## Development
+---
 
-To add new host-machine commands to the allowed list, update the whitelist:
+## Testing
 
+### AI Bridge Tests
 ```bash
-echo "command_name" >> scripts/bridge/whitelist.txt
+python3 -m pytest ai_bridge/tests
 ```
 
-## Security Disclosure
+### Full System Tests
+```bash
+npm test
+```
 
-This project implements strict isolation. All communication with the host machine is audited through `scripts/bridge/exec.sh`. Direct execution of host commands from within the container is disabled by design.
+## Security
+All communication with the host machine is audited. Direct execution is disabled. To allow new host commands, update `scripts/bridge/whitelist.txt`.
