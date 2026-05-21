@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import axios from 'axios';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { getDefaultRouteForUser } from '../security/adminAccess';
 
 export default function LoginForm() {
   const { theme, toggleTheme } = useTheme();
@@ -27,7 +28,7 @@ export default function LoginForm() {
     try {
       const response = await api.post('/auth/login', { email, password });
       setUser(response.data);
-      navigate(response.data.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
+      navigate(getDefaultRouteForUser(response.data), { replace: true });
     } catch (err: unknown) {
       const message = axios.isAxiosError<{ message?: string }>(err)
         ? err.response?.data?.message

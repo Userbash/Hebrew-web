@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { RegisterSchema, type AuthCredentials } from '../api/auth.schema';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { getDefaultRouteForUser } from '../security/adminAccess';
 
 export default function AuthForm({ type }: { type: 'register' }) {
   const [error, setError] = useState('');
@@ -23,7 +24,7 @@ export default function AuthForm({ type }: { type: 'register' }) {
     try {
       const res = await api.post('/auth/register', data);
       setUser(res.data);
-      navigate(res.data.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
+      navigate(getDefaultRouteForUser(res.data), { replace: true });
     } catch (err: unknown) {
       const message = axios.isAxiosError<{ message?: string }>(err)
         ? err.response?.data?.message

@@ -1,6 +1,24 @@
 import { createContext, useContext, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import api from '../api/client';
 
+export type RoleKey =
+  | 'root'
+  | 'platform_admin'
+  | 'security_admin'
+  | 'content_admin'
+  | 'editor'
+  | 'moderator'
+  | 'support'
+  | 'analyst'
+  | 'user';
+
+export interface AccessProfile {
+  roleKeys: RoleKey[];
+  highestRole: RoleKey;
+  highestPriority: number;
+  isSystemBlocked: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -14,6 +32,7 @@ export interface User {
   updated_at?: string;
   registered_at?: string;
   last_login?: string;
+  access?: AccessProfile | null;
 }
 
 interface AuthContextValue {
@@ -21,6 +40,8 @@ interface AuthContextValue {
   setUser: Dispatch<SetStateAction<User | null>>;
   isLoading: boolean;
   setIsLoading: Dispatch<SetStateAction<boolean>>;
+  hasRole: (role: RoleKey) => boolean;
+  hasAnyRole: (roles: RoleKey[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -49,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false);
         }
         return;
-      } catch (_meError) {
+      } catch {
         // Access token may be expired: try refresh once.
       }
 
@@ -59,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isMounted) {
           setUser(isUserPayload(meAfterRefresh.data) ? meAfterRefresh.data : null);
         }
-      } catch (_refreshError) {
+      } catch {
         if (isMounted) {
           setUser(null);
         }
@@ -77,8 +98,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const hasRole = (role: RoleKey) => {
+    if (!user?.access?.roleKeys) {
+      return false;
+    }
+
+    return user.access.roleKeys.includes(role);
+  };
+
+  const hasAnyRole = (roles: RoleKey[]) => {
+    if (!user?.access?.roleKeys || roles.length === 0) {
+      return false;
+    }
+
+    return roles.some((role) => user.access?.roleKeys.includes(role));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser, isLoading, setIsLoading }}>
+    <AuthContext.Provider value={{ user, setUser, isLoading, setIsLoading, hasRole, hasAnyRole }}>
       {children}
     </AuthContext.Provider>
   );

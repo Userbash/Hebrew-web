@@ -3,51 +3,52 @@
  */
 
 import express, { Request, Response } from 'express';
-import { db } from '../data/db.js';
-import { verifyToken, optionalAuth, requireAdmin, RequestWithAuth } from '../middleware/auth.js';
+import { db, ItemRow } from '../data/db.js';
+import { verifyToken, RequestWithAuth } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/authorization.js';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = express.Router();
 
+const withCompletionFlag = (lessons: ItemRow[], acquiredIds: Set<string>) => {
+    return lessons.map((lesson) => ({
+        ...lesson,
+        isCompleted: acquiredIds.has(lesson.id),
+    }));
+};
+
 /**
  * GET /api/lessons
- * Get all lessons with optional filtering
+ * Get all lessons with optional difficulty filter.
  */
-router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
-    const difficulty = req.query.difficulty as string | undefined;
+router.get('/', verifyToken, requirePermission('lessons', 'read', 'any'), asyncHandler(async (req: Request, res: Response) => {
+    const difficulty = typeof req.query.difficulty === 'string' ? req.query.difficulty.trim() : '';
+
     let lessons = await db.getAllLessons();
 
     if (difficulty) {
-        lessons = lessons.filter((l: any) => l.difficulty === difficulty);
+        lessons = lessons.filter((lesson) => lesson.metadata?.difficulty === difficulty);
     }
 
-    // Add completion status for authenticated users
     const authReq = req as RequestWithAuth;
     if (authReq.userId) {
-        const user = await db.getUserById(authReq.userId);
-        if (user) {
-            // Check acquisition from user_items
-            const acquisitionsRes = await db.query('SELECT item_id FROM user_items WHERE user_id = $1', [authReq.userId]);
-            const acquiredIds = acquisitionsRes.rows.map(r => r.item_id);
-            lessons = lessons.map((lesson: any) => ({
-                ...lesson,
-                isCompleted: acquiredIds.includes(lesson.id)
-            }));
-        }
+        const acquisitionsRes = await db.query('SELECT item_id FROM user_items WHERE user_id = $1', [authReq.userId]);
+        const acquiredIds = new Set<string>(acquisitionsRes.rows.map((row: { item_id: string }) => row.item_id));
+        lessons = withCompletionFlag(lessons, acquiredIds);
     }
 
     res.status(200).json({
         success: true,
         lessons,
-        count: lessons.length
+        count: lessons.length,
     });
 }));
 
 /**
  * GET /api/lessons/:id
- * Get lesson by ID
+ * Get lesson by ID.
  */
-router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id', verifyToken, requirePermission('lessons', 'read', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const lesson = await db.getLessonById(id);
 
@@ -55,25 +56,27 @@ router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response
         throw new NotFoundError('Lesson not found');
     }
 
-    // Add completion status
-    let lessonData: any = { ...lesson };
+    let lessonData: ItemRow & { isCompleted?: boolean } = { ...lesson };
     const authReq = req as RequestWithAuth;
     if (authReq.userId) {
         const acquisitionsRes = await db.query('SELECT 1 FROM user_items WHERE user_id = $1 AND item_id = $2', [authReq.userId, id]);
-        lessonData.isCompleted = (acquisitionsRes.rowCount ?? 0) > 0;
+        lessonData = {
+            ...lessonData,
+            isCompleted: (acquisitionsRes.rowCount ?? 0) > 0,
+        };
     }
 
     res.status(200).json({
         success: true,
-        lesson: lessonData
+        lesson: lessonData,
     });
 }));
 
 /**
  * POST /api/lessons/:id/complete
- * Mark lesson as completed
+ * Marks lesson as completed and applies XP once.
  */
-router.post('/:id/complete', verifyToken, asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/complete', verifyToken, requirePermission('progress', 'read', 'own'), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const lesson = await db.getLessonById(id);
 
@@ -82,22 +85,23 @@ router.post('/:id/complete', verifyToken, asyncHandler(async (req: Request, res:
     }
 
     const authReq = req as RequestWithAuth;
-    const userProgress = await db.completeLesson(authReq.userId, id);
+    const xpReward = typeof lesson.metadata?.xpReward === 'number' ? lesson.metadata.xpReward : 50;
+    const userProgress = await db.completeItemWithXp(authReq.userId, id, xpReward);
 
     res.status(200).json({
         success: true,
         message: 'Lesson marked as completed',
         xpEarned: userProgress.xpEarned,
         userLevel: userProgress.level,
-        userXp: userProgress.xp_total
+        userXp: userProgress.xp_total,
     });
 }));
 
 /**
  * POST /api/lessons
- * Create new lesson (admin only - demo endpoint)
+ * Create lesson (admin only).
  */
-router.post('/', ...requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+router.post('/', verifyToken, requirePermission('lessons', 'create', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const { title, description, difficulty, duration, content, xpReward } = req.body;
 
     if (!title || !description || !difficulty) {
@@ -105,28 +109,36 @@ router.post('/', ...requireAdmin, asyncHandler(async (req: Request, res: Respons
     }
 
     const lesson = await db.createLesson({
-        title,
-        description,
-        difficulty,
-        duration: duration || 15,
-        content: content || [],
-        xpReward: xpReward || 50
+        title: String(title),
+        description: String(description),
+        difficulty: String(difficulty),
+        duration: typeof duration === 'number' ? duration : 15,
+        content: Array.isArray(content) ? content : [],
+        xpReward: typeof xpReward === 'number' ? xpReward : 50,
     });
 
     res.status(201).json({
         success: true,
         message: 'Lesson created successfully',
-        lesson
+        lesson,
     });
 }));
 
 /**
  * PUT /api/lessons/:id
- * Update lesson
+ * Update lesson.
  */
-router.put('/:id', ...requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+router.put('/:id', verifyToken, requirePermission('lessons', 'update', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const lesson = await db.updateLesson(id, req.body);
+
+    const lesson = await db.updateLesson(id, {
+        title: typeof req.body?.title === 'string' ? req.body.title : undefined,
+        description: typeof req.body?.description === 'string' ? req.body.description : undefined,
+        difficulty: typeof req.body?.difficulty === 'string' ? req.body.difficulty : undefined,
+        duration: typeof req.body?.duration === 'number' ? req.body.duration : undefined,
+        content: Array.isArray(req.body?.content) ? req.body.content : undefined,
+        xpReward: typeof req.body?.xpReward === 'number' ? req.body.xpReward : undefined,
+    });
 
     if (!lesson) {
         throw new NotFoundError('Lesson not found');
@@ -135,7 +147,7 @@ router.put('/:id', ...requireAdmin, asyncHandler(async (req: Request, res: Respo
     res.status(200).json({
         success: true,
         message: 'Lesson updated successfully',
-        lesson
+        lesson,
     });
 }));
 

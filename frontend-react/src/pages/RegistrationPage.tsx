@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { getDefaultRouteForUser } from '../security/adminAccess';
 import api from '../api/client';
 
 const registrationSchema = z.object({
@@ -66,7 +67,7 @@ const RegistrationPage: React.FC = () => {
         username: data.username,
       });
       setUser(response.data);
-      navigate('/dashboard', { replace: true });
+      navigate(getDefaultRouteForUser(response.data), { replace: true });
     } catch (err: unknown) {
       const payload = axios.isAxiosError<RegisterErrorResponse>(err)
         ? err.response?.data

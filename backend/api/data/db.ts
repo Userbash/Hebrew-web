@@ -22,7 +22,7 @@ const requiredInProduction = (name: string, fallback: string) => {
 
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
+    port: parseInt(process.env.DB_PORT || '5432', 10),
     user: requiredInProduction('DB_USER', 'admin'),
     password: requiredInProduction('DB_PASSWORD', 'master_pass_2025'),
     database: requiredInProduction('DB_NAME', 'hebrew_db'),
@@ -31,13 +31,84 @@ const pool = new Pool({
     connectionTimeoutMillis: 2000,
 });
 
+type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
+type JsonObject = { [key: string]: JsonValue };
+
+export interface UserRow {
+    id: string;
+    email: string;
+    username: string;
+    first_name: string | null;
+    last_name: string | null;
+    role: 'user' | 'admin' | 'moderator';
+    xp_total: number;
+    level: number;
+    created_at: string;
+    updated_at: string;
+    registered_at: string | null;
+    last_login: string | null;
+    password_hash?: string;
+    streak?: number;
+    locked_until?: string | null;
+    failed_login_attempts?: number;
+}
+
+export interface ItemMetadata {
+    difficulty?: string;
+    duration?: number;
+    content?: JsonValue[];
+    xpReward?: number;
+    lessonId?: string;
+    questions?: JsonValue[];
+    correctAnswers?: Array<string | number | boolean | null>;
+    passingScore?: number;
+    authorId?: string;
+    status?: string;
+    tags?: string[];
+    visibility?: 'private' | 'team' | 'public';
+    publishedAt?: string | null;
+    [key: string]: JsonValue | undefined;
+}
+
+export interface ItemRow {
+    id: string;
+    name: string;
+    description: string | null;
+    category: string | null;
+    price: string | number;
+    stock?: number | null;
+    metadata?: ItemMetadata;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface UserProgress {
+    userId: string;
+    level: number;
+    xpTotal: number;
+    lessonsCompleted: string[];
+    quizzesCompleted: string[];
+    lastActiveDate: string;
+}
+
+export interface QuizAttemptRow {
+    id: string;
+    user_id: string;
+    quiz_id: string;
+    answers: JsonValue;
+    score: number;
+    total_questions: number;
+    passed: boolean;
+    submitted_at: string;
+}
+
 const USER_CACHE_TTL_SECONDS = 300;
 
 const userProfileByIdKey = (id: string) => `user:profile:id:${id}`;
 const userAuthByEmailKey = (email: string) => `user:auth:email:${email.trim().toLowerCase()}`;
 const userAuthByUsernameKey = (username: string) => `user:auth:username:${username.trim().toLowerCase()}`;
 
-const toPublicUser = (user: any) => ({
+const toPublicUser = (user: UserRow) => ({
     id: user.id,
     email: user.email,
     username: user.username,
@@ -52,7 +123,7 @@ const toPublicUser = (user: any) => ({
     last_login: user.last_login,
 });
 
-const cacheUserRecord = async (user: any) => {
+const cacheUserRecord = async (user: UserRow) => {
     if (!user?.id || !user?.email) {
         return;
     }
@@ -87,10 +158,53 @@ const invalidateUserCaches = async (user: { id?: string; email?: string; usernam
     await redisDel(...keys);
 };
 
-export const db = {
-    query: (text: string, params?: any[]) => pool.query(text, params),
+const parseItemMetadata = (raw: unknown): ItemMetadata => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {};
+    }
 
-    // --- USER METHODS ---
+    return raw as ItemMetadata;
+};
+
+const mapItem = (row: Record<string, unknown>): ItemRow => ({
+    ...(row as unknown as ItemRow),
+    metadata: parseItemMetadata(row.metadata),
+});
+
+const stripUndefined = <T extends Record<string, unknown>>(value: T) => {
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined);
+    return Object.fromEntries(entries);
+};
+
+const buildSearchQuery = (searchTerm: string, category?: string) => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    const params: unknown[] = [trimmed];
+    const categoryCondition = category
+        ? (() => {
+            params.push(category);
+            return `AND category = $${params.length}`;
+        })()
+        : '';
+
+    const query = `
+        SELECT id, name, description, category, price, metadata,
+               ts_rank(search_vector, plainto_tsquery('english', $1)) AS rank
+        FROM items
+        WHERE search_vector @@ plainto_tsquery('english', $1)
+          ${categoryCondition}
+        ORDER BY rank DESC
+        LIMIT 50;
+    `;
+
+    return { query, params };
+};
+
+export const db = {
+    query: (text: string, params?: unknown[]) => pool.query(text, params),
 
     createUser: async (email: string, passwordHash: string, username: string, firstName: string, lastName: string) => {
         const query = `
@@ -98,7 +212,7 @@ export const db = {
             VALUES ($1, $2, $3, $4, $5)
             RETURNING *;
         `;
-        const res = await pool.query(query, [email, passwordHash, username, firstName, lastName]);
+        const res = await pool.query<UserRow>(query, [email, passwordHash, username, firstName, lastName]);
         const user = res.rows[0];
         await cacheUserRecord(user);
         return toPublicUser(user);
@@ -106,13 +220,13 @@ export const db = {
 
     getUserByEmail: async (email: string) => {
         const cacheKey = userAuthByEmailKey(email);
-        const cached = await redisGetJson<any>(cacheKey);
+        const cached = await redisGetJson<UserRow>(cacheKey);
         if (cached) {
             return cached;
         }
 
         const query = 'SELECT * FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL LIMIT 1';
-        const res = await pool.query(query, [email]);
+        const res = await pool.query<UserRow>(query, [email]);
         const user = res.rows[0];
 
         if (user) {
@@ -124,13 +238,13 @@ export const db = {
 
     getUserByUsername: async (username: string) => {
         const cacheKey = userAuthByUsernameKey(username);
-        const cached = await redisGetJson<any>(cacheKey);
+        const cached = await redisGetJson<UserRow>(cacheKey);
         if (cached) {
             return cached;
         }
 
         const query = 'SELECT * FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL LIMIT 1';
-        const res = await pool.query(query, [username]);
+        const res = await pool.query<UserRow>(query, [username]);
         const user = res.rows[0];
 
         if (user) {
@@ -142,18 +256,18 @@ export const db = {
 
     getUserById: async (id: string) => {
         const cacheKey = userProfileByIdKey(id);
-        const cached = await redisGetJson<any>(cacheKey);
+        const cached = await redisGetJson<UserRow>(cacheKey);
         if (cached) {
             return cached;
         }
 
         const query = `
-            SELECT id, email, username, first_name, last_name, role, xp_total, level, created_at, updated_at, registered_at, last_login
+            SELECT id, email, username, first_name, last_name, role, xp_total, level, streak, created_at, updated_at, registered_at, last_login
             FROM users
             WHERE id = $1 AND deleted_at IS NULL
             LIMIT 1
         `;
-        const res = await pool.query(query, [id]);
+        const res = await pool.query<UserRow>(query, [id]);
         const user = res.rows[0];
 
         if (user) {
@@ -163,7 +277,7 @@ export const db = {
         return user;
     },
 
-    cacheUser: async (user: any) => {
+    cacheUser: async (user: UserRow) => {
         await cacheUserRecord(user);
     },
 
@@ -171,47 +285,41 @@ export const db = {
         await invalidateUserCaches(user);
     },
 
-    // --- ITEM METHODS ---
-
-    createItem: async (name: string, description: string, category: string, price: number) => {
+    createItem: async (name: string, description: string, category: string, price: number, metadata: ItemMetadata = {}) => {
         const query = `
-            INSERT INTO items (name, description, category, price)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO items (name, description, category, price, metadata)
+            VALUES ($1, $2, $3, $4, $5::jsonb)
             RETURNING *;
         `;
-        const res = await pool.query(query, [name, description, category, price]);
-        return res.rows[0];
+        const res = await pool.query(query, [name, description, category, price, JSON.stringify(metadata)]);
+        return mapItem(res.rows[0]);
     },
 
-    searchItems: async (searchTerm: string) => {
-        const query = `
-            SELECT id, name, description, category, price, 
-                   ts_rank(search_vector, to_tsquery('english', $1)) as rank
-            FROM items
-            WHERE search_vector @@ to_tsquery('english', $1)
-            ORDER BY rank DESC
-            LIMIT 50;
-        `;
-        const formattedSearch = searchTerm.trim().split(/\s+/).join(' & ');
-        const res = await pool.query(query, [formattedSearch]);
-        return res.rows;
+    searchItems: async (searchTerm: string, options?: { category?: string }) => {
+        const prepared = buildSearchQuery(searchTerm, options?.category);
+        if (!prepared) {
+            return [];
+        }
+
+        const res = await pool.query(prepared.query, prepared.params);
+        return res.rows.map((row) => mapItem(row));
     },
 
     deleteItem: async (id: string) => {
         const query = 'DELETE FROM items WHERE id = $1 RETURNING id';
-        const res = await pool.query(query, [id]);
+        const res = await pool.query<{ id: string }>(query, [id]);
         return res.rows[0];
     },
 
     updateUserXP: async (userId: string, xpToAdd: number) => {
         const query = `
-            UPDATE users 
+            UPDATE users
             SET xp_total = xp_total + $1,
                 level = floor((xp_total + $1) / 100) + 1
             WHERE id = $2
             RETURNING xp_total, level;
         `;
-        const res = await pool.query(query, [xpToAdd, userId]);
+        const res = await pool.query<{ xp_total: number; level: number }>(query, [xpToAdd, userId]);
         const updated = res.rows[0];
 
         if (updated) {
@@ -221,37 +329,73 @@ export const db = {
         return updated;
     },
 
-    // --- LESSONS ---
     getAllLessons: async () => {
-        const res = await pool.query('SELECT * FROM items WHERE category = $1', ['lesson']);
-        return res.rows;
+        const res = await pool.query('SELECT * FROM items WHERE category = $1 ORDER BY created_at DESC', ['lesson']);
+        return res.rows.map((row) => mapItem(row));
     },
 
     getLessonById: async (id: string) => {
         const res = await pool.query('SELECT * FROM items WHERE id = $1 AND category = $2', [id, 'lesson']);
-        return res.rows[0];
+        const row = res.rows[0];
+        return row ? mapItem(row) : null;
     },
 
-    createLesson: async (data: any) => {
+    createLesson: async (data: {
+        title: string;
+        description: string;
+        difficulty: string;
+        duration: number;
+        content: JsonValue[];
+        xpReward: number;
+    }) => {
+        const metadata: ItemMetadata = {
+            difficulty: data.difficulty,
+            duration: data.duration,
+            content: data.content,
+            xpReward: data.xpReward,
+        };
+
         const query = `
-            INSERT INTO items (name, description, category, price)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO items (name, description, category, price, metadata)
+            VALUES ($1, $2, 'lesson', 0, $3::jsonb)
             RETURNING *;
         `;
-        const res = await pool.query(query, [data.title, data.description, 'lesson', 0]);
-        return res.rows[0];
+        const res = await pool.query(query, [data.title, data.description, JSON.stringify(metadata)]);
+        return mapItem(res.rows[0]);
     },
 
-    updateLesson: async (id: string, updates: any) => {
+    updateLesson: async (id: string, updates: {
+        title?: string;
+        description?: string;
+        difficulty?: string;
+        duration?: number;
+        content?: JsonValue[];
+        xpReward?: number;
+    }) => {
+        const metadataPatch = stripUndefined({
+            difficulty: updates.difficulty,
+            duration: updates.duration,
+            content: updates.content,
+            xpReward: updates.xpReward,
+        });
+
         const query = `
-            UPDATE items 
+            UPDATE items
             SET name = COALESCE($1, name),
-                description = COALESCE($2, description)
-            WHERE id = $3 AND category = 'lesson'
+                description = COALESCE($2, description),
+                metadata = metadata || $3::jsonb
+            WHERE id = $4 AND category = 'lesson'
             RETURNING *;
         `;
-        const res = await pool.query(query, [updates.title, updates.description, id]);
-        return res.rows[0];
+        const res = await pool.query(query, [
+            updates.title,
+            updates.description,
+            JSON.stringify(metadataPatch),
+            id,
+        ]);
+
+        const row = res.rows[0];
+        return row ? mapItem(row) : null;
     },
 
     completeItemWithXp: async (userId: string, itemId: string, xpToAdd: number) => {
@@ -262,47 +406,114 @@ export const db = {
 
         if ((acquisition.rowCount ?? 0) === 0) {
             const user = await db.getUserById(userId);
-            return { ...user, xpEarned: 0 };
+            return {
+                xp_total: user?.xp_total ?? 0,
+                level: user?.level ?? 1,
+                xpEarned: 0,
+            };
         }
 
         const progress = await db.updateUserXP(userId, xpToAdd);
-        return { ...progress, xpEarned: xpToAdd };
+        return {
+            xp_total: progress?.xp_total ?? 0,
+            level: progress?.level ?? 1,
+            xpEarned: xpToAdd,
+        };
     },
 
     completeLesson: async (userId: string, lessonId: string) => {
-        return await db.completeItemWithXp(userId, lessonId, 50);
+        return db.completeItemWithXp(userId, lessonId, 50);
     },
 
-    // --- QUIZZES ---
     getAllQuizzes: async () => {
-        const res = await pool.query('SELECT * FROM items WHERE category = $1', ['quiz']);
-        return res.rows;
+        const res = await pool.query('SELECT * FROM items WHERE category = $1 ORDER BY created_at DESC', ['quiz']);
+        return res.rows.map((row) => mapItem(row));
     },
 
     getQuizById: async (id: string) => {
         const res = await pool.query('SELECT * FROM items WHERE id = $1 AND category = $2', [id, 'quiz']);
+        const row = res.rows[0];
+        return row ? mapItem(row) : null;
+    },
+
+    recordQuizAttempt: async (
+        userId: string,
+        quizId: string,
+        answers: JsonValue,
+        score: number,
+        totalQuestions: number,
+        passed: boolean
+    ) => {
+        const query = `
+            INSERT INTO quiz_attempts (user_id, quiz_id, answers, score, total_questions, passed)
+            VALUES ($1, $2, $3::jsonb, $4, $5, $6)
+            RETURNING *;
+        `;
+        const res = await pool.query<QuizAttemptRow>(query, [
+            userId,
+            quizId,
+            JSON.stringify(answers),
+            score,
+            totalQuestions,
+            passed,
+        ]);
+
         return res.rows[0];
     },
 
-    getUserProgress: async (userId: string) => {
-        const user = await db.getUserById(userId);
-        if (!user) return null;
+    getQuizAttemptsForUser: async (userId: string, quizId: string, limit = 20) => {
+        const safeLimit = Math.max(1, Math.min(limit, 100));
+        const query = `
+            SELECT id, user_id, quiz_id, answers, score, total_questions, passed, submitted_at
+            FROM quiz_attempts
+            WHERE user_id = $1 AND quiz_id = $2
+            ORDER BY submitted_at DESC
+            LIMIT $3;
+        `;
+        const res = await pool.query<QuizAttemptRow>(query, [userId, quizId, safeLimit]);
+        return res.rows;
+    },
 
-        const res = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [userId]);
-        const acquisitions = res.rows.map(r => r.item_id);
+    getUserProgress: async (userId: string): Promise<UserProgress | null> => {
+        const user = await db.getUserById(userId);
+        if (!user) {
+            return null;
+        }
+
+        const res = await pool.query<{ item_id: string; category: string | null }>(
+            `SELECT ui.item_id, i.category
+             FROM user_items ui
+             JOIN items i ON i.id = ui.item_id
+             WHERE ui.user_id = $1`,
+            [userId]
+        );
+
+        const lessonsCompleted: string[] = [];
+        const quizzesCompleted: string[] = [];
+
+        for (const row of res.rows) {
+            if (row.category === 'lesson') {
+                lessonsCompleted.push(row.item_id);
+                continue;
+            }
+
+            if (row.category === 'quiz') {
+                quizzesCompleted.push(row.item_id);
+            }
+        }
 
         return {
             userId,
             level: user.level,
             xpTotal: user.xp_total,
-            lessonsCompleted: acquisitions,
-            quizzesCompleted: [],
-            lastActiveDate: new Date().toISOString()
+            lessonsCompleted,
+            quizzesCompleted,
+            lastActiveDate: new Date().toISOString(),
         };
     },
 
     getAllUsers: async () => {
         const res = await pool.query('SELECT id, username, email, first_name, last_name, xp_total, level FROM users WHERE deleted_at IS NULL');
         return res.rows;
-    }
+    },
 };

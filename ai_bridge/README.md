@@ -243,24 +243,24 @@ planner -> senior codex -> reviewer -> tester -> security reviewer
 `UserConsole` records simple status events:
 
 ```text
-[PLAN] Задача проанализирована
-[AGENTS] Найдено агентов: 4, доступно: 4
-[ROUTING] code передан агенту codex-main
-[REVIEW] Качество ниже порога: low_confidence
-[FIX] Найдены ошибки, создана задача исправления
-[DONE] Все критерии выполнены
+[PLAN] Task analyzed
+[AGENTS] Agents found: 4, available: 4
+[ROUTING] code routed to agent codex-main
+[REVIEW] Quality below threshold: low_confidence
+[FIX] Errors found, a fix task was created
+[DONE] All criteria satisfied
 ```
 
 It can also render per-agent status:
 
 ```text
-Агент: codex-main
-Статус: busy
-Задача: создание модуля load_balancer.py
-Модель: gpt-coding-large
-Прогресс: 65%
-Текущий этап: пишет код
-Ошибки: нет
+Agent: codex-main
+Status: busy
+Task: creating module load_balancer.py
+Model: gpt-coding-large
+Progress: 65%
+Current stage: writing code
+Errors: none
 ```
 
 ## Quality Gate
@@ -472,26 +472,26 @@ assert not config.should_ask_confirmation({"type": "test", "risk_level": "low"})
 assert config.should_ask_confirmation({"action": "database_delete"})
 ```
 
-## Проверка доступности сторонних AI-модулей
+## Third-Party AI Module Availability Checks
 
-AI Bridge должен уметь проверять, доступен ли сторонний AI-модуль перед назначением задачи.
+AI Bridge must verify whether an external AI module is available before assigning a task.
 
-Сторонний AI-модуль считается доступным, если:
+An external AI module is considered available if:
 
-1. endpoint отвечает на healthcheck;
-2. API key или token валиден;
-3. модуль возвращает список capabilities;
-4. latency не превышает лимит;
-5. error_rate ниже допустимого порога;
-6. quota/rate limit не исчерпаны;
-7. модуль поддерживает нужный task_type;
-8. модуль не находится в состоянии disabled, failed, overloaded или unreachable.
+1. the endpoint responds to a healthcheck;
+2. the API key or token is valid;
+3. the module returns a capability list;
+4. latency does not exceed the limit;
+5. `error_rate` is below the allowed threshold;
+6. quota/rate limits are not exhausted;
+7. the module supports the required `task_type`;
+8. the module is not in `disabled`, `failed`, `overloaded`, or `unreachable` state.
 
-Каждый внешний AI-модуль обязан поддерживать endpoint:
+Each external AI module must expose:
 
 GET /health
 
-Ожидаемый ответ:
+Expected response:
 
 {
   "agent_id": "external-ai-1",
@@ -513,17 +513,17 @@ GET /health
   "timestamp": "ISO-8601"
 }
 
-Если модуль не поддерживает /health, AI Bridge должен выполнить fallback-проверку:
+If the module does not support `/health`, AI Bridge must run a fallback check:
 
-1. отправить минимальный ping-запрос;
-2. проверить HTTP status;
-3. измерить latency;
-4. проверить формат ответа;
-5. проверить наличие ошибок авторизации;
-6. определить capabilities из config;
-7. записать результат в metrics и audit trail.
+1. send a minimal ping request;
+2. verify HTTP status;
+3. measure latency;
+4. verify response format;
+5. check for authorization errors;
+6. derive capabilities from config;
+7. write the result to metrics and the audit trail.
 
-Пример fallback ping:
+Fallback ping example:
 
 POST /v1/ping
 
@@ -532,34 +532,34 @@ POST /v1/ping
   "max_tokens": 1
 }
 
-AI Bridge не должен передавать секреты, приватный код или полный контекст во время healthcheck. Проверка должна использовать минимальный безопасный payload.
+AI Bridge must not send secrets, private code, or full context during healthchecks. The check must use a minimal safe payload.
 
-Перед назначением задачи Scheduler обязан выполнить:
+Before task assignment, Scheduler must:
 
-1. найти AI-модули с нужной capability;
-2. проверить readiness;
-3. проверить quota/rate limit;
-4. проверить latency;
-5. проверить error_rate;
-6. проверить risk policy;
-7. выбрать лучший модуль через load_balancer;
-8. если модуль недоступен — выбрать fallback;
-9. если fallback отсутствует — эскалировать в Orchestrator.
+1. find AI modules with the required capability;
+2. check readiness;
+3. check quota/rate limits;
+4. check latency;
+5. check `error_rate`;
+6. check risk policy;
+7. select the best module via `load_balancer`;
+8. if the module is unavailable, select a fallback;
+9. if no fallback exists, escalate to Orchestrator.
 
-Статусы доступности:
+Availability statuses:
 
-ready       — можно назначать задачи
-busy        — можно назначать только низкоприоритетные задачи
-degraded    — использовать только если нет fallback
-overloaded  — не назначать новые задачи
-offline     — недоступен
-unreachable — endpoint не отвечает
-failed      — исключить из routing pool
-disabled    — отключён политикой
-quota_empty — нельзя использовать до восстановления quota
-auth_failed — требуется обновить credentials
+ready       - tasks can be assigned
+busy        - only low-priority tasks can be assigned
+degraded    - use only when no fallback exists
+overloaded  - do not assign new tasks
+offline     - unavailable
+unreachable - endpoint does not respond
+failed      - exclude from routing pool
+disabled    - disabled by policy
+quota_empty - cannot be used until quota is restored
+auth_failed - credentials must be updated
 
-Для каждого внешнего AI-модуля должны собираться метрики:
+Metrics must be collected for each external AI module:
 
 - availability
 - latency_ms
@@ -574,12 +574,12 @@ auth_failed — требуется обновить credentials
 - readiness
 - estimated_cost
 
-Если healthcheck падает несколько раз подряд, AI Bridge должен:
+If healthchecks fail multiple times in a row, AI Bridge must:
 
-1. пометить модуль как degraded;
-2. уменьшить его routing priority;
-3. после retry_limit пометить как failed;
-4. исключить из выбора агента;
-5. записать событие в audit trail;
-6. попробовать fallback-модуль;
-7. при отсутствии fallback — запросить вмешательство Orchestrator.
+1. mark the module as `degraded`;
+2. lower its routing priority;
+3. after `retry_limit`, mark it as `failed`;
+4. exclude it from agent selection;
+5. write an event to the audit trail;
+6. try a fallback module;
+7. if no fallback exists, request Orchestrator intervention.

@@ -8,16 +8,17 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: development
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Deploy to Server
         run: |
           # Используем переменные среды GitHub Secrets
           # Докер-композ подхватит их из окружения runner'а
           podman compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-          
+
           # Нативная проверка готовности (ждем здорового состояния контейнеров)
           echo "Waiting for healthy status..."
           for i in {1..10}; do
@@ -29,7 +30,6 @@ jobs:
             echo "Waiting... (Current status: $STATUS)"
             sleep 10
           done
-          
+
           # Проверка финального состояния
           podman ps
-EOF

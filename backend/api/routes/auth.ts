@@ -29,6 +29,7 @@ import {
   PASSWORD_RULES_TEXT
 } from '../security/credentials.js';
 import { isBlockedEmailByDomainPolicy } from '../security/emailDomainBlocklist.js';
+import { getUserAccessProfile } from '../security/rbacService.js';
 
 const router = Router();
 const SALT_ROUNDS = 12;
@@ -245,6 +246,22 @@ const toPublicUser = (user: any) => ({
   level: user.level,
 });
 
+const buildAuthResponseUser = async (user: any) => {
+  const access = await getUserAccessProfile(user.id);
+
+  return {
+    ...toPublicUser(user),
+    access: access
+      ? {
+          roleKeys: access.roleKeys,
+          highestRole: access.highestRole,
+          highestPriority: access.highestPriority,
+          isSystemBlocked: access.isSystemBlocked,
+        }
+      : null,
+  };
+};
+
 // POST /api/auth/register
 router.post('/register', loginLimiter, async (req, res) => {
   const {
@@ -346,10 +363,8 @@ router.post('/register', loginLimiter, async (req, res) => {
     setAuthCookies(res, accessToken, refreshToken);
     await db.cacheUser(user);
 
-    res.status(201).json({
-      ...toPublicUser(user),
-      token: accessToken,
-    });
+    const responseUser = await buildAuthResponseUser(user);
+    res.status(201).json(responseUser);
   } catch (err: unknown) {
     const conflict = err as { code?: string; constraint?: string };
 
@@ -403,6 +418,9 @@ router.post('/login', loginLimiter, async (req, res) => {
         lockedUntil: user.locked_until,
       });
     }
+    if (!user.password_hash) {
+      return res.status(401).json({ message: 'Неверные учетные данные' });
+    }
 
     const isMatch = await bcrypt.compare(String(password), user.password_hash);
     if (!isMatch) {
@@ -452,10 +470,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     await db.invalidateUserCache({ id: user.id, email: user.email, username: user.username });
     await db.cacheUser(updatedUser);
 
-    res.json({
-      ...toPublicUser(updatedUser),
-      token: accessToken,
-    });
+    const responseUser = await buildAuthResponseUser(updatedUser);
+    res.json(responseUser);
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -536,12 +552,11 @@ router.get('/verify', verifyToken, async (req, res) => {
     return res.status(401).json({ authenticated: false });
   }
 
+  const responseUser = await buildAuthResponseUser(user);
+
   return res.json({
     authenticated: true,
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    role: user.role
+    ...responseUser,
   });
 });
 
@@ -552,10 +567,11 @@ router.get('/me', verifyToken, async (req, res) => {
 
   if (!user) {
     clearAuthCookies(res);
-    return res.status(401).json({ message: 'Пользователь не найден' });
+    return res.status(401).json({ message: 'User not found' });
   }
 
-  res.json(user);
+  const responseUser = await buildAuthResponseUser(user);
+  res.json(responseUser);
 });
 
 // POST /api/auth/logout

@@ -1,0 +1,94 @@
+.admin-console {
+  min-height: 100vh;
+  background:
+    linear-gradient(140deg, rgba(37, 99, 235, 0.24), transparent 36%),
+    radial-gradient(circle at 88% 16%, rgba(16, 185, 129, 0.18), transparent 28%),
+    linear-gradient(180deg, #0b1220 0%, #090f1a 100%);
+  color: #e5edf8;
+}
+
+.admin-console .container-xl {
+  max-width: 1320px;
+}
+
+.admin-toolbar {
+  border: 1px solid rgba(70, 85, 112, 0.55);
+  background: rgba(11, 18, 32, 0.72);
+  backdrop-filter: blur(16px);
+  border-radius: 20px;
+}
+
+.admin-kpi {
+  border: 1px solid rgba(70, 85, 112, 0.45);
+  border-radius: 16px;
+  background: rgba(16, 24, 40, 0.72);
+}
+
+.admin-panel {
+  border: 1px solid rgba(70, 85, 112, 0.5);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.74);
+}
+
+.admin-console .nav-tabs {
+  border-bottom: 1px solid rgba(82, 96, 128, 0.5);
+}
+
+.admin-console .nav-tabs .nav-link {
+  color: #a9b6cf;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+}
+
+.admin-console .nav-tabs .nav-link.active {
+  color: #eef4ff;
+  border-bottom-color: #3b82f6;
+  background: transparent;
+}
+
+.admin-console .table {
+  color: #d8e2f3;
+}
+
+.admin-console .table thead th {
+  color: #9fb0cd;
+  border-bottom-color: rgba(82, 96, 128, 0.6);
+}
+
+.admin-console .table td {
+  border-color: rgba(70, 85, 112, 0.45);
+  vertical-align: middle;
+}
+
+.admin-console .form-control,
+.admin-console .form-select,
+.admin-console .input-group-text {
+  background: rgba(7, 13, 24, 0.72);
+  border-color: rgba(82, 96, 128, 0.55);
+  color: #e8effa;
+}
+
+.admin-console .form-control:focus,
+.admin-console .form-select:focus {
+  background: rgba(7, 13, 24, 0.85);
+  color: #f8fbff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.2);
+}
+
+.admin-console .badge-soft {
+  background: rgba(59, 130, 246, 0.16);
+  color: #9ec2ff;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.admin-console .btn-outline-light {
+  border-color: rgba(168, 179, 203, 0.55);
+  color: #d7e1f4;
+}
+
+.admin-console .btn-outline-light:hover {
+  color: #0b1220;
+  background: #dce6f9;
+}

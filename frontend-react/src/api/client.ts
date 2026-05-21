@@ -34,6 +34,7 @@ const isAuthRoute = (url?: string) => {
   ].some((route) => url.includes(route));
 };
 
+// Keep a single refresh request in-flight and replay queued requests afterward.
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -67,8 +68,9 @@ api.interceptors.response.use(
 
       if (typeof window !== 'undefined') {
         const path = window.location.pathname;
-        if (path !== '/autch' && path !== '/login') {
-          window.location.replace('/autch');
+        const isPublicAuthPage = path === '/login' || path === '/register';
+        if (!isPublicAuthPage) {
+          window.location.replace('/login');
         }
       }
 

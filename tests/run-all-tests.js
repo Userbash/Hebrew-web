@@ -86,8 +86,8 @@ class MasterTestRunner {
 
         const pathsToCheck = [
             { path: `${this.projectRoot}/backend`, type: 'dir', name: 'Backend directory' },
-            { path: `${this.projectRoot}/frontend/public`, type: 'dir', name: 'Frontend Public directory' },
-            { path: `${this.projectRoot}/backend/server.js`, type: 'file', name: 'Backend server.js' },
+            { path: `${this.projectRoot}/frontend-react/public`, type: 'dir', name: 'Frontend Public directory' },
+            { path: `${this.projectRoot}/backend/server.ts`, type: 'file', name: 'Backend server.js' },
             { path: `${this.projectRoot}/backend/package.json`, type: 'file', name: 'Backend package.json' },
             { path: `${this.projectRoot}/docker-compose.yml`, type: 'file', name: 'docker-compose.yml' },
             { path: `${this.projectRoot}/backend/Dockerfile`, type: 'file', name: 'Backend Dockerfile' },
@@ -125,7 +125,7 @@ class MasterTestRunner {
 
         const files = [
             { path: `${this.projectRoot}/backend/Dockerfile`, name: 'Backend Dockerfile' },
-            { path: `${this.projectRoot}/frontend/Dockerfile`, name: 'Frontend Dockerfile (Nginx)' }
+            { path: `${this.projectRoot}/frontend-react/Dockerfile`, name: 'Frontend Dockerfile (Nginx)' }
         ];
 
         const results = { total: 0, valid: 0, errors: [] };

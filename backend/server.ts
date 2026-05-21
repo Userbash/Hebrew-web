@@ -25,8 +25,11 @@ import itemsRoutes from './api/routes/items.js';
 import lessonsRoutes from './api/routes/lessons.js';
 import quizzesRoutes from './api/routes/quizzes.js';
 import dictionaryRoutes from './api/routes/dictionary.js';
+import publicationsRoutes from './api/routes/publications.js';
 import progressRoutes from './api/routes/progress.js';
 import userRoutes from './api/routes/users.js';
+import accessControlRoutes from './api/routes/accessControl.js';
+import adminRoutes from './api/routes/admin.js';
 
 // Import middleware
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
@@ -155,7 +158,10 @@ app.use('/api/users', userRoutes);
 app.use('/api/lessons', lessonsRoutes);
 app.use('/api/quizzes', quizzesRoutes);
 app.use('/api/dictionary', dictionaryRoutes);
+app.use('/api/publications', publicationsRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/access', accessControlRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
