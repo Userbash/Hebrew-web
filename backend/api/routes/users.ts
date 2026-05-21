@@ -3,7 +3,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { store } from '../data/store.js';
+import { db } from '../data/db.js';
 import { verifyToken, RequestWithAuth } from '../middleware/auth.js';
 import { asyncHandler, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -15,17 +15,15 @@ const router = express.Router();
  */
 router.get('/profile', verifyToken, asyncHandler(async (req: Request, res: Response) => {
     const authReq = req as RequestWithAuth;
-    const user = store.getUserById(authReq.userId);
+    const user = await db.getUserById(authReq.userId);
 
     if (!user) {
         throw new NotFoundError('User not found');
     }
 
-    const { password: _, ...userWithoutPassword } = user;
-
     res.status(200).json({
         success: true,
-        user: userWithoutPassword
+        user
     });
 }));
 
@@ -34,26 +32,27 @@ router.get('/profile', verifyToken, asyncHandler(async (req: Request, res: Respo
  * Update user profile
  */
 router.put('/profile', verifyToken, asyncHandler(async (req: Request, res: Response) => {
-    const { firstName, lastName, avatar } = req.body;
+    const { firstName, lastName } = req.body;
     const authReq = req as RequestWithAuth;
 
-    const user = store.updateUser(authReq.userId, {
-        firstName: firstName || undefined,
-        lastName: lastName || undefined,
-        // @ts-ignore
-        avatar: avatar || undefined
-    });
+    const query = `
+        UPDATE users 
+        SET first_name = COALESCE($1, first_name),
+            last_name = COALESCE($2, last_name)
+        WHERE id = $3
+        RETURNING id, email, first_name, last_name, role;
+    `;
+    const res_db = await db.query(query, [firstName, lastName, authReq.userId]);
+    const user = res_db.rows[0];
 
     if (!user) {
         throw new NotFoundError('User not found');
     }
 
-    const { password: _, ...userWithoutPassword } = user;
-
     res.status(200).json({
         success: true,
         message: 'Profile updated successfully',
-        user: userWithoutPassword
+        user
     });
 }));
 
@@ -62,18 +61,16 @@ router.put('/profile', verifyToken, asyncHandler(async (req: Request, res: Respo
  * Get user by ID (public profile)
  */
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
-    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const user = store.getUserById(id);
+    const id = req.params.id;
+    const user = await db.getUserById(id);
 
     if (!user) {
         throw new NotFoundError('User not found');
     }
 
-    const { password: _, ...userWithoutPassword } = user;
-
     res.status(200).json({
         success: true,
-        user: userWithoutPassword
+        user
     });
 }));
 
@@ -84,23 +81,18 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
 router.get('/stats/leaderboard', asyncHandler(async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
 
-    const users = store.getAllUsers()
-        .map((u: any) => ({
-            id: u.id,
-            firstName: u.firstName,
-            lastName: u.lastName,
-            xpTotal: u.xpTotal,
-            level: u.level,
-            lessonsCompleted: u.lessonsCompleted.length,
-            avatar: u.avatar
-        }))
-        .sort((a, b) => b.xpTotal - a.xpTotal)
-        .slice(0, limit);
+    const query = `
+        SELECT id, first_name, last_name, xp_total, level
+        FROM users
+        ORDER BY xp_total DESC
+        LIMIT $1;
+    `;
+    const res_db = await db.query(query, [limit]);
 
     res.status(200).json({
         success: true,
-        leaderboard: users,
-        count: users.length
+        leaderboard: res_db.rows,
+        count: res_db.rows.length
     });
 }));
 

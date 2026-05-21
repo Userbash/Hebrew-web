@@ -75,6 +75,27 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// GET /api/auth/verify (Dedicated session check)
+router.get('/verify', async (req, res) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ authenticated: false });
+
+  try {
+    const decoded: any = jwt.verify(token, JWT_SECRET);
+    const user = await db.getUserById(decoded.id);
+    if (!user) return res.status(401).json({ authenticated: false });
+    
+    res.json({ 
+      authenticated: true, 
+      id: user.id, 
+      email: user.email, 
+      role: user.role 
+    });
+  } catch (err) {
+    res.status(401).json({ authenticated: false });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', async (req, res) => {
   const token = req.cookies.token;

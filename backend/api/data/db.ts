@@ -94,5 +94,78 @@ export const db = {
         `;
         const res = await pool.query(query, [xpToAdd, userId]);
         return res.rows[0];
+    },
+
+    // --- LESSONS ---
+    getAllLessons: async () => {
+        const res = await pool.query('SELECT * FROM items WHERE category = $1', ['lesson']);
+        return res.rows;
+    },
+
+    getLessonById: async (id: string) => {
+        const res = await pool.query('SELECT * FROM items WHERE id = $1 AND category = $2', [id, 'lesson']);
+        return res.rows[0];
+    },
+
+    createLesson: async (data: any) => {
+        const query = `
+            INSERT INTO items (name, description, category, price)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        const res = await pool.query(query, [data.title, data.description, 'lesson', 0]);
+        return res.rows[0];
+    },
+
+    updateLesson: async (id: string, updates: any) => {
+        const query = `
+            UPDATE items 
+            SET name = COALESCE($1, name),
+                description = COALESCE($2, description)
+            WHERE id = $3 AND category = 'lesson'
+            RETURNING *;
+        `;
+        const res = await pool.query(query, [updates.title, updates.description, id]);
+        return res.rows[0];
+    },
+
+    completeLesson: async (userId: string, lessonId: string) => {
+        // Record acquisition
+        await pool.query('INSERT INTO user_items (user_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, lessonId]);
+        // Add XP
+        return await db.updateUserXP(userId, 50);
+    },
+
+    // --- QUIZZES ---
+    getAllQuizzes: async () => {
+        const res = await pool.query('SELECT * FROM items WHERE category = $1', ['quiz']);
+        return res.rows;
+    },
+
+    getQuizById: async (id: string) => {
+        const res = await pool.query('SELECT * FROM items WHERE id = $1 AND category = $2', [id, 'quiz']);
+        return res.rows[0];
+    },
+
+    getUserProgress: async (userId: string) => {
+        const user = await db.getUserById(userId);
+        if (!user) return null;
+        
+        const res = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [userId]);
+        const acquisitions = res.rows.map(r => r.item_id);
+
+        return {
+            userId,
+            level: user.level,
+            xpTotal: user.xp_total,
+            lessonsCompleted: acquisitions, // Simplified for now
+            quizzesCompleted: [],
+            lastActiveDate: new Date().toISOString()
+        };
+    },
+
+    getAllUsers: async () => {
+        const res = await pool.query('SELECT id, email, first_name, last_name, xp_total, level FROM users');
+        return res.rows;
     }
 };

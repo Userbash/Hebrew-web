@@ -3,7 +3,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { store } from '../data/store.js';
+import { db } from '../data/db.js';
 import { verifyToken, optionalAuth, RequestWithAuth } from '../middleware/auth.js';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
@@ -15,20 +15,23 @@ const router = express.Router();
  */
 router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const difficulty = req.query.difficulty as string | undefined;
-    let lessons = store.getAllLessons();
+    let lessons = await db.getAllLessons();
 
     if (difficulty) {
-        lessons = lessons.filter(l => l.difficulty === difficulty);
+        lessons = lessons.filter((l: any) => l.difficulty === difficulty);
     }
 
     // Add completion status for authenticated users
     const authReq = req as RequestWithAuth;
     if (authReq.userId) {
-        const user = store.getUserById(authReq.userId);
+        const user = await db.getUserById(authReq.userId);
         if (user) {
-            lessons = lessons.map(lesson => ({
+            // Check acquisition from user_items
+            const acquisitionsRes = await db.query('SELECT item_id FROM user_items WHERE user_id = $1', [authReq.userId]);
+            const acquiredIds = acquisitionsRes.rows.map(r => r.item_id);
+            lessons = lessons.map((lesson: any) => ({
                 ...lesson,
-                isCompleted: user.lessonsCompleted.includes(lesson.id)
+                isCompleted: acquiredIds.includes(lesson.id)
             }));
         }
     }
@@ -46,7 +49,7 @@ router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) =
  */
 router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const lesson = store.getLessonById(id);
+    const lesson = await db.getLessonById(id);
 
     if (!lesson) {
         throw new NotFoundError('Lesson not found');
@@ -56,10 +59,8 @@ router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response
     let lessonData: any = { ...lesson };
     const authReq = req as RequestWithAuth;
     if (authReq.userId) {
-        const user = store.getUserById(authReq.userId);
-        if (user) {
-            lessonData.isCompleted = user.lessonsCompleted.includes(lesson.id);
-        }
+        const acquisitionsRes = await db.query('SELECT 1 FROM user_items WHERE user_id = $1 AND item_id = $2', [authReq.userId, id]);
+        lessonData.isCompleted = (acquisitionsRes.rowCount ?? 0) > 0;
     }
 
     res.status(200).json({
@@ -74,25 +75,21 @@ router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response
  */
 router.post('/:id/complete', verifyToken, asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const lesson = store.getLessonById(id);
+    const lesson = await db.getLessonById(id);
 
     if (!lesson) {
         throw new NotFoundError('Lesson not found');
     }
 
     const authReq = req as RequestWithAuth;
-    const user = store.completeLesson(authReq.userId, id);
-
-    if (!user) {
-        throw new NotFoundError('User not found');
-    }
+    const userProgress = await db.completeLesson(authReq.userId, id);
 
     res.status(200).json({
         success: true,
         message: 'Lesson marked as completed',
-        xpEarned: lesson.xpReward,
-        userLevel: user.level,
-        userXp: user.xpTotal
+        xpEarned: 50,
+        userLevel: userProgress.level,
+        userXp: userProgress.xp_total
     });
 }));
 
@@ -107,7 +104,7 @@ router.post('/', verifyToken, asyncHandler(async (req: Request, res: Response) =
         throw new ValidationError('Title, description, and difficulty are required');
     }
 
-    const lesson = store.createLesson({
+    const lesson = await db.createLesson({
         title,
         description,
         difficulty,
@@ -129,7 +126,7 @@ router.post('/', verifyToken, asyncHandler(async (req: Request, res: Response) =
  */
 router.put('/:id', verifyToken, asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const lesson = store.updateLesson(id, req.body);
+    const lesson = await db.updateLesson(id, req.body);
 
     if (!lesson) {
         throw new NotFoundError('Lesson not found');

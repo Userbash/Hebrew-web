@@ -3,7 +3,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { store } from '../data/store.js';
+import { db } from '../data/db.js';
 import { verifyToken, RequestWithAuth } from '../middleware/auth.js';
 import { asyncHandler, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -15,7 +15,7 @@ const router = express.Router();
  */
 router.get('/', verifyToken, asyncHandler(async (req: Request, res: Response) => {
     const authReq = req as RequestWithAuth;
-    const progress = store.getUserProgress(authReq.userId);
+    const progress = await db.getUserProgress(authReq.userId);
 
     if (!progress) {
         throw new NotFoundError('Progress not found');
@@ -32,8 +32,8 @@ router.get('/', verifyToken, asyncHandler(async (req: Request, res: Response) =>
  * Get user's progress (if public)
  */
 router.get('/:userId', asyncHandler(async (req: Request, res: Response) => {
-    const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
-    const progress = store.getUserProgress(userId);
+    const userId = req.params.userId;
+    const progress = await db.getUserProgress(userId);
 
     if (!progress) {
         throw new NotFoundError('Progress not found');
@@ -44,8 +44,8 @@ router.get('/:userId', asyncHandler(async (req: Request, res: Response) => {
         userId: progress.userId,
         level: progress.level,
         xpTotal: progress.xpTotal,
-        lessonsCompleted: progress.lessonsCompleted.length,
-        quizzesCompleted: progress.quizzesCompleted.length
+        lessonsCompletedCount: progress.lessonsCompleted.length,
+        quizzesCompletedCount: progress.quizzesCompleted.length
     };
 
     res.status(200).json({
@@ -60,33 +60,33 @@ router.get('/:userId', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/stats/summary', verifyToken, asyncHandler(async (req: Request, res: Response) => {
     const authReq = req as RequestWithAuth;
-    const user = store.getUserById(authReq.userId);
+    const user = await db.getUserById(authReq.userId);
 
     if (!user) {
         throw new NotFoundError('User not found');
     }
 
-    const allLessons = store.getAllLessons();
-    const allQuizzes = store.getAllQuizzes();
-    const userProgress = store.getUserProgress(authReq.userId);
+    const allLessons = await db.getAllLessons();
+    const allQuizzes = await db.getAllQuizzes();
+    const userProgress = await db.getUserProgress(authReq.userId);
     
     if (!userProgress) {
         throw new NotFoundError('Progress not found');
     }
 
     const completionStats = {
-        lessonsCompleted: user.lessonsCompleted.length,
+        lessonsCompleted: userProgress.lessonsCompleted.length,
         lessonsTotal: allLessons.length,
-        lessonsPercentage: Math.round((user.lessonsCompleted.length / (allLessons.length || 1)) * 100),
+        lessonsPercentage: Math.round((userProgress.lessonsCompleted.length / (allLessons.length || 1)) * 100),
 
-        quizzesCompleted: user.quizzesCompleted.length,
+        quizzesCompleted: userProgress.quizzesCompleted.length,
         quizzesTotal: allQuizzes.length,
-        quizzesPercentage: Math.round((user.quizzesCompleted.length / (allQuizzes.length || 1)) * 100),
+        quizzesPercentage: Math.round((userProgress.quizzesCompleted.length / (allQuizzes.length || 1)) * 100),
 
         currentLevel: user.level,
-        currentXp: user.xpTotal,
+        currentXp: user.xp_total,
         nextLevelXp: (user.level * 500),
-        xpToNextLevel: Math.max(0, (user.level * 500) - user.xpTotal),
+        xpToNextLevel: Math.max(0, (user.level * 500) - user.xp_total),
 
         streak: user.streak || 0,
         lastActiveDate: userProgress.lastActiveDate
@@ -104,29 +104,25 @@ router.get('/stats/summary', verifyToken, asyncHandler(async (req: Request, res:
  */
 router.get('/stats/comparison', verifyToken, asyncHandler(async (req: Request, res: Response) => {
     const authReq = req as RequestWithAuth;
-    const currentUser = store.getUserById(authReq.userId);
-
-    if (!currentUser) {
-        throw new NotFoundError('User not found');
-    }
-
-    const allUsers = store.getAllUsers()
-        .map(u => ({
+    
+    const allUsers_raw = await db.getAllUsers();
+    const allUsers = allUsers_raw
+        .map((u: any) => ({
             id: u.id,
-            firstName: (u as any).firstName, // Handle dynamic property if exists
+            firstName: u.first_name,
             level: u.level,
-            xpTotal: u.xpTotal
+            xpTotal: u.xp_total
         }))
-        .sort((a, b) => b.xpTotal - a.xpTotal);
+        .sort((a: any, b: any) => b.xpTotal - a.xpTotal);
 
-    const currentUserRank = allUsers.findIndex(u => u.id === authReq.userId) + 1;
+    const currentUserRank = allUsers.findIndex((u: any) => u.id === authReq.userId) + 1;
 
     res.status(200).json({
         success: true,
         currentUserRank,
         totalUsers: allUsers.length,
         topUsers: allUsers.slice(0, 5),
-        userStats: allUsers.find(u => u.id === authReq.userId)
+        userStats: allUsers.find((u: any) => u.id === authReq.userId)
     });
 }));
 

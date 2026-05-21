@@ -30,6 +30,7 @@ import userRoutes from './api/routes/users.js';
 
 // Import middleware
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
+import { apiLimiter } from './api/middleware/security.js';
 
 // Initialize Express app
 const app = express();
@@ -39,9 +40,20 @@ const PORT: string | number = process.env.BACKEND_PORT || 3001;
 // MIDDLEWARE
 // ═══════════════════════════════════════════════════════════════════════════
 
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "http://localhost:3001", "http://localhost:8081"]
+        }
+    }
+}));
 app.use(cookieParser());
 app.use(compression());
+app.use(apiLimiter); // Protect all routes by default
 
 app.use(cors({
     origin: true, // Временно разрешаем все источники для отладки с куками

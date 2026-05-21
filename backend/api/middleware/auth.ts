@@ -1,62 +1,46 @@
-/**
- * Authentication Middleware
- */
-
 import { Request, Response, NextFunction } from 'express';
-import { store } from '../data/store.js';
+import jwt from 'jsonwebtoken';
 import { UnauthorizedError, asyncHandler } from './errorHandler.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_2025';
 
 export interface RequestWithAuth extends Request {
     userId: string;
-    token: string;
 }
 
 /**
  * Verify authentication token
  */
 export const verifyToken = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(' ')[1];
+    const token = req.cookies.token;
 
     if (!token) {
         throw new UnauthorizedError('No token provided');
     }
 
-    const session = store.getSession(token);
-    if (!session) {
+    try {
+        const decoded: any = jwt.verify(token, JWT_SECRET);
+        (req as RequestWithAuth).userId = decoded.id;
+        next();
+    } catch (err) {
         throw new UnauthorizedError('Invalid or expired token');
     }
-
-    (req as RequestWithAuth).userId = session.userId;
-    (req as RequestWithAuth).token = token;
-    next();
 });
 
 /**
  * Optional auth - doesn't fail if no token
  */
 export const optionalAuth = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(' ')[1];
+    const token = req.cookies.token;
 
     if (token) {
-        const session = store.getSession(token);
-        if (session) {
-            (req as RequestWithAuth).userId = session.userId;
-            (req as RequestWithAuth).token = token;
+        try {
+            const decoded: any = jwt.verify(token, JWT_SECRET);
+            (req as RequestWithAuth).userId = decoded.id;
+        } catch (err) {
+            // Silently fail for optional auth
         }
     }
 
     next();
 });
-
-/**
- * Simple password hashing (for demo - use bcrypt in production)
- */
-export const hashPassword = (password: string): string => {
-    return Buffer.from(password).toString('base64');
-};
-
-export const comparePassword = (password: string, hash: string): boolean => {
-    return hashPassword(password) === hash;
-};
