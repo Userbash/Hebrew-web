@@ -2,13 +2,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { LanguageProvider } from './context/LanguageContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import AuthGuard from './components/AuthGuard';
 import LoginForm from './components/LoginForm';
-import AuthForm from './components/AuthForm';
+import RegistrationPage from './pages/RegistrationPage';
 import App from './App';
 
 const queryClient = new QueryClient();
+
+// Компонент-обертка для управления редиректами
+// ... (убран unused ProtectedRedirect)
 
 function Router() {
   const { user, isLoading } = useAuth();
@@ -27,32 +30,35 @@ function Router() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* The user MUST see authorization first if no session exists */}
-        <Route path="/login" element={user ? <Navigate to="/" /> : <LoginForm />} />
-        <Route path="/register" element={user ? <Navigate to="/" /> : <AuthForm type="register" />} />
-        
-        {/* Root URL logic: redirect based on auth status */}
+        {/* Публичные маршруты */}
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginForm />} />
+        <Route path="/autch" element={user ? <Navigate to="/dashboard" replace /> : <LoginForm />} />
+        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <RegistrationPage />} />
+
+        {/* Маршрут по умолчанию */}
         <Route path="/" element={
-          user 
-            ? <Navigate to={user.role === 'admin' ? '/admin' : '/dashboard'} /> 
-            : <Navigate to="/login" />
+          user
+            ? <Navigate to="/dashboard" replace />
+            : <Navigate to="/autch" replace />
         } />
 
-        {/* Protected Panels */}
+        {/* Защищенные маршруты */}
         <Route element={<AuthGuard />}>
           <Route path="/dashboard" element={<App />} />
+          <Route path="/dashboard/" element={<App />} />
           <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/admin/" element={<AdminPanel />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
 }
 
-
 function AdminPanel() {
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   if (user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
@@ -61,11 +67,11 @@ function AdminPanel() {
   return (
     <div className="p-10 text-white bg-[#0a0a0b] min-h-screen font-sans">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-black tracking-tighter mb-4 italic text-blue-500">Admin Control Center</h1>
+        <h1 className="text-4xl font-black tracking-tighter mb-4 italic text-blue-500">{t.adminTitle}</h1>
         <div className="h-0.5 w-full bg-zinc-800 mb-8"></div>
-        <p className="text-zinc-400 font-bold uppercase tracking-widest text-sm">System Operator: {user?.email}</p>
+        <p className="text-zinc-400 font-bold uppercase tracking-widest text-sm">{t.adminOperator}: {user?.email}</p>
         <div className="mt-12 p-8 border border-zinc-800 rounded-3xl bg-zinc-900/50 backdrop-blur-md">
-          <p className="text-zinc-500 font-medium">Main administrative console is ready for commands.</p>
+          <p className="text-zinc-500 font-medium">{t.adminReady}</p>
         </div>
       </div>
     </div>

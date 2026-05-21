@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function LoginForm() {
   const { theme, toggleTheme } = useTheme();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const { setUser } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
@@ -32,7 +32,7 @@ export default function LoginForm() {
       const message = axios.isAxiosError<{ message?: string }>(err)
         ? err.response?.data?.message
         : undefined;
-      setError(message || 'Не удалось войти. Проверьте email и пароль.');
+      setError(message || t.loginErrorDefault);
     } finally {
       setIsSubmitting(false);
     }
@@ -40,18 +40,18 @@ export default function LoginForm() {
 
   return (
     <main className="login-page">
-      <div className="login-topbar" aria-label="Настройки входа">
+      <div className="login-topbar" aria-label={t.loginSettingsAria}>
         <select
           value={language}
           onChange={(e) => setLanguage(e.target.value as 'en' | 'ru' | 'he')}
           className="login-select"
-          aria-label="Язык интерфейса"
+          aria-label={t.languageAria}
         >
           <option value="en">English</option>
           <option value="ru">Русский</option>
           <option value="he">עברית</option>
         </select>
-        <button onClick={toggleTheme} className="login-icon-button" aria-label="Переключить тему">
+        <button onClick={toggleTheme} className="login-icon-button" aria-label={t.toggleThemeAria}>
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
       </div>
@@ -59,10 +59,8 @@ export default function LoginForm() {
       <section className="login-layout">
         <div className="login-copy">
           <div className="login-badge">Hebrew AI</div>
-          <h1>Учите иврит в понятном рабочем кабинете</h1>
-          <p>
-            Войдите, чтобы продолжить уроки, повторить слова и посмотреть прогресс без лишних панелей и сложных настроек.
-          </p>
+          <h1>{t.loginHeroTitle}</h1>
+          <p>{t.loginHeroDesc}</p>
         </div>
 
         <motion.div
@@ -71,14 +69,14 @@ export default function LoginForm() {
           className="login-card"
         >
           <div className="login-card-header">
-            <span className="login-card-kicker">Личный кабинет</span>
-            <h2>Вход</h2>
-            <p>Используйте email и пароль аккаунта.</p>
+            <span className="login-card-kicker">{t.loginCardKicker}</span>
+            <h2>{t.loginCardTitle}</h2>
+            <p>{t.loginCardDesc}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="login-form">
             <label className="login-field">
-              <span>Email</span>
+              <span>{t.emailLabel}</span>
               <div className="login-input-wrap">
                 <Mail size={18} />
                 <input
@@ -93,23 +91,23 @@ export default function LoginForm() {
             </label>
 
             <label className="login-field">
-              <span>Пароль</span>
+              <span>{t.passwordLabel}</span>
               <div className="login-input-wrap">
                 <Lock size={18} />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Минимум 6 символов"
+                  placeholder={t.passwordPlaceholder}
                   autoComplete="current-password"
-                  minLength={6}
+                  minLength={1}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
                   className="login-password-toggle"
-                  aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -119,12 +117,12 @@ export default function LoginForm() {
             {error && <p className="login-error" role="alert">{error}</p>}
 
             <button type="submit" className="login-submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Вход...' : 'Войти'}
+              {isSubmitting ? t.loginSubmitting : t.login}
             </button>
           </form>
 
           <div className="login-footer-link">
-            Нет аккаунта? <Link to="/register">Создать доступ</Link>
+            {t.noAccount} <Link to="/register">{t.createAccess}</Link>
           </div>
         </motion.div>
       </section>

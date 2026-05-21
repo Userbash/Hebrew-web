@@ -5,5 +5,5 @@ export default function AuthGuard() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) return <div>Загрузка...</div>;
-  return user ? <Outlet /> : <Navigate to="/login" replace />;
+  return user ? <Outlet /> : <Navigate to="/autch" replace />;
 }

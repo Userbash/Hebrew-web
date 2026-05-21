@@ -13,11 +13,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
+import { useLanguage } from './context/LanguageContext';
 import api from './api/client';
 
 export default function App() {
   const { user, setUser } = useAuth();
   const { theme } = useTheme();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('overview');
 
   const handleLogout = async () => {
@@ -36,30 +38,30 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="app-nav" aria-label="Главная навигация">
-          <NavItem icon={<Home size={18} />} label="Обзор" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
-          <NavItem icon={<BookOpen size={18} />} label="Уроки" active={activeTab === 'lessons'} onClick={() => setActiveTab('lessons')} />
-          <NavItem icon={<BarChart3 size={18} />} label="Прогресс" active={activeTab === 'progress'} onClick={() => setActiveTab('progress')} />
-          <NavItem icon={<Settings size={18} />} label="Настройки" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+        <nav className="app-nav" aria-label={t.dashboardNavAria}>
+          <NavItem icon={<Home size={18} />} label={t.navOverview} active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+          <NavItem icon={<BookOpen size={18} />} label={t.navLessons} active={activeTab === 'lessons'} onClick={() => setActiveTab('lessons')} />
+          <NavItem icon={<BarChart3 size={18} />} label={t.navProgress} active={activeTab === 'progress'} onClick={() => setActiveTab('progress')} />
+          <NavItem icon={<Settings size={18} />} label={t.navSettings} active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
         </nav>
 
         <button onClick={handleLogout} className="app-logout">
           <LogOut size={18} />
-          <span>Выйти</span>
+          <span>{t.logout}</span>
         </button>
       </aside>
 
       <main className="app-main">
         <header className="app-header">
           <div>
-            <p className="app-eyebrow">Сегодня</p>
-            <h1>Здравствуйте{user?.first_name ? `, ${user.first_name}` : ''}</h1>
-            <p>Продолжайте обучение и следите за состоянием платформы.</p>
+            <p className="app-eyebrow">{t.today}</p>
+            <h1>{t.hello}{user?.first_name ? `, ${user.first_name}` : ''}</h1>
+            <p>{t.dashboardSubtitle}</p>
           </div>
           <div className="app-header-actions">
             <div className="app-search">
               <Search size={17} />
-              <input placeholder="Найти урок, слово или отчёт" />
+              <input placeholder={t.searchPlaceholder} />
             </div>
             <div className="app-user-pill">
               <UserRound size={18} />
@@ -70,44 +72,44 @@ export default function App() {
 
         <section className="app-hero">
           <div>
-            <span className="app-status"><CheckCircle2 size={16} /> Система работает</span>
-            <h2>Ваш учебный день готов</h2>
-            <p>3 коротких упражнения и один словарный повтор помогут сохранить темп без перегрузки.</p>
+            <span className="app-status"><CheckCircle2 size={16} /> {t.systemOnline}</span>
+            <h2>{t.dayReadyTitle}</h2>
+            <p>{t.dayReadyDesc}</p>
           </div>
-          <button className="app-primary-action">Продолжить урок</button>
+          <button className="app-primary-action">{t.continueLesson}</button>
         </section>
 
-        <section className="app-stats-grid" aria-label="Ключевые показатели">
-          <StatCard label="Активные уроки" value="12" note="2 новых" icon={<BookOpen size={19} />} />
-          <StatCard label="Прогресс недели" value="74%" note="+8%" icon={<BarChart3 size={19} />} />
-          <StatCard label="Безопасность" value="OK" note="0 событий" icon={<ShieldCheck size={19} />} />
+        <section className="app-stats-grid" aria-label={t.statsAria}>
+          <StatCard label={t.activeLessons} value="12" note={t.newItems} icon={<BookOpen size={19} />} />
+          <StatCard label={t.weeklyProgress} value="74%" note="+8%" icon={<BarChart3 size={19} />} />
+          <StatCard label={t.security} value="OK" note={t.zeroIncidents} icon={<ShieldCheck size={19} />} />
         </section>
 
         <section className="app-content-grid">
           <div className="app-panel">
             <div className="app-panel-header">
-              <h3>Последние действия</h3>
-              <button>Все</button>
+              <h3>{t.recentActions}</h3>
+              <button>{t.all}</button>
             </div>
             <div className="activity-list">
-              <ActivityItem title="Урок: базовая грамматика" time="2 часа назад" result="+250 XP" />
-              <ActivityItem title="Повтор: современная лексика" time="Вчера" result="+120 XP" />
-              <ActivityItem title="Тест: технические термины" time="3 дня назад" result="+400 XP" />
+              <ActivityItem title={t.activity1Title} time={t.twoHoursAgo} result="+250 XP" />
+              <ActivityItem title={t.activity2Title} time={t.yesterday} result="+120 XP" />
+              <ActivityItem title={t.activity3Title} time={t.threeDaysAgo} result="+400 XP" />
             </div>
           </div>
 
           <div className="app-panel health-panel">
             <div className="app-panel-header">
-              <h3>Состояние среды</h3>
-              <span>Обновлено сейчас</span>
+              <h3>{t.envStatusTitle}</h3>
+              <span>{t.updatedNow}</span>
             </div>
             <div className="health-content">
-              <div className="health-ring" aria-label="90 процентов здоровья системы">
+              <div className="health-ring" aria-label="90 percent system health">
                 <span>90%</span>
               </div>
               <div>
-                <h4>Стабильно</h4>
-                <p>API, база данных и учебные сервисы отвечают в пределах нормы.</p>
+                <h4>{t.stable}</h4>
+                <p>{t.stableDesc}</p>
               </div>
             </div>
           </div>

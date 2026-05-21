@@ -4,7 +4,7 @@
 # from within an isolated environment (Flatpak/Container).
 
 BRIDGE_LOG="/var/tmp/bridge_access.log"
-CONFIG_FILE="$HOME/.bridge_config"
+PODMAN_SOCK="/run/user/1000/podman/podman.sock"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -20,7 +20,7 @@ detect_bridge_method() {
     if [ -f "/.flatpak-info" ]; then
         echo "flatpak-spawn"
     elif [ -n "$IS_CONTAINER" ] || [ -f "/.dockerenv" ]; then
-        echo "ssh" # Or other method
+        echo "ssh" 
     else
         echo "direct"
     fi
@@ -32,14 +32,25 @@ run_on_host() {
 
     case "$method" in
         "flatpak-spawn")
-            flatpak-spawn --host "$@"
+            # If the command starts with podman, pass the socket explicitly
+            if [[ "$1" == "podman" ]]; then
+                shift
+                flatpak-spawn --host podman --remote --url unix://"$PODMAN_SOCK" "$@"
+            else
+                flatpak-spawn --host "$@"
+            fi
             ;;
         "direct")
             "$@"
             ;;
         *)
-            echo -e "${RED}Error: No supported bridge method found.${NC}"
-            return 1
+            # Fallback to host podman command if available
+            if [[ "$1" == "podman" ]]; then
+                shift
+                podman --remote --url unix://"$PODMAN_SOCK" "$@"
+            else
+                "$@"
+            fi
             ;;
     esac
 }

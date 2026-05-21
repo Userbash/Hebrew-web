@@ -49,7 +49,7 @@ export default function WelcomePage() {
               theme === 'dark' ? 'border-zinc-800 text-white' : 'border-zinc-200 text-zinc-900'
             }`}
           >
-            Initialize Access
+            {t.initAccess}
           </Link>
         </div>
 

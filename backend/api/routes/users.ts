@@ -38,16 +38,19 @@ router.put('/profile', verifyToken, asyncHandler(async (req: Request, res: Respo
     const query = `
         UPDATE users 
         SET first_name = COALESCE($1, first_name),
-            last_name = COALESCE($2, last_name)
-        WHERE id = $3
-        RETURNING id, email, first_name, last_name, role;
+            last_name = COALESCE($2, last_name),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3 AND deleted_at IS NULL
+        RETURNING id, email, username, first_name, last_name, role, xp_total, level, created_at, updated_at;
     `;
-    const res_db = await db.query(query, [firstName, lastName, authReq.userId]);
-    const user = res_db.rows[0];
+    const resDb = await db.query(query, [firstName, lastName, authReq.userId]);
+    const user = resDb.rows[0];
 
     if (!user) {
         throw new NotFoundError('User not found');
     }
+
+    await db.cacheUser(user);
 
     res.status(200).json({
         success: true,
@@ -64,17 +67,18 @@ router.get('/stats/leaderboard', asyncHandler(async (req: Request, res: Response
     const limit = parseInt(req.query.limit as string) || 10;
 
     const query = `
-        SELECT id, first_name, last_name, xp_total, level
+        SELECT id, username, first_name, last_name, xp_total, level
         FROM users
+        WHERE deleted_at IS NULL
         ORDER BY xp_total DESC
         LIMIT $1;
     `;
-    const res_db = await db.query(query, [limit]);
+    const resDb = await db.query(query, [limit]);
 
     res.status(200).json({
         success: true,
-        leaderboard: res_db.rows,
-        count: res_db.rows.length
+        leaderboard: resDb.rows,
+        count: resDb.rows.length
     });
 }));
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from ai_bridge.agents.codex_agent import CodexAgent
 from ai_bridge.agents.gemini_agent import GeminiAgent
 from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
+from ai_bridge.agents.mistral_agent import MistralAgent
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.reviewer_agent import ReviewerAgent
 from ai_bridge.agents.tester_agent import TesterAgent
@@ -36,10 +38,22 @@ def main(argv: list[str] | None = None) -> None:
     orchestrator.attach_local_agent("planner-1", PlannerAgent("planner-1"), agent_type="planner", critical=True, model_name="gpt-planner", provider="openai")
     orchestrator.attach_local_agent("codex-main", CodexAgent("codex-main"), agent_type="codex", critical=True, model_name="gpt-coding-large", provider="openai")
     orchestrator.attach_local_agent("gemini-cli-1", GeminiCLIAgent("gemini-cli-1", security_manager), agent_type="external_ai", critical=False, model_name="gemini-cli", provider="google")
+    orchestrator.attach_local_agent("mistral-1", MistralAgent("mistral-1", security_manager), agent_type="external_ai", critical=False, model_name="mistral-large-latest", provider="mistral")
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", model_name="gpt-test-standard", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", model_name="gpt-review-large", provider="openai")
     
-    task = Task(TaskType.PLAN, TaskInput("Create a small feature", acceptance_criteria=["tests pass"]), TaskContext("demo", ".", "main"))
+    # Check if user wants a specific agent via a flag or environment
+    target_agent = os.getenv("TARGET_AGENT")
+    task_description = "Perform a system health check: respond with 'OK' and your current model name."
+    
+    if target_agent == "gemini":
+        task_description = "Use Gemini for this: " + task_description
+    elif target_agent == "mistral":
+        task_description = "Use Mistral for this: " + task_description
+    elif target_agent == "openai":
+        task_description = "Use OpenAI for this: " + task_description
+    
+    task = Task(TaskType.PLAN, TaskInput(task_description, acceptance_criteria=["tests pass"]), TaskContext("demo", ".", "main"))
     print(orchestrator.run(task))
 
 

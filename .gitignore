@@ -64,3 +64,6 @@ tests/.test-results.json
 # Backend specific node modules
 backend/node_modules/
 .env
+
+# Keep backend schema migrations in git
+!backend/database/migrations/*.sql

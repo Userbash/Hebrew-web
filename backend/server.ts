@@ -30,10 +30,12 @@ import userRoutes from './api/routes/users.js';
 
 // Import middleware
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
+import { telemetryMiddleware } from './api/middleware/telemetry.js';
 import { apiLimiter } from './api/middleware/security.js';
 
 // Initialize Express app
 const app = express();
+app.set('trust proxy', 1);
 const PORT: string | number = process.env.BACKEND_PORT || 3001;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -82,6 +84,7 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(telemetryMiddleware);
 app.use(express.static(join(__dirname, '..', 'public')));
 
 // ═══════════════════════════════════════════════════════════════════════════

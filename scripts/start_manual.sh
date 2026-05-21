@@ -10,7 +10,7 @@ $BRIDGE_CMD podman network create hebrew-net || true
 
 # 2. Start Postgres
 echo "Starting Postgres..."
-$BRIDGE_CMD podman run -d \
+$BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_postgres \
   --network hebrew-net \
   -e POSTGRES_USER=postgres \
@@ -20,14 +20,14 @@ $BRIDGE_CMD podman run -d \
 
 # 3. Start Redis
 echo "Starting Redis..."
-$BRIDGE_CMD podman run -d \
+$BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_redis \
   --network hebrew-net \
   redis:7-alpine
 
 # 4. Start Backend
 echo "Starting Backend..."
-$BRIDGE_CMD podman run -d \
+$BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_backend \
   --network hebrew-net \
   -p 3001:3001 \
@@ -44,7 +44,7 @@ $BRIDGE_CMD podman run -d \
 
 # 5. Start Frontend
 echo "Starting Frontend..."
-$BRIDGE_CMD podman run -d \
+$BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_frontend \
   --network hebrew-net \
   -p 8081:80 \

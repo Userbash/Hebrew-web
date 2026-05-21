@@ -3,6 +3,7 @@ const { Pool } = pkg;
 import { config } from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { redisDel, redisGetJson, redisSetJson } from './redis.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,8 +20,6 @@ const requiredInProduction = (name: string, fallback: string) => {
     return value || fallback;
 };
 
-// Connection Pool Configuration
-// Uses Master for Writes and potentially Replica for Reads
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
@@ -32,35 +31,147 @@ const pool = new Pool({
     connectionTimeoutMillis: 2000,
 });
 
+const USER_CACHE_TTL_SECONDS = 300;
+
+const userProfileByIdKey = (id: string) => `user:profile:id:${id}`;
+const userAuthByEmailKey = (email: string) => `user:auth:email:${email.trim().toLowerCase()}`;
+const userAuthByUsernameKey = (username: string) => `user:auth:username:${username.trim().toLowerCase()}`;
+
+const toPublicUser = (user: any) => ({
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    role: user.role,
+    xp_total: user.xp_total,
+    level: user.level,
+    created_at: user.created_at,
+    updated_at: user.updated_at,
+    registered_at: user.registered_at,
+    last_login: user.last_login,
+});
+
+const cacheUserRecord = async (user: any) => {
+    if (!user?.id || !user?.email) {
+        return;
+    }
+
+    const publicUser = toPublicUser(user);
+    await redisSetJson(userProfileByIdKey(user.id), publicUser, USER_CACHE_TTL_SECONDS);
+
+    if (user.password_hash) {
+        await redisSetJson(userAuthByEmailKey(user.email), user, USER_CACHE_TTL_SECONDS);
+
+        if (user.username) {
+            await redisSetJson(userAuthByUsernameKey(user.username), user, USER_CACHE_TTL_SECONDS);
+        }
+    }
+};
+
+const invalidateUserCaches = async (user: { id?: string; email?: string; username?: string }) => {
+    const keys: string[] = [];
+
+    if (user.id) {
+        keys.push(userProfileByIdKey(user.id));
+    }
+
+    if (user.email) {
+        keys.push(userAuthByEmailKey(user.email));
+    }
+
+    if (user.username) {
+        keys.push(userAuthByUsernameKey(user.username));
+    }
+
+    await redisDel(...keys);
+};
+
 export const db = {
-    // Basic query wrapper for protection against SQL injection
     query: (text: string, params?: any[]) => pool.query(text, params),
 
     // --- USER METHODS ---
-    
-    createUser: async (email: string, passwordHash: string, firstName: string, lastName: string) => {
+
+    createUser: async (email: string, passwordHash: string, username: string, firstName: string, lastName: string) => {
         const query = `
-            INSERT INTO users (email, password_hash, first_name, last_name)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, email, first_name, last_name, role;
+            INSERT INTO users (email, password_hash, username, first_name, last_name)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *;
         `;
-        const res = await pool.query(query, [email, passwordHash, firstName, lastName]);
-        return res.rows[0];
+        const res = await pool.query(query, [email, passwordHash, username, firstName, lastName]);
+        const user = res.rows[0];
+        await cacheUserRecord(user);
+        return toPublicUser(user);
     },
 
     getUserByEmail: async (email: string) => {
-        const query = 'SELECT * FROM users WHERE email = $1';
+        const cacheKey = userAuthByEmailKey(email);
+        const cached = await redisGetJson<any>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const query = 'SELECT * FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL LIMIT 1';
         const res = await pool.query(query, [email]);
-        return res.rows[0];
+        const user = res.rows[0];
+
+        if (user) {
+            await cacheUserRecord(user);
+        }
+
+        return user;
+    },
+
+    getUserByUsername: async (username: string) => {
+        const cacheKey = userAuthByUsernameKey(username);
+        const cached = await redisGetJson<any>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const query = 'SELECT * FROM users WHERE lower(username) = lower($1) AND deleted_at IS NULL LIMIT 1';
+        const res = await pool.query(query, [username]);
+        const user = res.rows[0];
+
+        if (user) {
+            await cacheUserRecord(user);
+        }
+
+        return user;
     },
 
     getUserById: async (id: string) => {
-        const query = 'SELECT id, email, first_name, last_name, role, xp_total, level FROM users WHERE id = $1';
+        const cacheKey = userProfileByIdKey(id);
+        const cached = await redisGetJson<any>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const query = `
+            SELECT id, email, username, first_name, last_name, role, xp_total, level, created_at, updated_at, registered_at, last_login
+            FROM users
+            WHERE id = $1 AND deleted_at IS NULL
+            LIMIT 1
+        `;
         const res = await pool.query(query, [id]);
-        return res.rows[0];
+        const user = res.rows[0];
+
+        if (user) {
+            await redisSetJson(cacheKey, user, USER_CACHE_TTL_SECONDS);
+        }
+
+        return user;
     },
 
-    // --- ITEM METHODS (Optimized) ---
+    cacheUser: async (user: any) => {
+        await cacheUserRecord(user);
+    },
+
+    invalidateUserCache: async (user: { id?: string; email?: string; username?: string }) => {
+        await invalidateUserCaches(user);
+    },
+
+    // --- ITEM METHODS ---
 
     createItem: async (name: string, description: string, category: string, price: number) => {
         const query = `
@@ -72,7 +183,6 @@ export const db = {
         return res.rows[0];
     },
 
-    // Blazing fast search using GIN index and tsvector
     searchItems: async (searchTerm: string) => {
         const query = `
             SELECT id, name, description, category, price, 
@@ -82,7 +192,6 @@ export const db = {
             ORDER BY rank DESC
             LIMIT 50;
         `;
-        // Prepare search term for tsquery (replace spaces with & for AND search)
         const formattedSearch = searchTerm.trim().split(/\s+/).join(' & ');
         const res = await pool.query(query, [formattedSearch]);
         return res.rows;
@@ -103,7 +212,13 @@ export const db = {
             RETURNING xp_total, level;
         `;
         const res = await pool.query(query, [xpToAdd, userId]);
-        return res.rows[0];
+        const updated = res.rows[0];
+
+        if (updated) {
+            await invalidateUserCaches({ id: userId });
+        }
+
+        return updated;
     },
 
     // --- LESSONS ---
@@ -172,7 +287,7 @@ export const db = {
     getUserProgress: async (userId: string) => {
         const user = await db.getUserById(userId);
         if (!user) return null;
-        
+
         const res = await pool.query('SELECT item_id FROM user_items WHERE user_id = $1', [userId]);
         const acquisitions = res.rows.map(r => r.item_id);
 
@@ -180,14 +295,14 @@ export const db = {
             userId,
             level: user.level,
             xpTotal: user.xp_total,
-            lessonsCompleted: acquisitions, // Simplified for now
+            lessonsCompleted: acquisitions,
             quizzesCompleted: [],
             lastActiveDate: new Date().toISOString()
         };
     },
 
     getAllUsers: async () => {
-        const res = await pool.query('SELECT id, email, first_name, last_name, xp_total, level FROM users');
+        const res = await pool.query('SELECT id, username, email, first_name, last_name, xp_total, level FROM users WHERE deleted_at IS NULL');
         return res.rows;
     }
 };
