@@ -2,6 +2,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { Link } from 'react-router-dom';
 import { BrainCircuit, ShieldCheck, Zap } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 export default function WelcomePage() {
   const { t } = useLanguage();
@@ -73,7 +74,13 @@ export default function WelcomePage() {
   );
 }
 
-function Feature({ icon, title, desc }: any) {
+interface FeatureProps {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+}
+
+function Feature({ icon, title, desc }: FeatureProps) {
   return (
     <div className="flex flex-col items-center space-y-4 p-8 rounded-[3rem] hover:bg-zinc-500/5 transition-all cursor-default">
       <div className="p-4 rounded-2xl bg-zinc-500/5 border border-zinc-500/10">

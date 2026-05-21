@@ -9,14 +9,24 @@ const __dirname = dirname(__filename);
 
 config({ path: join(__dirname, '../../..', '.env') });
 
+const requiredInProduction = (name: string, fallback: string) => {
+    const value = process.env[name];
+
+    if (!value && process.env.NODE_ENV === 'production') {
+        throw new Error(`${name} is required in production`);
+    }
+
+    return value || fallback;
+};
+
 // Connection Pool Configuration
 // Uses Master for Writes and potentially Replica for Reads
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
-    user: process.env.DB_USER || 'admin',
-    password: process.env.DB_PASSWORD || 'master_pass_2025',
-    database: process.env.DB_NAME || 'hebrew_db',
+    user: requiredInProduction('DB_USER', 'admin'),
+    password: requiredInProduction('DB_PASSWORD', 'master_pass_2025'),
+    database: requiredInProduction('DB_NAME', 'hebrew_db'),
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
@@ -129,11 +139,23 @@ export const db = {
         return res.rows[0];
     },
 
+    completeItemWithXp: async (userId: string, itemId: string, xpToAdd: number) => {
+        const acquisition = await pool.query(
+            'INSERT INTO user_items (user_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING item_id',
+            [userId, itemId]
+        );
+
+        if ((acquisition.rowCount ?? 0) === 0) {
+            const user = await db.getUserById(userId);
+            return { ...user, xpEarned: 0 };
+        }
+
+        const progress = await db.updateUserXP(userId, xpToAdd);
+        return { ...progress, xpEarned: xpToAdd };
+    },
+
     completeLesson: async (userId: string, lessonId: string) => {
-        // Record acquisition
-        await pool.query('INSERT INTO user_items (user_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, lessonId]);
-        // Add XP
-        return await db.updateUserXP(userId, 50);
+        return await db.completeItemWithXp(userId, lessonId, 50);
     },
 
     // --- QUIZZES ---

@@ -57,24 +57,6 @@ router.put('/profile', verifyToken, asyncHandler(async (req: Request, res: Respo
 }));
 
 /**
- * GET /api/users/:id
- * Get user by ID (public profile)
- */
-router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id;
-    const user = await db.getUserById(id);
-
-    if (!user) {
-        throw new NotFoundError('User not found');
-    }
-
-    res.status(200).json({
-        success: true,
-        user
-    });
-}));
-
-/**
  * GET /api/users/stats/leaderboard
  * Get top users by XP
  */
@@ -93,6 +75,24 @@ router.get('/stats/leaderboard', asyncHandler(async (req: Request, res: Response
         success: true,
         leaderboard: res_db.rows,
         count: res_db.rows.length
+    });
+}));
+
+/**
+ * GET /api/users/:id
+ * Get user by ID (public profile)
+ */
+router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id;
+    const user = await db.getUserById(id);
+
+    if (!user) {
+        throw new NotFoundError('User not found');
+    }
+
+    res.status(200).json({
+        success: true,
+        user
     });
 }));
 

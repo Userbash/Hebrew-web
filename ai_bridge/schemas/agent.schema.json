@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["id", "type", "endpoint", "capabilities"],
+  "properties": {
+    "id": {"type": "string"},
+    "type": {"enum": ["codex", "reviewer", "tester", "planner", "docs", "external_ai", "custom"]},
+    "endpoint": {"type": "string"},
+    "capabilities": {"type": "array", "items": {"type": "string"}},
+    "status": {"enum": ["offline", "starting", "ready", "busy", "overloaded", "idle", "degraded", "disabled", "failed"]},
+    "limits": {"type": "object"},
+    "model_name": {"type": "string"},
+    "provider": {"type": "string"}
+  }
+}

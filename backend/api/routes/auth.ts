@@ -2,13 +2,14 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { db } from '../data/db.js';
+import { getJwtSecret } from '../middleware/auth.js';
+import { loginLimiter } from '../middleware/security.js';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_2025';
 const SALT_ROUNDS = 12; // High security factor
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', loginLimiter, async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
   
   try {
@@ -27,7 +28,7 @@ router.post('/register', async (req, res) => {
       lastName || ''
     );
 
-    const token = jwt.sign({ id: newUser.id }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: newUser.id }, getJwtSecret(), { expiresIn: '24h' });
 
     res.cookie('token', token, {
       httpOnly: true,
@@ -44,7 +45,7 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   
   try {
@@ -59,7 +60,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Неверные учетные данные' });
     }
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: user.id }, getJwtSecret(), { expiresIn: '24h' });
 
     res.cookie('token', token, {
       httpOnly: true,
@@ -68,7 +69,15 @@ router.post('/login', async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000
     });
 
-    res.json({ id: user.id, email: user.email, first_name: user.first_name });
+    res.json({
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      role: user.role,
+      xp_total: user.xp_total,
+      level: user.level
+    });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -81,7 +90,7 @@ router.get('/verify', async (req, res) => {
   if (!token) return res.status(401).json({ authenticated: false });
 
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
+    const decoded: any = jwt.verify(token, getJwtSecret());
     const user = await db.getUserById(decoded.id);
     if (!user) return res.status(401).json({ authenticated: false });
     
@@ -102,7 +111,7 @@ router.get('/me', async (req, res) => {
   if (!token) return res.status(401).json({ message: 'Не авторизован' });
 
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
+    const decoded: any = jwt.verify(token, getJwtSecret());
     const user = await db.getUserById(decoded.id);
     if (!user) return res.status(401).json({ message: 'Пользователь не найден' });
     

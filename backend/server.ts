@@ -55,8 +55,26 @@ app.use(cookieParser());
 app.use(compression());
 app.use(apiLimiter); // Protect all routes by default
 
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const defaultOrigins = process.env.NODE_ENV === 'production'
+    ? [process.env.DOMAIN_NAME ? `https://${process.env.DOMAIN_NAME}` : ''].filter(Boolean)
+    : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:8081'];
+
+const allowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : defaultOrigins;
+
 app.use(cors({
-    origin: true, // Временно разрешаем все источники для отладки с куками
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+
+        callback(new Error('CORS origin denied'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']

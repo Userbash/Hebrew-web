@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../data/db.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.get('/search', async (req, res) => {
 });
 
 // POST /api/items
-router.post('/', async (req, res) => {
+router.post('/', ...requireAdmin, async (req, res) => {
   const { name, description, category, price } = req.body;
   
   try {
@@ -34,7 +35,7 @@ router.post('/', async (req, res) => {
 });
 
 // DELETE /api/items/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', ...requireAdmin, async (req, res) => {
   const { id } = req.params;
   
   try {

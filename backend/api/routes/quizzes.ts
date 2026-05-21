@@ -59,18 +59,23 @@ router.post('/:id/submit', verifyToken, asyncHandler(async (req: Request, res: R
     const { answers } = req.body;
     const id = req.params.id;
 
+    if (!answers || typeof answers !== 'object') {
+        throw new ValidationError('Answers are required');
+    }
+
     const quiz = await db.getQuizById(id);
     if (!quiz) {
         throw new NotFoundError('Quiz not found');
     }
 
     const authReq = req as RequestWithAuth;
-    // Simple logic for now
-    const userProgress = await db.updateUserXP(authReq.userId, 100);
+    // Quiz scoring is still simplified; XP is idempotent per user/quiz.
+    const userProgress = await db.completeItemWithXp(authReq.userId, id, 100);
 
     res.status(200).json({
         success: true,
         message: 'Quiz submitted successfully',
+        xpEarned: userProgress.xpEarned,
         userXp: userProgress.xp_total,
         userLevel: userProgress.level,
         passed: true

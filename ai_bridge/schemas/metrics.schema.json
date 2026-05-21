@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["counters", "avg_latency_ms", "agents"],
+  "properties": {
+    "counters": {"type": "object"},
+    "avg_latency_ms": {"type": "object"},
+    "agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["agent_id", "agent_type", "model_name", "provider", "status", "active_tasks", "completed_tasks", "failed_tasks", "queue_depth", "avg_latency_ms", "success_rate", "error_rate", "token_total", "estimated_cost", "last_seen", "idle_time_sec", "uptime_sec", "quality_score", "review_score", "test_pass_rate"],
+        "properties": {
+          "agent_id": {"type": "string"},
+          "agent_type": {"type": "string"},
+          "model_name": {"type": "string"},
+          "provider": {"type": "string"},
+          "status": {"type": "string"},
+          "active_tasks": {"type": "integer"},
+          "completed_tasks": {"type": "integer"},
+          "failed_tasks": {"type": "integer"},
+          "queue_depth": {"type": "integer"},
+          "avg_latency_ms": {"type": "number"},
+          "success_rate": {"type": "number"},
+          "error_rate": {"type": "number"},
+          "token_input": {"type": "integer"},
+          "token_output": {"type": "integer"},
+          "token_total": {"type": "integer"},
+          "estimated_cost": {"type": "number"},
+          "cpu_load": {"type": ["number", "null"]},
+          "memory_load": {"type": ["number", "null"]},
+          "last_seen": {"type": "string"},
+          "idle_time_sec": {"type": "number"},
+          "uptime_sec": {"type": "number"},
+          "current_task_id": {"type": ["string", "null"]},
+          "current_task_type": {"type": ["string", "null"]},
+          "quality_score": {"type": "number"},
+          "review_score": {"type": "number"},
+          "test_pass_rate": {"type": "number"}
+        }
+      }
+    }
+  }
+}

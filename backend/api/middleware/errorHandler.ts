@@ -63,6 +63,13 @@ export class NotFoundError extends AppError {
     }
 }
 
+export class ForbiddenError extends AppError {
+    constructor(message: string = 'Forbidden') {
+        super(message, 403);
+        this.name = 'ForbiddenError';
+    }
+}
+
 export class ConflictError extends AppError {
     constructor(message: string = 'Conflict') {
         super(message, 409);

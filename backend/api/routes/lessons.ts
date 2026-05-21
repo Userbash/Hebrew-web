@@ -4,7 +4,7 @@
 
 import express, { Request, Response } from 'express';
 import { db } from '../data/db.js';
-import { verifyToken, optionalAuth, RequestWithAuth } from '../middleware/auth.js';
+import { verifyToken, optionalAuth, requireAdmin, RequestWithAuth } from '../middleware/auth.js';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
 
 const router = express.Router();
@@ -87,7 +87,7 @@ router.post('/:id/complete', verifyToken, asyncHandler(async (req: Request, res:
     res.status(200).json({
         success: true,
         message: 'Lesson marked as completed',
-        xpEarned: 50,
+        xpEarned: userProgress.xpEarned,
         userLevel: userProgress.level,
         userXp: userProgress.xp_total
     });
@@ -97,7 +97,7 @@ router.post('/:id/complete', verifyToken, asyncHandler(async (req: Request, res:
  * POST /api/lessons
  * Create new lesson (admin only - demo endpoint)
  */
-router.post('/', verifyToken, asyncHandler(async (req: Request, res: Response) => {
+router.post('/', ...requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const { title, description, difficulty, duration, content, xpReward } = req.body;
 
     if (!title || !description || !difficulty) {
@@ -124,7 +124,7 @@ router.post('/', verifyToken, asyncHandler(async (req: Request, res: Response) =
  * PUT /api/lessons/:id
  * Update lesson
  */
-router.put('/:id', verifyToken, asyncHandler(async (req: Request, res: Response) => {
+router.put('/:id', ...requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const lesson = await db.updateLesson(id, req.body);
 

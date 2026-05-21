@@ -1,0 +1,80 @@
+project:
+  name: "ai-bridge"
+  mode: "local"
+
+orchestrator:
+  max_parallel_tasks: 5
+  retry_limit: 3
+  task_timeout_sec: 900
+  idle_shutdown_sec: 900
+  kpi_threshold: 0.65
+  visible_console: true
+
+agents:
+  - id: "codex-main"
+    type: "codex"
+    endpoint: "local://codex"
+    capabilities: ["code", "fix", "refactor"]
+    model_name: "gpt-coding-large"
+    provider: "openai"
+    critical: true
+
+  - id: "reviewer-1"
+    type: "reviewer"
+    endpoint: "http://localhost:8011"
+    capabilities: ["review", "security"]
+    model_name: "gpt-review-large"
+    provider: "openai"
+
+  - id: "tester-1"
+    type: "tester"
+    endpoint: "http://localhost:8012"
+    capabilities: ["test", "ci"]
+    model_name: "gpt-test-standard"
+    provider: "openai"
+
+load_balancing:
+  strategy: "weighted_score"
+  healthcheck_interval_sec: 30
+  overload_threshold: 0.85
+
+security:
+  allow_shell: true
+  shell_allowlist:
+    - "pytest"
+    - "npm test"
+    - "python -m pytest"
+    - "ruff check"
+    - "mypy"
+  block_commands:
+    - "rm -rf /"
+    - "curl | sh"
+    - "sudo"
+    - "chmod 777"
+
+modules:
+  agent_registry: true
+  agent_lifecycle: true
+  agent_autoscaler: true
+  model_selector: true
+  task_decomposer: true
+  task_router: true
+  load_balancer: true
+  metrics: true
+  kpi: true
+  healthcheck: true
+  result_merger: true
+  quality_analyzer: true
+  feedback_loop: true
+  user_console: true
+
+models:
+  low_complexity: "local-small"
+  medium_complexity: "gpt-coding-standard"
+  high_complexity: "gpt-coding-large"
+  critical_complexity: "gpt-senior-secure"
+
+lifecycle:
+  idle_shutdown_sec: 900
+  critical_agent_types: ["planner", "codex"]
+  critical_capabilities: ["security", "orchestrator"]

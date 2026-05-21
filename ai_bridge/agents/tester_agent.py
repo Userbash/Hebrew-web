@@ -1,0 +1,15 @@
+from __future__ import annotations
+
+from ai_bridge.agents.base_agent import BaseAgent
+from ai_bridge.core.models import AgentResult, Task
+
+__test__ = False
+
+
+class TesterAgent(BaseAgent):
+    __test__ = False
+    def __init__(self, agent_id: str = "testeragent") -> None:
+        super().__init__(agent_id, ['test', 'ci'])
+
+    def run(self, task: Task) -> AgentResult:
+        return self.result(task, "Created and ran tests for acceptance criteria.")

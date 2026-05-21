@@ -1,8 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { UnauthorizedError, asyncHandler } from './errorHandler.js';
+import { db } from '../data/db.js';
+import { ForbiddenError, UnauthorizedError, asyncHandler } from './errorHandler.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_2025';
+export const getJwtSecret = () => {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret && process.env.NODE_ENV === 'production') {
+        throw new Error('JWT_SECRET is required in production');
+    }
+
+    return secret || 'dev_only_jwt_secret_change_me';
+};
 
 export interface RequestWithAuth extends Request {
     userId: string;
@@ -19,13 +28,30 @@ export const verifyToken = asyncHandler(async (req: Request, res: Response, next
     }
 
     try {
-        const decoded: any = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, getJwtSecret()) as { id?: string };
+        if (!decoded.id) {
+            throw new UnauthorizedError('Invalid token payload');
+        }
         (req as RequestWithAuth).userId = decoded.id;
         next();
-    } catch (err) {
+    } catch (_err) {
         throw new UnauthorizedError('Invalid or expired token');
     }
 });
+
+export const requireAdmin = [
+    verifyToken,
+    asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const authReq = req as RequestWithAuth;
+        const user = await db.getUserById(authReq.userId);
+
+        if (!user || user.role !== 'admin') {
+            throw new ForbiddenError('Admin role required');
+        }
+
+        next();
+    })
+];
 
 /**
  * Optional auth - doesn't fail if no token
@@ -35,9 +61,11 @@ export const optionalAuth = asyncHandler(async (req: Request, res: Response, nex
 
     if (token) {
         try {
-            const decoded: any = jwt.verify(token, JWT_SECRET);
-            (req as RequestWithAuth).userId = decoded.id;
-        } catch (err) {
+            const decoded = jwt.verify(token, getJwtSecret()) as { id?: string };
+            if (decoded.id) {
+                (req as RequestWithAuth).userId = decoded.id;
+            }
+        } catch (_err) {
             // Silently fail for optional auth
         }
     }

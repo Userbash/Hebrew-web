@@ -28,33 +28,6 @@ router.get('/', verifyToken, asyncHandler(async (req: Request, res: Response) =>
 }));
 
 /**
- * GET /api/progress/:userId
- * Get user's progress (if public)
- */
-router.get('/:userId', asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.params.userId;
-    const progress = await db.getUserProgress(userId);
-
-    if (!progress) {
-        throw new NotFoundError('Progress not found');
-    }
-
-    // Return only public stats
-    const publicProgress = {
-        userId: progress.userId,
-        level: progress.level,
-        xpTotal: progress.xpTotal,
-        lessonsCompletedCount: progress.lessonsCompleted.length,
-        quizzesCompletedCount: progress.quizzesCompleted.length
-    };
-
-    res.status(200).json({
-        success: true,
-        progress: publicProgress
-    });
-}));
-
-/**
  * GET /api/progress/stats/summary
  * Get progress summary
  */
@@ -123,6 +96,33 @@ router.get('/stats/comparison', verifyToken, asyncHandler(async (req: Request, r
         totalUsers: allUsers.length,
         topUsers: allUsers.slice(0, 5),
         userStats: allUsers.find((u: any) => u.id === authReq.userId)
+    });
+}));
+
+/**
+ * GET /api/progress/:userId
+ * Get user's progress (if public)
+ */
+router.get('/:userId', asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.params.userId;
+    const progress = await db.getUserProgress(userId);
+
+    if (!progress) {
+        throw new NotFoundError('Progress not found');
+    }
+
+    // Return only public stats
+    const publicProgress = {
+        userId: progress.userId,
+        level: progress.level,
+        xpTotal: progress.xpTotal,
+        lessonsCompletedCount: progress.lessonsCompleted.length,
+        quizzesCompletedCount: progress.quizzesCompleted.length
+    };
+
+    res.status(200).json({
+        success: true,
+        progress: publicProgress
     });
 }));
 

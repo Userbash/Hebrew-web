@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["task_id", "agent_id", "status", "output", "confidence", "errors", "next_recommendations"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "agent_id": {"type": "string"},
+    "status": {"enum": ["done", "failed", "needs_review"]},
+    "output": {
+      "type": "object",
+      "required": ["summary", "files_changed", "commands_run", "test_results", "diff"],
+      "properties": {
+        "summary": {"type": "string"},
+        "files_changed": {"type": "array"},
+        "commands_run": {"type": "array"},
+        "test_results": {"type": "array"},
+        "diff": {"type": "string"}
+      }
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "errors": {"type": "array"},
+    "next_recommendations": {"type": "array"}
+  }
+}

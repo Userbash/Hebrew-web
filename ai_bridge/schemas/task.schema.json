@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["task_id", "type", "priority", "input", "context"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "parent_task_id": {"type": ["string", "null"]},
+    "type": {"enum": ["plan", "code", "review", "test", "docs", "fix", "research"]},
+    "priority": {"enum": ["low", "normal", "high", "critical"]},
+    "input": {
+      "type": "object",
+      "required": ["description", "files", "constraints", "acceptance_criteria"],
+      "properties": {
+        "description": {"type": "string"},
+        "files": {"type": "array", "items": {"type": "string"}},
+        "constraints": {"type": "array", "items": {"type": "string"}},
+        "acceptance_criteria": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "context": {
+      "type": "object",
+      "required": ["project", "repo_path", "branch"],
+      "properties": {
+        "project": {"type": "string"},
+        "repo_path": {"type": "string"},
+        "branch": {"type": "string"}
+      }
+    },
+    "callback_url": {"type": ["string", "null"]}
+  }
+}

@@ -2,6 +2,7 @@ import eslint from '@eslint/js';
 import globals from 'globals';
 
 export default [
+    { ignores: ['node_modules/**', 'public/**', 'dist/**'] },
     eslint.configs.recommended,
     {
         languageOptions: {
@@ -34,7 +35,6 @@ export default [
                 { 'argsIgnorePattern': '^_|^req|^res|^next' }
             ],
             'no-console': 'warn'
-        },
-        ignores: ['node_modules/**', 'public/**']
+        }
     }
 ];
