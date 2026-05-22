@@ -20,6 +20,8 @@ import {
   verifyTypedToken
 } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/security.js';
+import { setTelemetryContext } from '../middleware/telemetry.js';
+import { setAuditContext } from '../middleware/auditTrail.js';
 import {
   isValidEmail,
   isValidUsername,
@@ -223,7 +225,7 @@ const createSessionAndTokens = async (req: Request, userId: string) => {
     ]
   );
 
-  return { accessToken, refreshToken };
+  return { sessionId, accessToken, refreshToken };
 };
 
 const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
@@ -396,29 +398,113 @@ router.post('/register', loginLimiter, async (req, res) => {
 // POST /api/auth/login
 router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body || {};
+  const loginIdentifier = normalizeEmail(String(email || ''));
+
+  setTelemetryContext(res, {
+    area: 'auth',
+    resource: 'auth',
+    action: 'login',
+    loginIdentifier: loginIdentifier || null,
+    isAuthenticated: false,
+  });
 
   if (!email || !password) {
+    setTelemetryContext(res, {
+      outcome: 'error',
+      metadata: { reason: 'missing_credentials' },
+    });
+
     return res.status(400).json({ message: 'Email и пароль обязательны' });
   }
 
   const normalizedEmail = normalizeEmail(String(email));
   if (!isValidEmail(normalizedEmail)) {
+    setTelemetryContext(res, {
+      loginIdentifier: normalizedEmail,
+      outcome: 'error',
+      metadata: { reason: 'invalid_email_format' },
+    });
+
     return res.status(400).json({ message: 'Некорректный email' });
   }
 
   try {
     const user = await db.getUserByEmail(normalizedEmail);
     if (!user) {
+      setTelemetryContext(res, {
+        loginIdentifier: normalizedEmail,
+        outcome: 'blocked',
+        accountLocked: false,
+        hadPreviousLogin: false,
+        failedLoginAttempts: 0,
+        metadata: { reason: 'user_not_found' },
+      });
+
+      setAuditContext(res, {
+        resource: 'auth',
+        action: 'login',
+        message: 'Login failed: user not found',
+        metadata: { login_identifier: normalizedEmail },
+      });
+
       return res.status(401).json({ message: 'Неверные учетные данные' });
     }
 
-    if (user.locked_until && new Date(user.locked_until).getTime() > Date.now()) {
+    const hadPreviousLogin = Boolean(user.last_login);
+    const lockIsActive = Boolean(user.locked_until && new Date(user.locked_until).getTime() > Date.now());
+
+    if (lockIsActive) {
+      setTelemetryContext(res, {
+        targetUserId: user.id,
+        loginIdentifier: normalizedEmail,
+        userRole: user.role,
+        outcome: 'blocked',
+        accountLocked: true,
+        hadPreviousLogin,
+        failedLoginAttempts: user.failed_login_attempts || 0,
+        metadata: {
+          reason: 'locked_until_active',
+          locked_until: user.locked_until || null,
+        },
+      });
+
+      setAuditContext(res, {
+        resource: 'auth',
+        action: 'login',
+        targetType: 'user',
+        targetId: user.id,
+        message: 'Login blocked: account temporarily locked',
+        metadata: {
+          locked_until: user.locked_until || null,
+          failed_login_attempts: user.failed_login_attempts || 0,
+        },
+      });
+
       return res.status(423).json({
         message: 'Аккаунт временно заблокирован из-за большого числа неудачных попыток входа',
         lockedUntil: user.locked_until,
       });
     }
+
     if (!user.password_hash) {
+      setTelemetryContext(res, {
+        targetUserId: user.id,
+        loginIdentifier: normalizedEmail,
+        outcome: 'blocked',
+        accountLocked: false,
+        hadPreviousLogin,
+        failedLoginAttempts: user.failed_login_attempts || 0,
+        metadata: { reason: 'missing_password_hash' },
+      });
+
+      setAuditContext(res, {
+        resource: 'auth',
+        action: 'login',
+        targetType: 'user',
+        targetId: user.id,
+        message: 'Login blocked: no password hash',
+      });
+
       return res.status(401).json({ message: 'Неверные учетные данные' });
     }
 
@@ -438,13 +524,46 @@ router.post('/login', loginLimiter, async (req, res) => {
         [MAX_FAILED_LOGIN_ATTEMPTS, LOCK_WINDOW_MINUTES, user.id]
       );
 
-      const failInfo = failRes.rows[0];
+      const failInfo = failRes.rows[0] as {
+        failed_login_attempts?: number;
+        locked_until?: string | null;
+      } | undefined;
+
       await db.invalidateUserCache({ id: user.id, email: user.email, username: user.username });
 
-      if (failInfo?.locked_until && new Date(failInfo.locked_until).getTime() > Date.now()) {
+      const nowLocked = Boolean(failInfo?.locked_until && new Date(String(failInfo.locked_until)).getTime() > Date.now());
+      const failedAttempts = failInfo?.failed_login_attempts || 0;
+
+      setTelemetryContext(res, {
+        targetUserId: user.id,
+        loginIdentifier: normalizedEmail,
+        userRole: user.role,
+        outcome: 'blocked',
+        accountLocked: nowLocked,
+        hadPreviousLogin,
+        failedLoginAttempts: failedAttempts,
+        metadata: {
+          reason: 'invalid_password',
+          locked_until: failInfo?.locked_until || null,
+        },
+      });
+
+      setAuditContext(res, {
+        resource: 'auth',
+        action: 'login',
+        targetType: 'user',
+        targetId: user.id,
+        message: nowLocked ? 'Login blocked: too many failed attempts' : 'Login failed: invalid password',
+        metadata: {
+          failed_login_attempts: failedAttempts,
+          locked_until: failInfo?.locked_until || null,
+        },
+      });
+
+      if (nowLocked) {
         return res.status(423).json({
           message: 'Аккаунт временно заблокирован из-за большого числа неудачных попыток входа',
-          lockedUntil: failInfo.locked_until,
+          lockedUntil: failInfo?.locked_until || null,
         });
       }
 
@@ -464,15 +583,54 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const updatedUser = updateRes.rows[0];
 
-    const { accessToken, refreshToken } = await createSessionAndTokens(req, user.id);
+    const { sessionId, accessToken, refreshToken } = await createSessionAndTokens(req, user.id);
     setAuthCookies(res, accessToken, refreshToken);
 
     await db.invalidateUserCache({ id: user.id, email: user.email, username: user.username });
     await db.cacheUser(updatedUser);
 
     const responseUser = await buildAuthResponseUser(updatedUser);
+
+    setTelemetryContext(res, {
+      userId: user.id,
+      targetUserId: user.id,
+      sessionId,
+      loginIdentifier: normalizedEmail,
+      isAuthenticated: true,
+      userRole: updatedUser.role,
+      highestRole: responseUser.access?.highestRole || updatedUser.role,
+      roleKeys: responseUser.access?.roleKeys || [],
+      isSystemBlocked: responseUser.access?.isSystemBlocked ?? null,
+      hadPreviousLogin,
+      accountLocked: false,
+      failedLoginAttempts: 0,
+      outcome: 'success',
+      metadata: {
+        reason: 'login_success',
+      },
+    });
+
+    setAuditContext(res, {
+      resource: 'auth',
+      action: 'login',
+      targetType: 'user',
+      targetId: user.id,
+      message: 'Login success',
+      metadata: {
+        had_previous_login: hadPreviousLogin,
+        highest_role: responseUser.access?.highestRole || updatedUser.role,
+        role_keys: responseUser.access?.roleKeys || [],
+      },
+    });
+
     res.json(responseUser);
   } catch (err) {
+    setTelemetryContext(res, {
+      loginIdentifier: normalizedEmail,
+      outcome: 'error',
+      metadata: { reason: 'internal_error' },
+    });
+
     console.error('Login error:', err);
     res.status(500).json({ message: 'Internal Server Error' });
   }

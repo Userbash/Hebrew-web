@@ -22,6 +22,7 @@ interface AccessProfileRow {
   legacy_role: string;
   is_system_blocked: boolean;
   role_keys: string[] | null;
+  highest_priority: number | null;
 }
 
 export interface UserAccessProfile {
@@ -35,26 +36,77 @@ export interface UserAccessProfile {
 const profileCache = new Map<string, { expiresAt: number; value: UserAccessProfile }>();
 const PROFILE_CACHE_TTL_MS = 15_000;
 
+const rolePermissionCache = new Map<string, Set<string>>();
+const PERMISSION_CACHE_TTL_MS = 15_000;
+let permissionsCacheExpiresAt = 0;
+let permissionRefreshInFlight: Promise<void> | null = null;
+
+const permissionKey = (resource: string, action: string, scope: string) => `${resource}.${action}.${scope}`;
+
+const refreshPermissionCache = async (force = false) => {
+  if (!force && permissionsCacheExpiresAt > Date.now()) {
+    return;
+  }
+
+  if (!permissionRefreshInFlight) {
+    permissionRefreshInFlight = (async () => {
+      const res = await db.query(
+        `SELECT r.role_key, p.resource, p.action, p.scope
+         FROM role_permissions rp
+         JOIN roles r ON r.id = rp.role_id
+         JOIN permissions p ON p.id = rp.permission_id
+         WHERE rp.granted = TRUE`
+      );
+
+      const next = new Map<string, Set<string>>();
+      for (const row of res.rows as Array<{ role_key: string; resource: string; action: string; scope: string }>) {
+        const key = row.role_key;
+        const permission = permissionKey(row.resource, row.action, row.scope);
+
+        if (!next.has(key)) {
+          next.set(key, new Set<string>());
+        }
+
+        next.get(key)?.add(permission);
+      }
+
+      rolePermissionCache.clear();
+      for (const [role, grants] of next.entries()) {
+        rolePermissionCache.set(role, grants);
+      }
+
+      permissionsCacheExpiresAt = Date.now() + PERMISSION_CACHE_TTL_MS;
+    })().finally(() => {
+      permissionRefreshInFlight = null;
+    });
+  }
+
+  await permissionRefreshInFlight;
+};
+
+export const invalidatePermissionCache = () => {
+  permissionsCacheExpiresAt = 0;
+  rolePermissionCache.clear();
+};
+
 const normalizeRoles = (roles: string[] | null, legacyRole: string): RoleKey[] => {
   const normalized = new Set<RoleKey>();
 
   for (const role of roles || []) {
-    if (role in ROLE_PRIORITY) {
-      normalized.add(role as RoleKey);
+    if (typeof role === 'string' && role.trim().length > 0) {
+      normalized.add(role.trim() as RoleKey);
     }
   }
 
-  // Keep legacy fallback for migration-safe startup.
-  // `user` role has no default grants, so new registrations still remain restricted.
   if (normalized.size === 0) {
     normalized.add(roleFromLegacy(legacyRole));
   }
 
-  return Array.from(normalized).sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a]);
+  return Array.from(normalized);
 };
 
-const highestRoleOf = (roles: RoleKey[]): RoleKey => {
-  return roles[0] || 'user';
+const highestRoleOf = (roles: RoleKey[], legacyRole: string): RoleKey => {
+  return roles[0] || roleFromLegacy(legacyRole);
 };
 
 const normalizeExpiresAt = (value?: string | null) => {
@@ -84,6 +136,8 @@ export const clearAccessProfileCache = (userId?: string) => {
 };
 
 export const getUserAccessProfile = async (userId: string): Promise<UserAccessProfile | null> => {
+  await refreshPermissionCache();
+
   const cached = profileCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.value;
@@ -98,7 +152,9 @@ export const getUserAccessProfile = async (userId: string): Promise<UserAccessPr
           ARRAY_AGG(r.role_key ORDER BY r.priority DESC)
             FILTER (WHERE ur.is_active = TRUE AND ur.revoked_at IS NULL AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)),
           ARRAY[]::text[]
-        ) AS role_keys
+        ) AS role_keys,
+        MAX(r.priority)
+          FILTER (WHERE ur.is_active = TRUE AND ur.revoked_at IS NULL AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)) AS highest_priority
       FROM users u
       LEFT JOIN user_roles ur ON ur.user_id = u.id
       LEFT JOIN roles r ON r.id = ur.role_id
@@ -113,13 +169,13 @@ export const getUserAccessProfile = async (userId: string): Promise<UserAccessPr
   }
 
   const roleKeys = normalizeRoles(row.role_keys, row.legacy_role);
-  const highestRole = highestRoleOf(roleKeys);
+  const highestRole = highestRoleOf(roleKeys, row.legacy_role);
 
   const profile: UserAccessProfile = {
     userId,
     roleKeys,
     highestRole,
-    highestPriority: ROLE_PRIORITY[highestRole],
+    highestPriority: row.highest_priority ?? ROLE_PRIORITY[highestRole] ?? 0,
     isSystemBlocked: Boolean(row.is_system_blocked),
   };
 
@@ -137,6 +193,8 @@ export const canAccess = (
   scope: PermissionScope,
   resource: RbacResource
 ) => {
+  const requiredPermission = permissionKey(resource, action, scope);
+
   for (const role of roles) {
     const permission = accessControl.permission({
       role,
@@ -147,12 +205,18 @@ export const canAccess = (
     if (permission.granted) {
       return true;
     }
+
+    if (rolePermissionCache.get(role)?.has(requiredPermission)) {
+      return true;
+    }
   }
 
   return false;
 };
 
 export const listRbacCatalog = async () => {
+  await refreshPermissionCache();
+
   const rolesRes = await db.query(
     `SELECT id, management_key, role_key, title, description, priority, is_system, created_at, updated_at
      FROM roles
@@ -245,6 +309,7 @@ export const assignRoleToUser = async (
     actor: actorProfile,
     target: targetProfile,
     targetRoleKey: roleKey,
+    targetRolePriority: role.priority,
     mutation: 'assign_role',
   });
 
@@ -297,6 +362,7 @@ export const revokeRoleFromUser = async (
     actor: actorProfile,
     target: targetProfile,
     targetRoleKey: roleKey,
+    targetRolePriority: role.priority,
     mutation: 'revoke_role',
   });
 

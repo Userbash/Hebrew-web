@@ -10,7 +10,8 @@ export type RoleKey =
   | 'moderator'
   | 'support'
   | 'analyst'
-  | 'user';
+  | 'user'
+  | (string & {});
 
 export interface AccessProfile {
   roleKeys: RoleKey[];

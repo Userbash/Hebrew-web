@@ -71,10 +71,23 @@ export interface AdminUsersListParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface CreateAdminUserPayload {
+  email: string;
+  username: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+}
+
 export const adminUsersApi = {
   list: async (params: AdminUsersListParams) => {
     const { data } = await api.get<UsersListResponse>('/admin/users', { params });
     return data;
+  },
+
+  create: async (payload: CreateAdminUserPayload) => {
+    const { data } = await api.post('/admin/users', payload);
+    return data as { success: boolean; message: string; user: AdminUser };
   },
 
   update: async (userId: string, payload: Partial<AdminUser>) => {

@@ -6,6 +6,9 @@ import { type RoleKey } from '../security/rbacCatalog.js';
 import userRoutes from './users.js';
 import accessControlRoutes from './accessControl.js';
 import publicationsRoutes from './publications.js';
+import logsRoutes from './logs.js';
+import systemMetricsRoutes from './systemMetrics.js';
+import auditEventsRoutes from './auditEvents.js';
 
 const router = express.Router();
 
@@ -31,5 +34,8 @@ router.get('/health', (_req: Request, res: Response) => {
 router.use('/users', userRoutes);
 router.use('/access', accessControlRoutes);
 router.use('/publications', publicationsRoutes);
+router.use('/logs', logsRoutes);
+router.use('/system', systemMetricsRoutes);
+router.use('/audit', auditEventsRoutes);
 
 export default router;

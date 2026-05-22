@@ -229,7 +229,9 @@ networks:
 
 volumes:
   postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-hebrew_pgdata}
   redis_data:
+    name: ${REDIS_VOLUME_NAME:-hebrew_redisdata}
   certs:
   acme-data:
   loki_data:

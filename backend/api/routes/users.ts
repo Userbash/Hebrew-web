@@ -3,6 +3,7 @@
  */
 
 import express, { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { db } from '../data/db.js';
 import { verifyToken, RequestWithAuth } from '../middleware/auth.js';
 import {
@@ -11,8 +12,16 @@ import {
   type RequestWithAccess,
 } from '../middleware/authorization.js';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import {
+  isValidEmail,
+  isValidUsername,
+  normalizeEmail,
+  normalizeUsername,
+  validatePassword,
+} from '../security/credentials.js';
 
 const router = express.Router();
+const SALT_ROUNDS = 12;
 
 const parsePositiveInt = (value: unknown, fallback: number, min = 1, max = 100) => {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -108,6 +117,71 @@ router.put(
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
+      user,
+    });
+  })
+);
+
+/**
+ * POST /api/users
+ * Admin creates a new user with validated credentials.
+ */
+router.post(
+  '/',
+  verifyToken,
+  requirePermission('users', 'create', 'any'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const normalizedEmail = normalizeEmail(String(req.body?.email || ''));
+    const normalizedUsername = normalizeUsername(String(req.body?.username || ''));
+    const password = String(req.body?.password || '');
+    const firstName = String(req.body?.first_name || '').trim();
+    const lastName = String(req.body?.last_name || '').trim();
+
+    if (!isValidEmail(normalizedEmail)) {
+      throw new ValidationError('Некорректный email');
+    }
+
+    if (!isValidUsername(normalizedUsername)) {
+      throw new ValidationError('Некорректный username. Разрешены: буквы, цифры, ., _, - (3-50 символов)');
+    }
+
+    const passwordValidation = validatePassword(password, {
+      email: normalizedEmail,
+      username: normalizedUsername,
+    });
+
+    if (!passwordValidation.valid) {
+      throw new ValidationError(`Пароль не соответствует требованиям: ${passwordValidation.errors.join('; ')}`);
+    }
+
+    const [existingEmail, existingUsername] = await Promise.all([
+      db.getUserByEmail(normalizedEmail),
+      db.getUserByUsername(normalizedUsername),
+    ]);
+
+    if (existingEmail) {
+      throw new ValidationError('Пользователь с таким email уже существует');
+    }
+
+    if (existingUsername) {
+      throw new ValidationError('Пользователь с таким username уже существует');
+    }
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const createdRes = await db.query(
+      `INSERT INTO users (email, password_hash, username, first_name, last_name, role, registered_at, password_changed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id, email, username, first_name, last_name, role, xp_total, level, failed_login_attempts, locked_until, deleted_at, created_at, updated_at, registered_at, last_login`,
+      [normalizedEmail, passwordHash, normalizedUsername, firstName, lastName, 'user']
+    );
+
+    const user = createdRes.rows[0];
+    await db.cacheUser(user);
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
       user,
     });
   })
@@ -517,7 +591,7 @@ router.get(
 router.get(
   '/stats/leaderboard',
   verifyToken,
-  requirePermission('users', 'read', 'any'),
+  requirePermission('progress', 'read', 'own'),
   asyncHandler(async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string, 10) || 10;
 

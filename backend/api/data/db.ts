@@ -20,16 +20,29 @@ const requiredInProduction = (name: string, fallback: string) => {
     return value || fallback;
 };
 
-const pool = new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432', 10),
-    user: requiredInProduction('DB_USER', 'admin'),
-    password: requiredInProduction('DB_PASSWORD', 'master_pass_2025'),
-    database: requiredInProduction('DB_NAME', 'hebrew_db'),
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-});
+const buildPoolConfig = () => {
+    if (process.env.DATABASE_URL) {
+        return {
+            connectionString: process.env.DATABASE_URL,
+            max: 20,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 2000,
+        };
+    }
+
+    return {
+        host: process.env.DB_HOST || '127.0.0.1',
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+        user: requiredInProduction('DB_USER', 'postgres'),
+        password: requiredInProduction('DB_PASSWORD', 'postgres123'),
+        database: requiredInProduction('DB_NAME', 'hebrew_ai_db'),
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+    };
+};
+
+const pool = new Pool(buildPoolConfig());
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 type JsonObject = { [key: string]: JsonValue };
@@ -51,6 +64,7 @@ export interface UserRow {
     streak?: number;
     locked_until?: string | null;
     failed_login_attempts?: number;
+    is_system_blocked?: boolean;
 }
 
 export interface ItemMetadata {

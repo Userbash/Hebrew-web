@@ -34,6 +34,7 @@ import adminRoutes from './api/routes/admin.js';
 // Import middleware
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
 import { telemetryMiddleware } from './api/middleware/telemetry.js';
+import { auditTrailMiddleware } from './api/middleware/auditTrail.js';
 import { apiLimiter } from './api/middleware/security.js';
 import {
     initEmailDomainBlocklistAutomation,
@@ -139,6 +140,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(telemetryMiddleware);
+app.use(auditTrailMiddleware);
 app.use(express.static(join(__dirname, '..', 'public')));
 
 // ═══════════════════════════════════════════════════════════════════════════

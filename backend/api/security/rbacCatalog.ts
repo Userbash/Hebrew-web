@@ -9,7 +9,8 @@ export type RoleKey =
   | 'moderator'
   | 'support'
   | 'analyst'
-  | 'user';
+  | 'user'
+  | (string & {});
 
 export type RbacResource =
   | 'system'
@@ -146,9 +147,15 @@ const ROLE_GRANTS: Record<RoleKey, PermissionTuple[]> = {
     { resource: 'users', action: 'read', scope: 'any' },
   ],
 
-  // By design, freshly registered users do not receive actionable permissions.
-  // Access is granted only after an explicit administrator assignment.
-  user: [],
+  user: [
+    { resource: 'users', action: 'read', scope: 'own' },
+    { resource: 'users', action: 'update', scope: 'own' },
+    { resource: 'lessons', action: 'read', scope: 'any' },
+    { resource: 'quizzes', action: 'read', scope: 'any' },
+    { resource: 'quizzes', action: 'update', scope: 'own' },
+    { resource: 'dictionary', action: 'read', scope: 'any' },
+    { resource: 'progress', action: 'read', scope: 'own' },
+  ],
 };
 
 export const ROLE_PRIVILEGES_OVERVIEW: RolePrivileges[] = [
@@ -236,9 +243,10 @@ export const ROLE_PRIVILEGES_OVERVIEW: RolePrivileges[] = [
     role: 'user',
     title: 'User',
     priority: 100,
-    summary: 'No operational permissions by default.',
+    summary: 'Baseline self-service access for authenticated learning flows.',
     privileges: [
-      'Requires explicit administrator assignment before access is granted.',
+      'Read/update own profile and progress.',
+      'Read lessons/quizzes/dictionary and submit own quiz attempts.',
     ],
   },
 ];

@@ -23,6 +23,7 @@ export const hasRbacAdminAccess = (profile: GovernanceAccessProfile) => {
 const assertRoleMutationAllowedForActor = (
   actor: GovernanceAccessProfile,
   targetRoleKey: RoleKey,
+  targetRolePriority: number,
   mutation: GovernanceMutation
 ) => {
   if (!hasRbacAdminAccess(actor)) {
@@ -33,13 +34,11 @@ const assertRoleMutationAllowedForActor = (
     throw new Error('Only root can change root/platform administrator assignments');
   }
 
-  const targetRolePriority = ROLE_PRIORITY[targetRoleKey];
   if (actor.highestRole !== 'root' && targetRolePriority >= actor.highestPriority) {
     throw new Error('Cannot modify roles with equal or higher priority than your own');
   }
 
-  // Keep a clear error to simplify security audit trails.
-  if (!targetRolePriority && targetRolePriority !== 0) {
+  if (!Number.isFinite(targetRolePriority)) {
     throw new Error(`Unknown role priority for ${targetRoleKey}`);
   }
 
@@ -52,15 +51,17 @@ export const assertRoleMutationAllowed = (params: {
   actor: GovernanceAccessProfile;
   target: GovernanceAccessProfile;
   targetRoleKey: RoleKey;
+  targetRolePriority?: number;
   mutation: GovernanceMutation;
 }) => {
   const { actor, target, targetRoleKey, mutation } = params;
+  const targetRolePriority = params.targetRolePriority ?? ROLE_PRIORITY[targetRoleKey] ?? Number.NaN;
 
   if (actor.userId === target.userId) {
     throw new Error('Self role mutation is not allowed');
   }
 
-  assertRoleMutationAllowedForActor(actor, targetRoleKey, mutation);
+  assertRoleMutationAllowedForActor(actor, targetRoleKey, targetRolePriority, mutation);
 
   if (target.highestRole === 'root' && actor.highestRole !== 'root') {
     throw new Error('Only root can modify root user assignments');
