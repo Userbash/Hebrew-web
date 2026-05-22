@@ -67,6 +67,10 @@ router.get(
     if (path) {
       params.push(`%${path}%`);
       where.push(`t.path ILIKE $${params.length}`);
+    } else {
+      // Exclude admin auto-refresh polling from telemetry stats to prevent 
+      // skewed success rates and self-observability feedback loops.
+      where.push(`(t.path NOT ILIKE '/api/admin/%' OR t.method != 'GET')`);
     }
 
     if (userId) {

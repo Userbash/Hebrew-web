@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Alert,
   Badge,
@@ -545,6 +545,38 @@ export default function AdminPanel() {
 
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAnyRole]);
+
+  const autoRefreshRef = useRef<() => void>(undefined);
+
+  autoRefreshRef.current = () => {
+    if (activeSection === 'overview') {
+      void Promise.all([
+        reloadUsers(),
+        reloadCatalog(),
+        reloadPublications(),
+        reloadLogs(),
+        reloadSystemMetrics(),
+      ]);
+    } else if (activeSection === 'system-monitoring') {
+      void reloadSystemMetrics();
+    }
+  };
+
+  useEffect(() => {
+    if (!hasAnyRole(ADMIN_ROLES)) {
+      return;
+    }
+
+    // 5 seconds interval is safe for older hardware (e.g. HDD)
+    // while providing near real-time updates for the admin console.
+    const interval = window.setInterval(() => {
+      if (autoRefreshRef.current) {
+        autoRefreshRef.current();
+      }
+    }, 5000);
+
+    return () => window.clearInterval(interval);
   }, [hasAnyRole]);
 
   useEffect(() => {

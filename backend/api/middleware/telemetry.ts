@@ -136,6 +136,12 @@ export const telemetryMiddleware = (req: Request, res: Response, next: NextFunct
     const durationMs = Date.now() - startedAt;
     const path = req.originalUrl.split('?')[0] || req.path;
 
+    // Skip logging frequent read-only admin polling endpoints to prevent DB lock contention 
+    // and self-observability feedback loops.
+    if (req.method === 'GET' && path.startsWith('/api/admin/')) {
+      return;
+    }
+
     const roleKeys = context.roleKeys || authReq.accessProfile?.roleKeys || [];
     const highestRole = context.highestRole || authReq.accessProfile?.highestRole || null;
     const userRole = context.userRole || highestRole || null;
