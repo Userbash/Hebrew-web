@@ -17,7 +17,8 @@ import {
   signAccessToken,
   signRefreshToken,
   verifyToken,
-  verifyTypedToken
+  verifyTypedToken,
+  type RequestWithAuth
 } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/security.js';
 import { setTelemetryContext } from '../middleware/telemetry.js';
@@ -716,6 +717,168 @@ router.get('/verify', verifyToken, async (req, res) => {
     authenticated: true,
     ...responseUser,
   });
+});
+
+// POST /api/auth/change-password
+router.post("/change-password", verifyToken, async (req, res) => {
+  const authReq = req as RequestWithAuth;
+  const { currentPassword, newPassword, confirmPassword } = req.body || {};
+
+  setTelemetryContext(res, {
+    area: "auth",
+    resource: "auth",
+    action: "update",
+    userId: authReq.userId,
+    targetUserId: authReq.userId,
+    isAuthenticated: true,
+  });
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    setTelemetryContext(res, {
+      outcome: "error",
+      metadata: { reason: "missing_change_password_fields" },
+    });
+
+    return res.status(400).json({ message: "Current password, new password and confirmation are required" });
+  }
+
+  if (String(newPassword) !== String(confirmPassword)) {
+    setTelemetryContext(res, {
+      outcome: "error",
+      metadata: { reason: "password_confirmation_mismatch" },
+    });
+
+    return res.status(400).json({ message: "New password confirmation does not match" });
+  }
+
+  if (String(currentPassword) === String(newPassword)) {
+    setTelemetryContext(res, {
+      outcome: "blocked",
+      metadata: { reason: "same_as_current_password" },
+    });
+
+    return res.status(400).json({ message: "New password must be different from current password" });
+  }
+
+  try {
+    const userRes = await db.query(
+      `SELECT id, email, username, password_hash, deleted_at
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [authReq.userId]
+    );
+
+    const user = userRes.rows[0] as {
+      id: string;
+      email: string;
+      username: string;
+      password_hash: string | null;
+      deleted_at: string | null;
+    } | undefined;
+
+    if (!user || user.deleted_at) {
+      setTelemetryContext(res, {
+        outcome: "error",
+        metadata: { reason: "user_not_found" },
+      });
+
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.password_hash) {
+      setTelemetryContext(res, {
+        outcome: "blocked",
+        metadata: { reason: "missing_password_hash" },
+      });
+
+      return res.status(400).json({ message: "Password cannot be changed for this account" });
+    }
+
+    const currentMatches = await bcrypt.compare(String(currentPassword), user.password_hash);
+    if (!currentMatches) {
+      setTelemetryContext(res, {
+        outcome: "blocked",
+        metadata: { reason: "current_password_mismatch" },
+      });
+
+      setAuditContext(res, {
+        resource: "auth",
+        action: "update",
+        targetType: "user",
+        targetId: authReq.userId,
+        message: "Password change rejected: current password mismatch",
+      });
+
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    const passwordValidation = validatePassword(String(newPassword), {
+      email: user.email,
+      username: user.username,
+    });
+
+    if (!passwordValidation.valid) {
+      setTelemetryContext(res, {
+        outcome: "blocked",
+        metadata: { reason: "new_password_policy_rejected" },
+      });
+
+      return res.status(400).json({
+        message: "Password does not meet requirements: " + passwordValidation.errors.join("; "),
+        passwordRules: PASSWORD_RULES_TEXT,
+      });
+    }
+
+    const nextPasswordHash = await bcrypt.hash(String(newPassword), SALT_ROUNDS);
+
+    await db.query(
+      `UPDATE users
+       SET password_hash = $1,
+           password_changed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [nextPasswordHash, authReq.userId]
+    );
+
+    await db.query(
+      `UPDATE user_sessions
+       SET revoked_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+         AND id <> $2
+         AND revoked_at IS NULL`,
+      [authReq.userId, authReq.sessionId]
+    );
+
+    await db.invalidateUserCache({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    });
+
+    setTelemetryContext(res, {
+      outcome: "success",
+      metadata: { reason: "password_changed" },
+    });
+
+    setAuditContext(res, {
+      resource: "auth",
+      action: "update",
+      targetType: "user",
+      targetId: authReq.userId,
+      message: "Password changed successfully",
+    });
+
+    return res.status(200).json({ success: true, message: "Password changed successfully" });
+  } catch (err) {
+    setTelemetryContext(res, {
+      outcome: "error",
+      metadata: { reason: "change_password_internal_error" },
+    });
+
+    console.error("Change password error:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
 });
 
 // GET /api/auth/me

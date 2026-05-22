@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, type ChangeEvent } from 'react';
 import {
   Alert,
   Badge,
@@ -17,16 +17,21 @@ import {
   Activity,
   BadgeCheck,
   BookMarked,
+  CircleUserRound,
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  FileText,
+  KeyRound,
   LayoutDashboard,
   Lock,
   LogOut,
+  Settings,
   Shield,
   UserPlus,
   Users,
   UsersRound,
+  X,
 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { useAuth, type RoleKey } from '../../context/AuthContext';
@@ -290,6 +295,26 @@ const statusVariant = (status?: string) => {
 const normalizeRoleKey = (value: string) =>
   value.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
 
+const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
+const AVATAR_ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+const getAvatarInitials = (username?: string | null, email?: string | null) => {
+  const source = (username || email || "U").trim();
+  const pure = source.includes("@") ? source.split("@")[0] : source;
+  const compact = pure.replace(/[^a-zA-Z0-9]+/g, " ").trim();
+
+  if (!compact) {
+    return "U";
+  }
+
+  const parts = compact.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  return compact.slice(0, 2).toUpperCase();
+};
+
 const toReadableError = (message?: string) => {
   if (!message) {
     return 'Action failed';
@@ -337,6 +362,13 @@ export default function AdminPanel() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [selectedUserSessions, setSelectedUserSessions] = useState<UserSession[]>([]);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
+  const [showUserSettingsModal, setShowUserSettingsModal] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [selectedUserTab, setSelectedUserTab] = useState<"profile" | "security">("profile");
+  const [avatarRefreshSeed, setAvatarRefreshSeed] = useState(() => Date.now());
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ username: "", first_name: "", last_name: "", email: "" });
+  const [passwordDraft, setPasswordDraft] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [userAssignments, setUserAssignments] = useState<UserRoleAssignment[]>([]);
 
   const [createUserForm, setCreateUserForm] = useState<CreateAdminUserPayload>({
@@ -367,6 +399,7 @@ export default function AdminPanel() {
     visibility: 'private' as 'private' | 'team' | 'public',
     tags: '',
   });
+  const [publicationOwnerFilter, setPublicationOwnerFilter] = useState<'all' | 'mine'>('all');
 
   const [logs, setLogs] = useState<AdminLogItem[]>([]);
   const [logsSummary, setLogsSummary] = useState({ total: 0, server_errors: 0, client_errors: 0, success: 0, blocked: 0, errors: 0, authenticated: 0, locked_accounts: 0, avg_response_ms: 0 });
@@ -389,6 +422,17 @@ export default function AdminPanel() {
   const [systemMetrics, setSystemMetrics] = useState<AdminSystemMetricsResponse['metrics'] | null>(null);
 
   const activeRoles = user?.access?.roleKeys || [];
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const currentUserId = user?.id || null;
+  const avatarUrl = currentUserId ? '/api/profile-avatar/me?v=' + avatarRefreshSeed : null;
+  const hasAvatarImage = Boolean(avatarUrl) && !avatarLoadFailed;
+
+  const currentUserDisplayName = user?.username || user?.email?.split('@')[0] || 'Operator';
+  const currentUserRole = user?.access?.highestRole || user?.role || 'user';
+  const currentUserStatus = user?.access?.isSystemBlocked ? 'Blocked' : 'Active';
+  const currentUserPosts = publications.filter((item) => item.metadata?.authorId === currentUserId).length;
+  const avatarInitials = getAvatarInitials(user?.username, user?.email);
 
   const selectedGroup = useMemo(
     () => groups.find((group) => group.role_key === selectedGroupKey) || null,
@@ -547,21 +591,23 @@ export default function AdminPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAnyRole]);
 
-  const autoRefreshRef = useRef<() => void>(undefined);
+  const autoRefreshRef = useRef<() => void>(() => undefined);
 
-  autoRefreshRef.current = () => {
-    if (activeSection === 'overview') {
-      void Promise.all([
-        reloadUsers(),
-        reloadCatalog(),
-        reloadPublications(),
-        reloadLogs(),
-        reloadSystemMetrics(),
-      ]);
-    } else if (activeSection === 'system-monitoring') {
-      void reloadSystemMetrics();
-    }
-  };
+  useEffect(() => {
+    autoRefreshRef.current = () => {
+      if (activeSection === 'overview') {
+        void Promise.all([
+          reloadUsers(),
+          reloadCatalog(),
+          reloadPublications(),
+          reloadLogs(),
+          reloadSystemMetrics(),
+        ]);
+      } else if (activeSection === 'system-monitoring') {
+        void reloadSystemMetrics();
+      }
+    };
+  }, [activeSection]);
 
   useEffect(() => {
     if (!hasAnyRole(ADMIN_ROLES)) {
@@ -592,6 +638,21 @@ export default function AdminPanel() {
     return () => window.clearTimeout(timer);
   }, [error, okMessage]);
 
+  useEffect(() => {
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      if (!userMenuRef.current) {
+        return;
+      }
+
+      if (!userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onDocumentMouseDown);
+    return () => document.removeEventListener("mousedown", onDocumentMouseDown);
+  }, []);
+
   const withAction = async (action: () => Promise<void>, successMessage: string) => {
     setBusy(true);
     setError(null);
@@ -606,6 +667,109 @@ export default function AdminPanel() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const openUserSettingsModal = () => {
+    setProfileDraft({
+      username: user?.username || "",
+      first_name: user?.first_name || "",
+      last_name: user?.last_name || "",
+      email: user?.email || "",
+    });
+    setPasswordDraft({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    setSelectedUserTab("profile");
+    setAvatarLoadFailed(false);
+    setShowUserSettingsModal(true);
+    setIsUserMenuOpen(false);
+  };
+
+  const jumpToMyPublications = () => {
+    setPublicationOwnerFilter("mine");
+    setActiveSection("publications-review");
+    setIsUserMenuOpen(false);
+  };
+
+  const openMySessions = () => {
+    if (!user?.id) {
+      return;
+    }
+
+    setIsUserMenuOpen(false);
+    void loadSessions(user.id);
+  };
+
+  const saveProfileSettings = async () => {
+    if (!user?.id) {
+      return;
+    }
+
+    await withAction(async () => {
+      await adminUsersApi.update(user.id, {
+        username: profileDraft.username.trim(),
+        first_name: profileDraft.first_name.trim(),
+        last_name: profileDraft.last_name.trim(),
+        email: profileDraft.email.trim(),
+      });
+
+      const me = await api.get("/auth/me");
+      setUser(me.data);
+      await reloadUsers();
+    }, "User profile updated");
+  };
+
+  const savePasswordSettings = async () => {
+    await withAction(async () => {
+      await api.post("/auth/change-password", passwordDraft);
+      setPasswordDraft({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    }, "Password changed successfully");
+  };
+
+  const handleAvatarUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!AVATAR_ALLOWED_MIME_TYPES.includes(file.type)) {
+      setError('Unsupported avatar format. Use PNG, JPG or WEBP.');
+      return;
+    }
+
+    if (file.size > AVATAR_MAX_SIZE_BYTES) {
+      setError('Avatar file must be up to 2 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageBase64 = typeof reader.result === 'string' ? reader.result : null;
+      if (!imageBase64) {
+        return;
+      }
+
+      void withAction(async () => {
+        await api.post('/profile-avatar/me', {
+          imageBase64,
+          mimeType: file.type,
+        });
+
+        setAvatarLoadFailed(false);
+        setAvatarRefreshSeed(Date.now());
+      }, 'Avatar updated');
+    };
+
+    reader.onerror = () => setError('Failed to read avatar file');
+    reader.readAsDataURL(file);
+  };
+
+  const clearAvatar = async () => {
+    await withAction(async () => {
+      await api.delete('/profile-avatar/me');
+      setAvatarLoadFailed(false);
+      setAvatarRefreshSeed(Date.now());
+    }, 'Avatar removed');
   };
 
   const toggleNavGroup = (groupId: NavGroupId) => {
@@ -842,6 +1006,14 @@ export default function AdminPanel() {
     );
   }, [publications]);
 
+  const visiblePublications = useMemo(() => {
+    if (publicationOwnerFilter === 'mine' && currentUserId) {
+      return publications.filter((item) => item.metadata?.authorId === currentUserId);
+    }
+
+    return publications;
+  }, [publicationOwnerFilter, publications, currentUserId]);
+
   const logsHealth = useMemo(() => {
     const success = Math.max(logsSummary.total - logsSummary.client_errors - logsSummary.server_errors, 0);
     const successRate = logsSummary.total > 0 ? Math.round((success / logsSummary.total) * 100) : 100;
@@ -890,10 +1062,63 @@ export default function AdminPanel() {
     <div className="admin-shell">
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <div className="admin-brand-mark">A</div>
-          <div>
-            <strong>Admin Console</strong>
-            <span>Secure governance</span>
+          <div className="admin-brand-main">
+            <div className="admin-brand-mark">A</div>
+            <div>
+              <strong>Admin Console</strong>
+              <span>Secure governance</span>
+            </div>
+          </div>
+
+          <div className="admin-brand-user-shell" ref={userMenuRef}>
+            <button
+              type="button"
+              className="admin-user-trigger admin-user-trigger-sidebar"
+              onClick={() => setIsUserMenuOpen((prev) => !prev)}
+              aria-expanded={isUserMenuOpen}
+              aria-haspopup="menu"
+            >
+              <div className="admin-user-avatar" aria-hidden="true">
+                {hasAvatarImage ? <img src={avatarUrl || undefined} alt="" onError={() => setAvatarLoadFailed(true)} /> : <span>{avatarInitials}</span>}
+              </div>
+
+              <div className="admin-user-meta">
+                <div className="admin-sidebar-meta-title">Operator</div>
+                <div className="admin-sidebar-meta-value">{currentUserDisplayName}</div>
+                <div className="admin-user-meta-sub">{currentUserRole} • {currentUserStatus}</div>
+              </div>
+
+              <ChevronDown size={16} className={isUserMenuOpen ? "admin-user-chevron open" : "admin-user-chevron"} />
+            </button>
+
+            {isUserMenuOpen && (
+              <div className="admin-user-menu" role="menu">
+                <button type="button" className="admin-user-menu-item" onClick={openUserSettingsModal}>
+                  <Settings size={15} />
+                  Settings
+                </button>
+                <button type="button" className="admin-user-menu-item" onClick={jumpToMyPublications}>
+                  <FileText size={15} />
+                  My publications ({currentUserPosts})
+                </button>
+                <button type="button" className="admin-user-menu-item" onClick={openMySessions}>
+                  <CircleUserRound size={15} />
+                  My sessions
+                </button>
+
+                <div className="admin-user-menu-roles" aria-hidden="true">
+                  {activeRoles.length === 0 && <Badge bg="secondary">no roles</Badge>}
+                  {activeRoles.map((role) => (
+                    <Badge key={role} bg="primary">{role}</Badge>
+                  ))}
+                </div>
+
+                <button type="button" className="admin-user-menu-item danger" onClick={() => void handleLogout()}>
+                  <LogOut size={15} />
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -935,34 +1160,25 @@ export default function AdminPanel() {
           Exit admin
         </Button>
 
-        <Card className="admin-sidebar-card">
-          <Card.Body>
-            <div className="admin-sidebar-meta-title">Operator</div>
-            <div className="admin-sidebar-meta-value">{user?.email || 'unknown'}</div>
-            <div className="admin-sidebar-meta-badges">
-              {activeRoles.length === 0 && <Badge bg="secondary">no roles</Badge>}
-              {activeRoles.map((role) => (
-                <Badge key={role} bg="primary">{role}</Badge>
-              ))}
-            </div>
-          </Card.Body>
-        </Card>
       </aside>
 
       <main className="admin-main">
         <header className="admin-topbar">
-          <div>
+          <div className="admin-topbar-head">
+            <div className="admin-topbar-badges">
+              <Badge className="badge-soft">Users: {usersTotal}</Badge>
+              <Badge className="badge-soft">Groups: {groups.length}</Badge>
+              <Badge className="badge-soft">Publications: {publications.length}</Badge>
+              <Badge className="badge-soft">Logs: {logsSummary.total}</Badge>
+              <Badge className="badge-soft">Records: {totalRecords}</Badge>
+              <Badge className="badge-soft">Changes: {auditSummary.total}</Badge>
+            </div>
+          </div>
+
+          <div className="admin-topbar-title-block">
             <div className="admin-topbar-path">{sectionMeta.groupTitle} / {sectionMeta.sectionLabel}</div>
             <h1>{sectionGuide.title}</h1>
             <p>{sectionGuide.description}</p>
-          </div>
-          <div className="admin-topbar-badges">
-            <Badge className="badge-soft">Users: {usersTotal}</Badge>
-            <Badge className="badge-soft">Groups: {groups.length}</Badge>
-            <Badge className="badge-soft">Publications: {publications.length}</Badge>
-            <Badge className="badge-soft">Logs: {logsSummary.total}</Badge>
-            <Badge className="badge-soft">Records: {totalRecords}</Badge>
-            <Badge className="badge-soft">Changes: {auditSummary.total}</Badge>
           </div>
         </header>
 
@@ -1002,6 +1218,26 @@ export default function AdminPanel() {
           <Card.Body>
             <div className="admin-section-helper-title">What this section is for</div>
             <div className="admin-section-helper-text">{sectionGuide.nextStep}</div>
+          </Card.Body>
+        </Card>
+
+        <Card className="admin-surface admin-user-map mb-3">
+          <Card.Body>
+            <div className="admin-section-helper-title">Profile quick map</div>
+            <div className="admin-user-map-grid">
+              <button type="button" className="admin-user-map-step" onClick={openUserSettingsModal}>
+                <strong>1. Open Settings</strong>
+                <span>Open your profile menu in the left top Admin Console block, then choose Settings.</span>
+              </button>
+              <button type="button" className="admin-user-map-step" onClick={jumpToMyPublications}>
+                <strong>2. Manage my publications</strong>
+                <span>Jump directly to your own publications and update moderation status.</span>
+              </button>
+              <button type="button" className="admin-user-map-step" onClick={openMySessions}>
+                <strong>3. Check my sessions</strong>
+                <span>Open active/revoked sessions to review security access.</span>
+              </button>
+            </div>
           </Card.Body>
         </Card>
 
@@ -1725,7 +1961,13 @@ export default function AdminPanel() {
               <Col lg={8}>
                 <Card className="admin-surface h-100">
                   <Card.Body>
-                    <h5 className="mb-3">Create publication</h5>
+                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <h5 className="mb-0">Create publication</h5>
+                    <div className="d-flex gap-2">
+                      <Button size="sm" variant={publicationOwnerFilter === 'all' ? 'primary' : 'outline-light'} onClick={() => setPublicationOwnerFilter('all')}>All publications</Button>
+                      <Button size="sm" variant={publicationOwnerFilter === 'mine' ? 'primary' : 'outline-light'} onClick={() => setPublicationOwnerFilter('mine')}>My publications</Button>
+                    </div>
+                  </div>
                     <Row className="g-3">
                       <Col md={6}><Form.Control value={publicationForm.title} placeholder="Title" onChange={(e) => setPublicationForm({ ...publicationForm, title: e.target.value })} /></Col>
                       <Col md={3}>
@@ -1782,7 +2024,7 @@ export default function AdminPanel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {publications.map((publication) => (
+                      {visiblePublications.map((publication) => (
                         <tr key={publication.id}>
                           <td>
                             <div className="fw-semibold">{publication.name}</div>
@@ -2036,6 +2278,114 @@ export default function AdminPanel() {
               </Card.Body>
             </Card>
           </>
+        )}
+
+        {showUserSettingsModal && (
+          <div
+            className="admin-user-modal-overlay"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setShowUserSettingsModal(false);
+              }
+            }}
+          >
+            <div className="admin-user-modal-window" role="dialog" aria-modal="true" aria-label="User settings">
+              <button type="button" className="admin-user-modal-close" onClick={() => setShowUserSettingsModal(false)} aria-label="Close settings">
+                <X size={16} />
+              </button>
+
+              <div className="admin-user-modal-head">
+                <h5 className="mb-1">User settings</h5>
+                <p className="mb-0">Profile management, security and account summary.</p>
+              </div>
+
+              <div className="admin-user-modal-tabs">
+                <button type="button" className={selectedUserTab === "profile" ? "active" : ""} onClick={() => setSelectedUserTab("profile")}>
+                  <Settings size={15} />
+                  Profile
+                </button>
+                <button type="button" className={selectedUserTab === "security" ? "active" : ""} onClick={() => setSelectedUserTab("security")}>
+                  <KeyRound size={15} />
+                  Security
+                </button>
+              </div>
+
+              {selectedUserTab === "profile" && (
+                <div className="admin-user-modal-content">
+                  <div className="admin-user-modal-avatar-block">
+                    <div className="admin-user-avatar large">
+                      {hasAvatarImage ? <img src={avatarUrl || undefined} alt="" onError={() => setAvatarLoadFailed(true)} /> : <span>{avatarInitials}</span>}
+                    </div>
+                    <div className="admin-user-avatar-actions">
+                      <Form.Control type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarUpload} />
+                      <div className="admin-user-avatar-rules">Allowed: PNG, JPG, WEBP • Max 2 MB</div>
+                      <Button size="sm" variant="outline-danger" onClick={() => void clearAvatar()}>Remove avatar</Button>
+                    </div>
+                  </div>
+
+                  <Row className="g-3">
+                    <Col md={6}>
+                      <Form.Label>Nickname</Form.Label>
+                      <Form.Control value={profileDraft.username} onChange={(event) => setProfileDraft((prev) => ({ ...prev, username: event.target.value }))} />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label>Email</Form.Label>
+                      <Form.Control type="email" value={profileDraft.email} onChange={(event) => setProfileDraft((prev) => ({ ...prev, email: event.target.value }))} />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label>First name</Form.Label>
+                      <Form.Control value={profileDraft.first_name} onChange={(event) => setProfileDraft((prev) => ({ ...prev, first_name: event.target.value }))} />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label>Last name</Form.Label>
+                      <Form.Control value={profileDraft.last_name} onChange={(event) => setProfileDraft((prev) => ({ ...prev, last_name: event.target.value }))} />
+                    </Col>
+                  </Row>
+
+                  <div className="admin-user-modal-summary">
+                    <div><span>Posts</span><strong>{currentUserPosts}</strong></div>
+                    <div><span>Role</span><strong>{currentUserRole}</strong></div>
+                    <div><span>Status</span><strong>{currentUserStatus}</strong></div>
+                    <div><span>Last login</span><strong>{formatDate(user?.last_login)}</strong></div>
+                  </div>
+
+                  <div className="admin-user-modal-footer">
+                    <Button variant="primary" onClick={() => void saveProfileSettings()}>Save profile</Button>
+                  </div>
+                </div>
+              )}
+
+              {selectedUserTab === "security" && (
+                <div className="admin-user-modal-content">
+                  <Row className="g-3">
+                    <Col xs={12}>
+                      <Form.Label>Current password</Form.Label>
+                      <Form.Control type="password" value={passwordDraft.currentPassword} onChange={(event) => setPasswordDraft((prev) => ({ ...prev, currentPassword: event.target.value }))} />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label>New password</Form.Label>
+                      <Form.Control type="password" value={passwordDraft.newPassword} onChange={(event) => setPasswordDraft((prev) => ({ ...prev, newPassword: event.target.value }))} />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label>Confirm new password</Form.Label>
+                      <Form.Control type="password" value={passwordDraft.confirmPassword} onChange={(event) => setPasswordDraft((prev) => ({ ...prev, confirmPassword: event.target.value }))} />
+                    </Col>
+                  </Row>
+
+                  <div className="admin-user-modal-summary">
+                    <div><span>User ID</span><strong>{user?.id || "-"}</strong></div>
+                    <div><span>Nickname</span><strong>{profileDraft.username || "-"}</strong></div>
+                    <div><span>Role</span><strong>{currentUserRole}</strong></div>
+                    <div><span>Status</span><strong>{currentUserStatus}</strong></div>
+                  </div>
+
+                  <div className="admin-user-modal-footer">
+                    <Button variant="primary" onClick={() => void savePasswordSettings()}>Change password</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         <Modal show={showSessionsModal} onHide={() => setShowSessionsModal(false)} size="lg" centered>

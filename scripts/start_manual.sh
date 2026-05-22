@@ -6,6 +6,7 @@ echo "Starting project containers manually via BridgeOS..."
 
 PG_VOLUME_NAME="${PG_VOLUME_NAME:-hebrew_pgdata}"
 REDIS_VOLUME_NAME="${REDIS_VOLUME_NAME:-hebrew_redisdata}"
+AVATAR_VOLUME_NAME="${AVATAR_VOLUME_NAME:-hebrew_avatar_uploads}"
 
 # 1. Create Network
 echo "Creating network..."
@@ -14,6 +15,7 @@ $BRIDGE_CMD podman network create hebrew-net || true
 echo "Ensuring persistent volumes..."
 $BRIDGE_CMD podman volume create "$PG_VOLUME_NAME" >/dev/null || true
 $BRIDGE_CMD podman volume create "$REDIS_VOLUME_NAME" >/dev/null || true
+$BRIDGE_CMD podman volume create "$AVATAR_VOLUME_NAME" >/dev/null || true
 
 # 2. Start Postgres
 echo "Starting Postgres..."
@@ -53,6 +55,7 @@ $BRIDGE_CMD podman run -d --pull=never \
   -e DB_NAME=hebrew_ai_db \
   -e REDIS_HOST=hebrew_ai_redis \
   -e REDIS_PORT=6379 \
+  -v "$AVATAR_VOLUME_NAME":/app/public/uploads/avatars:Z \
   hebrew-backend:latest
 
 # 5. Start Frontend

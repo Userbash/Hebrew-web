@@ -30,6 +30,7 @@ import progressRoutes from './api/routes/progress.js';
 import userRoutes from './api/routes/users.js';
 import accessControlRoutes from './api/routes/accessControl.js';
 import adminRoutes from './api/routes/admin.js';
+import profileAvatarRoutes from './api/routes/profileAvatar.js';
 
 // Import middleware
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
@@ -164,6 +165,7 @@ app.use('/api/publications', publicationsRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/access', accessControlRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/profile-avatar', profileAvatarRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

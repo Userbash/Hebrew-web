@@ -95,6 +95,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - avatar_uploads:/app/public/uploads/avatars
     depends_on:
       postgres:
         condition: service_healthy
@@ -237,3 +239,4 @@ volumes:
   loki_data:
   promtail_positions:
   grafana_data:
+  avatar_uploads:
