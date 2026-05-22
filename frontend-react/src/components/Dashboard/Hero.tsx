@@ -1,16 +1,19 @@
 import { CheckCircle2 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function Hero() {
+  const { t } = useLanguage();
+
   return (
     <section className="app-hero">
       <div>
         <span className="app-status">
-          <CheckCircle2 size={16} /> Система работает
+          <CheckCircle2 size={16} /> {t.systemOnline}
         </span>
-        <h2>Ваш учебный день готов</h2>
-        <p>3 коротких упражнения и один словарный повтор помогут сохранить темп без перегрузки.</p>
+        <h2>{t.dayReadyTitle}</h2>
+        <p>{t.dayReadyDesc}</p>
       </div>
-      <button className="app-primary-action">Продолжить урок</button>
+      <button className="app-primary-action">{t.continueLesson}</button>
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { Clock3 } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 interface ActivityItemProps {
   title: string;
@@ -22,16 +23,18 @@ function ActivityItem({ title, time, result }: ActivityItemProps) {
 }
 
 export default function ActivityPanel() {
+  const { t } = useLanguage();
+
   return (
     <div className="app-panel">
       <div className="app-panel-header">
-        <h3>Последние действия</h3>
-        <button>Все</button>
+        <h3>{t.recentActions}</h3>
+        <button>{t.all}</button>
       </div>
       <div className="activity-list">
-        <ActivityItem title="Урок: базовая грамматика" time="2 часа назад" result="+250 XP" />
-        <ActivityItem title="Повтор: современная лексика" time="Вчера" result="+120 XP" />
-        <ActivityItem title="Тест: технические термины" time="3 дня назад" result="+400 XP" />
+        <ActivityItem title={t.activity1Title} time={t.twoHoursAgo} result="+250 XP" />
+        <ActivityItem title={t.activity2Title} time={t.yesterday} result="+120 XP" />
+        <ActivityItem title={t.activity3Title} time={t.threeDaysAgo} result="+400 XP" />
       </div>
     </div>
   );

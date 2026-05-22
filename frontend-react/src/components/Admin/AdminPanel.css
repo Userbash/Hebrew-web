@@ -1233,3 +1233,661 @@
     font-size: 28px;
   }
 }
+
+.admin-shell-light {
+  background:
+    radial-gradient(circle at 96% 2%, rgba(37, 99, 235, 0.1), transparent 30%),
+    linear-gradient(160deg, #eef4fb 0%, #e5edf8 48%, #e7eff9 100%);
+  color: #12253f;
+}
+
+.admin-shell-light .admin-sidebar {
+  border-right: 1px solid rgba(129, 154, 191, 0.4);
+  background: rgba(237, 245, 255, 0.95);
+}
+
+.admin-shell-light .admin-topbar,
+.admin-shell-light .admin-card,
+.admin-shell-light .admin-nav-group,
+.admin-shell-light .admin-sidebar-card,
+.admin-shell-light .admin-quick-nav,
+.admin-shell-light .site-card,
+.admin-shell-light .table-shell {
+  background: rgba(255, 255, 255, 0.92);
+  color: #14253e;
+  border-color: rgba(129, 154, 191, 0.45);
+}
+
+.admin-shell-light .admin-topbar p,
+.admin-shell-light .admin-brand span,
+.admin-shell-light .admin-nav-item,
+.admin-shell-light .admin-section-helper-text,
+.admin-shell-light .text-secondary,
+.admin-shell-light .small.text-secondary {
+  color: #405a7e;
+}
+
+.admin-shell-light .admin-nav-group-toggle,
+.admin-shell-light .admin-brand strong,
+.admin-shell-light .admin-topbar h1 {
+  color: #0f2542;
+}
+
+.admin-shell-light .admin-nav-item.active {
+  color: #0f2542;
+}
+
+/* Final light-theme stabilization layer */
+.admin-shell {
+  width: 100%;
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+.admin-shell-light {
+  --admin-light-bg: #eef3fa;
+  --admin-light-bg-2: #e7edf7;
+  --admin-light-surface: #ffffff;
+  --admin-light-surface-soft: #f7faff;
+  --admin-light-border: #cfdae8;
+  --admin-light-text: #172b45;
+  --admin-light-text-soft: #496586;
+  --admin-light-accent: #2563eb;
+
+  background:
+    radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.08), transparent 34%),
+    linear-gradient(180deg, var(--admin-light-bg) 0%, var(--admin-light-bg-2) 100%);
+  color: var(--admin-light-text);
+}
+
+.admin-shell-light .admin-main {
+  background: transparent;
+}
+
+.admin-shell-light .admin-sidebar {
+  background: rgba(245, 249, 255, 0.92);
+  border-right: 1px solid var(--admin-light-border);
+}
+
+.admin-shell-light .admin-topbar,
+.admin-shell-light .admin-surface,
+.admin-shell-light .admin-surface-sub,
+.admin-shell-light .admin-kpi,
+.admin-shell-light .admin-sidebar-card,
+.admin-shell-light .admin-nav-group,
+.admin-shell-light .admin-user-trigger,
+.admin-shell-light .admin-user-menu,
+.admin-shell-light .admin-user-modal-window,
+.admin-shell-light .admin-group-item,
+.admin-shell-light .admin-map-item,
+.admin-shell-light .admin-chart-item,
+.admin-shell-light .admin-health-list > div,
+.admin-shell-light .admin-user-map-step,
+.admin-shell-light .admin-permission-item,
+.admin-shell-light .admin-user-modal-summary > div,
+.admin-shell-light .admin-progress,
+.admin-shell-light .admin-shell .modal-content,
+.admin-shell-light .admin-shell .modal-header,
+.admin-shell-light .admin-shell .modal-body {
+  background: var(--admin-light-surface) !important;
+  border-color: var(--admin-light-border) !important;
+  color: var(--admin-light-text) !important;
+}
+
+.admin-shell-light .admin-nav-item,
+.admin-shell-light .admin-nav-group-toggle,
+.admin-shell-light .admin-top-tab,
+.admin-shell-light .admin-topbar p,
+.admin-shell-light .admin-section-helper-text,
+.admin-shell-light .admin-user-meta-sub,
+.admin-shell-light .admin-user-map-step span,
+.admin-shell-light .admin-shell .text-secondary,
+.admin-shell-light .admin-shell .small.text-secondary,
+.admin-shell-light .kpi-sub,
+.admin-shell-light .admin-chart-head,
+.admin-shell-light .admin-topbar-path,
+.admin-shell-light .admin-section-helper-title,
+.admin-shell-light .admin-quick-nav-title,
+.admin-shell-light .admin-user-modal-head p,
+.admin-shell-light .admin-user-modal-summary span,
+.admin-shell-light .admin-permission-item small {
+  color: var(--admin-light-text-soft) !important;
+}
+
+.admin-shell-light .admin-topbar h1,
+.admin-shell-light .admin-brand strong,
+.admin-shell-light .kpi-value,
+.admin-shell-light .admin-map-item strong,
+.admin-shell-light .admin-user-modal-summary strong,
+.admin-shell-light .admin-shell .form-label,
+.admin-shell-light .admin-shell .form-check-label {
+  color: var(--admin-light-text) !important;
+}
+
+.admin-shell-light .admin-nav-item:hover,
+.admin-shell-light .admin-top-tab:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--admin-light-text) !important;
+}
+
+.admin-shell-light .admin-nav-item.active,
+.admin-shell-light .admin-top-tab.active {
+  color: #0f2c5c !important;
+  border-color: rgba(37, 99, 235, 0.45) !important;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.14), rgba(2, 132, 199, 0.08));
+}
+
+.admin-shell-light .admin-shell .btn-outline-light,
+.admin-shell-light .admin-sidebar-logout {
+  border-color: #a9bfdc !important;
+  color: #1d3a62 !important;
+  background: #f2f7ff !important;
+}
+
+.admin-shell-light .admin-shell .btn-outline-light:hover,
+.admin-shell-light .admin-sidebar-logout:hover {
+  background: #e3efff !important;
+}
+
+.admin-shell-light .admin-shell .form-control,
+.admin-shell-light .admin-shell .form-select,
+.admin-shell-light .admin-shell .input-group-text {
+  background: var(--admin-light-surface-soft) !important;
+  border-color: var(--admin-light-border) !important;
+  color: var(--admin-light-text) !important;
+}
+
+.admin-shell-light .admin-shell .form-control::placeholder {
+  color: #7d94b2 !important;
+}
+
+.admin-shell-light .admin-shell .form-control:focus,
+.admin-shell-light .admin-shell .form-select:focus {
+  border-color: var(--admin-light-accent) !important;
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.16) !important;
+}
+
+.admin-shell-light .admin-table,
+.admin-shell-light .admin-table td,
+.admin-shell-light .admin-table tbody th {
+  color: var(--admin-light-text) !important;
+}
+
+.admin-shell-light .admin-table thead th {
+  color: #123257 !important;
+  background: #eaf2ff !important;
+  border-bottom-color: #c2d3ea !important;
+}
+
+.admin-shell-light .admin-table td,
+.admin-shell-light .admin-table tbody th {
+  background: #ffffff !important;
+  border-color: #dde7f3 !important;
+}
+
+.admin-shell-light .admin-table tbody tr:hover td {
+  background: #f3f8ff !important;
+}
+
+.admin-shell-light .badge-soft {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1b4da0;
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.admin-shell-light .ui-prefs-control {
+  background: #f7fbff;
+  color: #17365c;
+  border-color: #bbcee6;
+}
+
+.admin-shell-light .ui-prefs-control select option {
+  color: #17365c;
+  background: #ffffff;
+}
+
+/* Zabbix-like light admin theme (admin only, light mode only) */
+.admin-shell-light {
+  --zbx-bg: #edf2f8;
+  --zbx-bg-soft: #e4ebf4;
+  --zbx-surface: #ffffff;
+  --zbx-surface-2: #f7faff;
+  --zbx-border: #c7d3e2;
+  --zbx-text: #1f2f46;
+  --zbx-text-soft: #5f7694;
+  --zbx-accent: #2d6cdf;
+  --zbx-accent-2: #4f8df2;
+  --zbx-danger: #d94a57;
+
+  background:
+    radial-gradient(circle at 88% -10%, rgba(45, 108, 223, 0.1), transparent 34%),
+    linear-gradient(180deg, var(--zbx-bg) 0%, var(--zbx-bg-soft) 100%);
+  color: var(--zbx-text);
+}
+
+.admin-shell-light .admin-main {
+  padding: 28px;
+}
+
+.admin-shell-light .admin-sidebar {
+  background: linear-gradient(180deg, #eef4fb 0%, #e8eff8 100%);
+  border-right: 1px solid var(--zbx-border);
+}
+
+.admin-shell-light .admin-brand,
+.admin-shell-light .admin-nav-group,
+.admin-shell-light .admin-sidebar-card,
+.admin-shell-light .admin-topbar,
+.admin-shell-light .admin-surface,
+.admin-shell-light .admin-surface-sub,
+.admin-shell-light .admin-kpi,
+.admin-shell-light .admin-user-trigger,
+.admin-shell-light .admin-user-menu,
+.admin-shell-light .admin-user-modal-window,
+.admin-shell-light .admin-group-item,
+.admin-shell-light .admin-map-item,
+.admin-shell-light .admin-health-list > div,
+.admin-shell-light .admin-chart-item,
+.admin-shell-light .admin-permission-item,
+.admin-shell-light .admin-user-map-step,
+.admin-shell-light .admin-user-modal-summary > div,
+.admin-shell-light .table-shell,
+.admin-shell-light .site-card,
+.admin-shell-light .admin-progress {
+  background: var(--zbx-surface) !important;
+  border: 1px solid var(--zbx-border) !important;
+  color: var(--zbx-text) !important;
+  box-shadow: 0 1px 0 rgba(24, 45, 74, 0.03);
+}
+
+.admin-shell-light .admin-topbar {
+  border-radius: 14px;
+}
+
+.admin-shell-light .admin-topbar h1 {
+  color: #1c3150 !important;
+  font-size: clamp(38px, 3.3vw, 52px);
+  line-height: 1.08;
+  font-weight: 800;
+}
+
+.admin-shell-light .admin-topbar p,
+.admin-shell-light .admin-topbar-path,
+.admin-shell-light .admin-section-helper-text,
+.admin-shell-light .admin-section-helper-title,
+.admin-shell-light .admin-quick-nav-title,
+.admin-shell-light .admin-user-meta-sub,
+.admin-shell-light .admin-shell .text-secondary,
+.admin-shell-light .admin-shell .small.text-secondary,
+.admin-shell-light .kpi-sub,
+.admin-shell-light .admin-permission-item small,
+.admin-shell-light .admin-user-map-step span,
+.admin-shell-light .admin-user-modal-head p,
+.admin-shell-light .admin-user-modal-summary span {
+  color: var(--zbx-text-soft) !important;
+}
+
+.admin-shell-light .admin-brand strong,
+.admin-shell-light .admin-nav-group-toggle,
+.admin-shell-light .kpi-value,
+.admin-shell-light .kpi-title,
+.admin-shell-light .admin-map-item strong,
+.admin-shell-light .admin-user-modal-summary strong,
+.admin-shell-light .admin-shell .form-label,
+.admin-shell-light .admin-shell .form-check-label {
+  color: var(--zbx-text) !important;
+}
+
+.admin-shell-light .admin-nav-item,
+.admin-shell-light .admin-top-tab {
+  color: #4d6787 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+.admin-shell-light .admin-nav-item:hover,
+.admin-shell-light .admin-top-tab:hover {
+  color: #1f3c67 !important;
+  background: rgba(45, 108, 223, 0.09) !important;
+  border-color: rgba(45, 108, 223, 0.18) !important;
+}
+
+.admin-shell-light .admin-nav-item.active,
+.admin-shell-light .admin-top-tab.active {
+  color: #1c3f74 !important;
+  border-color: rgba(45, 108, 223, 0.42) !important;
+  background: linear-gradient(90deg, rgba(45, 108, 223, 0.16), rgba(79, 141, 242, 0.11)) !important;
+}
+
+.admin-shell-light .badge-soft {
+  color: #1d4b9a;
+  border-color: rgba(45, 108, 223, 0.35);
+  background: rgba(45, 108, 223, 0.14);
+}
+
+.admin-shell-light .admin-shell .btn-primary,
+.admin-shell-light .admin-shell .btn-outline-light,
+.admin-shell-light .admin-sidebar-logout {
+  border-radius: 10px;
+}
+
+.admin-shell-light .admin-shell .btn-primary {
+  border-color: #2d6cdf;
+  background: linear-gradient(180deg, var(--zbx-accent-2) 0%, var(--zbx-accent) 100%);
+  color: #fff;
+}
+
+.admin-shell-light .admin-shell .btn-primary:hover,
+.admin-shell-light .admin-shell .btn-primary:focus {
+  background: linear-gradient(180deg, #5d9af7 0%, #3577e4 100%);
+}
+
+.admin-shell-light .admin-shell .btn-outline-light,
+.admin-shell-light .admin-sidebar-logout {
+  border-color: #afc2db !important;
+  color: #2e4d77 !important;
+  background: #f4f8ff !important;
+}
+
+.admin-shell-light .admin-shell .btn-outline-light:hover,
+.admin-shell-light .admin-sidebar-logout:hover {
+  background: #e7f0ff !important;
+}
+
+.admin-shell-light .admin-shell .btn-danger,
+.admin-shell-light .admin-shell .btn-outline-danger {
+  border-color: rgba(217, 74, 87, 0.5);
+  color: var(--zbx-danger);
+}
+
+.admin-shell-light .admin-shell input:not([type='checkbox']):not([type='radio']):not([type='button']):not([type='submit']),
+.admin-shell-light .admin-shell select,
+.admin-shell-light .admin-shell textarea,
+.admin-shell-light .admin-shell .form-control,
+.admin-shell-light .admin-shell .form-select,
+.admin-shell-light .admin-shell .input-group-text,
+.admin-shell-light .ui-prefs-control {
+  background: var(--zbx-surface-2) !important;
+  color: #213752 !important;
+  border: 1px solid var(--zbx-border) !important;
+}
+
+.admin-shell-light .admin-shell input::placeholder,
+.admin-shell-light .admin-shell textarea::placeholder,
+.admin-shell-light .admin-shell .form-control::placeholder {
+  color: #7e93ae !important;
+}
+
+.admin-shell-light .admin-shell input:focus,
+.admin-shell-light .admin-shell select:focus,
+.admin-shell-light .admin-shell textarea:focus,
+.admin-shell-light .admin-shell .form-control:focus,
+.admin-shell-light .admin-shell .form-select:focus,
+.admin-shell-light .ui-prefs-control:focus-within {
+  border-color: var(--zbx-accent) !important;
+  box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.16) !important;
+}
+
+.admin-shell-light .admin-shell .input-group-text {
+  color: #4d6787 !important;
+}
+
+.admin-shell-light .admin-table,
+.admin-shell-light .admin-table td,
+.admin-shell-light .admin-table tbody th {
+  color: var(--zbx-text) !important;
+}
+
+.admin-shell-light .admin-table thead th {
+  color: #264467 !important;
+  background: #e9f1fc !important;
+  border-bottom-color: #c3d3e8 !important;
+  font-weight: 700;
+}
+
+.admin-shell-light .admin-table td,
+.admin-shell-light .admin-table tbody th {
+  background: #ffffff !important;
+  border-color: #dce5f1 !important;
+}
+
+.admin-shell-light .admin-table tbody tr:hover td {
+  background: #f2f7ff !important;
+}
+
+.admin-shell-light .admin-shell .alert-danger {
+  border-color: rgba(217, 74, 87, 0.42);
+  background: rgba(217, 74, 87, 0.1);
+}
+
+.admin-shell-light .admin-shell .alert-warning {
+  border-color: rgba(229, 163, 0, 0.42);
+  background: rgba(229, 163, 0, 0.1);
+}
+
+.admin-shell-light .admin-shell .alert-success {
+  border-color: rgba(29, 162, 108, 0.42);
+  background: rgba(29, 162, 108, 0.1);
+}
+
+.admin-shell-light .ui-prefs-control select {
+  color: #2b476e;
+}
+
+.admin-shell-light .ui-prefs-control select option {
+  color: #2b476e;
+  background: #ffffff;
+}
+
+/* Light theme final fixes: dropdowns, file input, badges, bootstrap surfaces */
+.admin-shell-light .admin-user-menu {
+  background: #ffffff !important;
+  border-color: #c7d3e2 !important;
+  box-shadow: 0 14px 36px rgba(27, 53, 87, 0.18);
+}
+
+.admin-shell-light .admin-user-menu-item {
+  background: #f5f9ff !important;
+  color: #243b5c !important;
+  border-color: #d4e0ef !important;
+}
+
+.admin-shell-light .admin-user-menu-item:hover {
+  background: #e8f1ff !important;
+  border-color: #b8cde9 !important;
+}
+
+.admin-shell-light .admin-user-menu-item.danger {
+  color: #c33f4d !important;
+  background: #fff6f7 !important;
+  border-color: #efc8ce !important;
+}
+
+.admin-shell-light .admin-user-menu-roles .badge {
+  background: rgba(45, 108, 223, 0.14) !important;
+  color: #1d4b9a !important;
+  border: 1px solid rgba(45, 108, 223, 0.33);
+}
+
+.admin-shell-light .admin-user-modal-overlay {
+  background: rgba(28, 48, 74, 0.28);
+  backdrop-filter: blur(3px);
+}
+
+.admin-shell-light .admin-user-modal-close {
+  background: #f0f6ff !important;
+  color: #2f4f76 !important;
+  border-color: #c1d3ea !important;
+}
+
+.admin-shell-light .admin-user-modal-tabs button {
+  background: #f4f8ff !important;
+  color: #47658a !important;
+  border-color: #c8d8ec !important;
+}
+
+.admin-shell-light .admin-user-modal-tabs button.active {
+  background: linear-gradient(180deg, #eaf2ff 0%, #dfeafb 100%) !important;
+  color: #1f436f !important;
+  border-color: #94b4df !important;
+}
+
+.admin-shell-light .admin-user-avatar {
+  border-color: #7aa4df !important;
+  background: linear-gradient(145deg, #4f8df2, #6cb8f0) !important;
+  color: #ffffff !important;
+}
+
+.admin-shell-light .admin-user-avatar-rules {
+  color: #6e87a9 !important;
+}
+
+.admin-shell-light input[type='file'] {
+  background: #f7faff !important;
+  color: #2a4162 !important;
+  border: 1px solid #c7d3e2 !important;
+}
+
+.admin-shell-light input[type='file']::file-selector-button {
+  border: 1px solid #b7cce8;
+  background: #e9f2ff;
+  color: #234568;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-right: 10px;
+}
+
+.admin-shell-light input[type='file']::-webkit-file-upload-button {
+  border: 1px solid #b7cce8;
+  background: #e9f2ff;
+  color: #234568;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-right: 10px;
+}
+
+.admin-shell-light .admin-shell .form-select option,
+.admin-shell-light select option {
+  background: #ffffff !important;
+  color: #243b5c !important;
+}
+
+.admin-shell-light .admin-shell .modal-content,
+.admin-shell-light .admin-shell .modal-header,
+.admin-shell-light .admin-shell .modal-body,
+.admin-shell-light .admin-shell .modal-footer,
+.admin-shell-light .admin-shell .modal-title {
+  background: #ffffff !important;
+  color: #233b5b !important;
+  border-color: #d1ddec !important;
+}
+
+.admin-shell-light .admin-shell .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background: #f7fbff !important;
+  color: #233b5b !important;
+}
+
+.admin-shell-light .admin-shell .close,
+.admin-shell-light .admin-shell .btn-close {
+  filter: none;
+}
+
+.admin-shell-light .admin-shell .badge.bg-dark,
+.admin-shell-light .admin-shell .bg-dark {
+  background: #2f4563 !important;
+  color: #f4f8ff !important;
+}
+
+.admin-shell-light .admin-shell .badge.bg-success {
+  background: #1ea567 !important;
+}
+
+.admin-shell-light .admin-shell .badge.bg-warning {
+  background: #d29a22 !important;
+  color: #1f2f46 !important;
+}
+
+.admin-shell-light .admin-shell .badge.bg-danger {
+  background: #ce4a57 !important;
+}
+
+/* Absolute light-theme sanitizer for admin panel */
+.admin-shell-light {
+  --bs-body-bg: #edf2f8;
+  --bs-body-color: #1f2f46;
+  --bs-border-color: #c7d3e2;
+  --bs-tertiary-bg: #f7faff;
+  --bs-secondary-bg: #eef4fb;
+}
+
+.admin-shell-light .admin-main,
+.admin-shell-light .admin-main * {
+  color-scheme: light;
+}
+
+.admin-shell-light .admin-main :is(input, select, textarea, .form-control, .form-select, .input-group-text):not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='hidden']) {
+  background-color: #f7faff !important;
+  color: #243b5c !important;
+  border-color: #c7d3e2 !important;
+}
+
+.admin-shell-light .admin-main :is(input, select, textarea, .form-control, .form-select):focus {
+  background-color: #ffffff !important;
+  color: #1f3654 !important;
+  border-color: #2d6cdf !important;
+  box-shadow: 0 0 0 3px rgba(45, 108, 223, 0.15) !important;
+}
+
+.admin-shell-light .admin-main :is(input, select, textarea, .form-control, .form-select)::placeholder {
+  color: #7d93af !important;
+  opacity: 1;
+}
+
+.admin-shell-light .admin-main :is(input, select, textarea, .form-control, .form-select):disabled {
+  background-color: #eef3fb !important;
+  color: #6d84a3 !important;
+}
+
+.admin-shell-light .admin-main select option,
+.admin-shell-light .admin-main .form-select option {
+  background: #ffffff !important;
+  color: #243b5c !important;
+}
+
+.admin-shell-light .admin-brand-user-shell .admin-user-menu,
+.admin-shell-light .admin-brand-user-shell .admin-user-menu * {
+  background-image: none !important;
+}
+
+.admin-shell-light .admin-brand-user-shell .admin-user-menu .admin-user-menu-item {
+  background-color: #f4f8ff !important;
+  color: #233b5a !important;
+  border: 1px solid #d1ddec !important;
+}
+
+.admin-shell-light .admin-brand-user-shell .admin-user-menu .admin-user-menu-item:hover {
+  background-color: #e8f1ff !important;
+}
+
+.admin-shell-light .admin-brand-user-shell .admin-user-menu .admin-user-menu-item.danger {
+  background-color: #fff6f7 !important;
+  color: #c43f4d !important;
+  border-color: #efc7cd !important;
+}
+
+.admin-shell-light .admin-main .bg-dark,
+.admin-shell-light .admin-main .badge.bg-dark,
+.admin-shell-light .admin-main [class*='bg-dark'] {
+  background-color: #324a68 !important;
+  color: #f5f9ff !important;
+}
+
+.admin-shell-light .admin-main .modal-content,
+.admin-shell-light .admin-main .modal-header,
+.admin-shell-light .admin-main .modal-body,
+.admin-shell-light .admin-main .modal-footer,
+.admin-shell-light .admin-main .dropdown-menu {
+  background-color: #ffffff !important;
+  color: #233b5b !important;
+  border-color: #d1ddec !important;
+}

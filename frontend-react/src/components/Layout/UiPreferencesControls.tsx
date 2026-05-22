@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Languages, Monitor, Moon, Sun } from 'lucide-react';
 import { useLanguage, type Language } from '../../context/LanguageContext';
 import { useTheme, type ThemeMode } from '../../context/ThemeContext';
@@ -19,27 +20,24 @@ export default function UiPreferencesControls({ className = '' }: UiPreferencesC
   const { languageMode, setLanguage, setLanguageMode, t } = useLanguage();
   const { themeMode, setThemeMode } = useTheme();
   const { user, setUser } = useAuth();
+  const queryClient = useQueryClient();
 
-  const persistPreferences = async (patch: Partial<UserUiPreferences>) => {
-    if (!user?.id) return;
-    if (Object.keys(patch).length === 0) return;
+  const persistMutation = useMutation({
+    mutationFn: async (patch: Partial<UserUiPreferences>) => {
+      if (!user?.id || Object.keys(patch).length === 0) return null;
+      const response = await api.put('/users/preferences', { preferences: patch });
+      return response.data?.preferences || patch;
+    },
+    onSuccess: (preferences) => {
+      if (!preferences) return;
+      setUser((prev) => (prev ? { ...prev, ui_preferences: { ...(prev.ui_preferences || {}), ...preferences } } : prev));
+      queryClient.setQueryData(['preferences', user?.id], preferences);
+    },
+  });
 
-    setUser((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        ui_preferences: {
-          ...(prev.ui_preferences || {}),
-          ...patch,
-        },
-      };
-    });
-
-    try {
-      await api.put('/users/preferences', { preferences: patch });
-    } catch {
-      // Non-blocking: UI still applies local preference immediately.
-    }
+  const persistPreferences = (patch: Partial<UserUiPreferences>) => {
+    if (!user?.id || Object.keys(patch).length === 0) return;
+    void persistMutation.mutateAsync(patch);
   };
 
   return (
@@ -53,14 +51,14 @@ export default function UiPreferencesControls({ className = '' }: UiPreferencesC
             if (next === 'system') {
               if (languageMode !== 'system') {
                 setLanguageMode('system');
-                void persistPreferences({ languageMode: 'system' });
+                persistPreferences({ languageMode: 'system' });
               }
               return;
             }
 
             if (languageMode !== next) {
               setLanguage(next);
-              void persistPreferences({ language: next, languageMode: next });
+              persistPreferences({ language: next, languageMode: next });
             }
           }}
         >
@@ -78,7 +76,7 @@ export default function UiPreferencesControls({ className = '' }: UiPreferencesC
             const next = e.target.value as ThemeMode;
             if (themeMode !== next) {
               setThemeMode(next);
-              void persistPreferences({ themeMode: next });
+              persistPreferences({ themeMode: next });
             }
           }}
         >

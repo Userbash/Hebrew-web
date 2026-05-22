@@ -1,5 +1,6 @@
 import { Home, BookOpen, BarChart3, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import api from '../../api/client';
 import type { ReactNode } from 'react';
 
@@ -10,6 +11,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const { setUser } = useAuth();
+  const { t } = useLanguage();
 
   const handleLogout = async () => {
     await api.post('/auth/logout').catch(() => undefined);
@@ -26,28 +28,28 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="app-nav" aria-label="Главная навигация">
+      <nav className="app-nav" aria-label={t.dashboardNavAria}>
         <NavItem 
           icon={<Home size={18} />} 
-          label="Обзор" 
+          label={t.navOverview} 
           active={activeTab === 'overview'} 
           onClick={() => onTabChange('overview')} 
         />
         <NavItem 
           icon={<BookOpen size={18} />} 
-          label="Уроки" 
+          label={t.navLessons} 
           active={activeTab === 'lessons'} 
           onClick={() => onTabChange('lessons')} 
         />
         <NavItem 
           icon={<BarChart3 size={18} />} 
-          label="Прогресс" 
+          label={t.navProgress} 
           active={activeTab === 'progress'} 
           onClick={() => onTabChange('progress')} 
         />
         <NavItem 
           icon={<Settings size={18} />} 
-          label="Настройки" 
+          label={t.navSettings} 
           active={activeTab === 'settings'} 
           onClick={() => onTabChange('settings')} 
         />
@@ -55,7 +57,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
       <button onClick={handleLogout} className="app-logout">
         <LogOut size={18} />
-        <span>Выйти</span>
+        <span>{t.logout}</span>
       </button>
     </aside>
   );

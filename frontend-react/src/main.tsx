@@ -9,6 +9,7 @@ import PermissionGuard from './components/PermissionGuard';
 import LoginForm from './components/LoginForm';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import PreferencesSync from './components/PreferencesSync';
 import { ThemeProvider } from './context/ThemeContext';
 import RegistrationPage from './pages/RegistrationPage';
 import PublicHomePage from './pages/PublicHomePage';
@@ -75,6 +76,7 @@ export default function Root() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <PreferencesSync />
         <ThemeProvider>
           <LanguageProvider>
             <Router />

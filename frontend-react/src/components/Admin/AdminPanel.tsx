@@ -39,6 +39,7 @@ import {
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth, type RoleKey } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import api from '../../api/client';
 import { accessApi, type AccessGroupSummary, type CatalogPermission, type UserRoleAssignment } from '../../api/access';
 import { adminUsersApi, type AdminUser, type AdminUsersListParams, type CreateAdminUserPayload, type UserSession } from '../../api/adminUsers';
@@ -341,7 +342,8 @@ const getSeverity = (value: number, warnAt: number, criticalAt: number): 'health
 };
 export default function AdminPanel() {
   const { user, setUser, hasAnyRole } = useAuth();
-  const { language } = useLanguage();
+  const { t } = useLanguage();
+  const { theme } = useTheme();
 
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [openNavGroups, setOpenNavGroups] = useState<Record<NavGroupId, boolean>>({
@@ -352,34 +354,27 @@ export default function AdminPanel() {
     audit: true,
   });
 
-
-  const A = (ru: string, en: string, he: string) => {
-    if (language === 'ru') return ru;
-    if (language === 'he') return he;
-    return en;
-  };
-
   const NAV_GROUPS = NAV_GROUPS_BASE.map((group) => ({
     ...group,
     title:
-      group.id === 'dashboard' ? A('Панель', 'Dashboard', 'לוח בקרה') :
-      group.id === 'users' ? A('Пользователи', 'Users', 'משתמשים') :
-      group.id === 'groups' ? A('Группы и доступ', 'Groups & access', 'קבוצות והרשאות') :
-      group.id === 'content' ? A('Модерация контента', 'Content moderation', 'ניהול תוכן') :
-      A('Аудит и логи', 'Audit & logs', 'ביקורת ולוגים'),
+      group.id === 'dashboard' ? t.adminNavDashboard :
+      group.id === 'users' ? t.adminNavUsers :
+      group.id === 'groups' ? t.adminNavGroupsAccess :
+      group.id === 'content' ? t.adminNavContentModeration :
+      t.adminNavAuditLogs,
     items: group.items.map((item) => ({
       ...item,
       label:
-        item.id === 'overview' ? A('Обзор и состояние', 'Overview & health', 'סקירה ומצב') :
-        item.id === 'admin-map' ? A('Карта админа и логирование', 'Admin map & logging', 'מפת ניהול ולוגים') :
-        item.id === 'system-monitoring' ? A('Мониторинг системы', 'System monitoring', 'ניטור מערכת') :
-        item.id === 'user-directory' ? A('Каталог', 'Directory', 'ספרייה') :
-        item.id === 'user-create' ? A('Создать пользователя', 'Create user', 'יצירת משתמש') :
-        item.id === 'groups-catalog' ? A('Каталог групп', 'Groups catalog', 'קטלוג קבוצות') :
-        item.id === 'group-assignments' ? A('Назначения пользователей', 'User assignments', 'שיוכי משתמשים') :
-        item.id === 'publications-review' ? A('Очередь публикаций', 'Publications queue', 'תור פרסומים') :
-        item.id === 'audit-trail' ? A('Журнал изменений', 'Change audit trail', 'יומן שינויים') :
-        A('Логи API', 'API activity logs', 'לוגים של API'),
+        item.id === 'overview' ? t.adminSectionOverviewHealth :
+        item.id === 'admin-map' ? t.adminSectionMapLogging :
+        item.id === 'system-monitoring' ? t.adminSectionSystemMonitoring :
+        item.id === 'user-directory' ? t.adminSectionDirectory :
+        item.id === 'user-create' ? t.adminSectionCreateUser :
+        item.id === 'groups-catalog' ? t.adminSectionGroupsCatalog :
+        item.id === 'group-assignments' ? t.adminSectionUserAssignments :
+        item.id === 'publications-review' ? t.adminSectionPublicationsQueue :
+        item.id === 'audit-trail' ? t.adminSectionAuditTrail :
+        t.adminSectionApiLogs,
     })),
   }));
 
@@ -1122,14 +1117,14 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="admin-shell">
+    <div className={'admin-shell admin-shell-' + theme}>
       <aside className="admin-sidebar">
         <div className="admin-brand">
           <div className="admin-brand-main">
             <div className="admin-brand-mark">A</div>
             <div>
-              <strong>{A('Админ-консоль', 'Admin Console', 'קונסולת ניהול')}</strong>
-              <span>{A('Безопасное управление', 'Secure governance', 'ממשל מאובטח')}</span>
+              <strong>{t.adminConsole}</strong>
+              <span>{t.adminSecureGovernance}</span>
             </div>
           </div>
 
@@ -1146,7 +1141,7 @@ export default function AdminPanel() {
               </div>
 
               <div className="admin-user-meta">
-                <div className="admin-sidebar-meta-title">{A('Оператор', 'Operator', 'מפעיל')}</div>
+                <div className="admin-sidebar-meta-title">{t.adminOperatorLabel}</div>
                 <div className="admin-sidebar-meta-value">{currentUserDisplayName}</div>
                 <div className="admin-user-meta-sub">{currentUserRole} • {currentUserStatus}</div>
               </div>
@@ -1170,7 +1165,7 @@ export default function AdminPanel() {
                 </button>
 
                 <div className="admin-user-menu-roles" aria-hidden="true">
-                  {activeRoles.length === 0 && <Badge bg="secondary">{A('нет ролей', 'no roles', 'ללא תפקידים')}</Badge>}
+                  {activeRoles.length === 0 && <Badge bg="secondary">{t.adminNoRoles}</Badge>}
                   {activeRoles.map((role) => (
                     <Badge key={role} bg="primary">{role}</Badge>
                   ))}
@@ -1220,7 +1215,7 @@ export default function AdminPanel() {
 
         <Button variant="outline-light" className="admin-sidebar-logout" onClick={() => void handleLogout()}>
           <LogOut size={15} className="me-2" />
-          {A('Выход из админки', 'Exit admin', 'יציאה מניהול')}
+          {t.adminExit}
         </Button>
 
       </aside>
@@ -1261,11 +1256,11 @@ export default function AdminPanel() {
           <div className="admin-header-row admin-context-summary" aria-live="polite">
             <div className="admin-context-title">
               <Siren size={16} />
-              {A('Что требует внимания сейчас', 'What needs attention now', 'מה דורש תשומת לב כעת')}
+              {t.adminAttentionNow}
             </div>
             <div className="admin-context-items">
               {attentionItems.length === 0 ? (
-                <span className="admin-context-item healthy"><CheckCircle2 size={14} />{A('Критичных сигналов нет', 'No critical signals', 'אין התראות קריטיות')}</span>
+                <span className="admin-context-item healthy"><CheckCircle2 size={14} />{t.adminNoCriticalSignals}</span>
               ) : (
                 attentionItems.map((item) => (
                   <span key={item} className="admin-context-item warning"><AlertTriangle size={14} />{item}</span>
@@ -1285,20 +1280,20 @@ export default function AdminPanel() {
         {busy && (
           <div className="admin-progress">
             <Spinner animation="border" size="sm" />
-            <span>{A('Обработка защищенного запроса...', 'Processing secured request...', 'מעבד בקשה מאובטחת...')}</span>
+            <span>{t.adminProcessingSecureRequest}</span>
           </div>
         )}
 
         <Card className="admin-surface admin-section-helper mb-3">
           <Card.Body>
-            <div className="admin-section-helper-title">{A('Назначение раздела', 'What this section is for', 'מטרת הסעיף')}</div>
+            <div className="admin-section-helper-title">{t.adminSectionPurpose}</div>
             <div className="admin-section-helper-text">{sectionGuide.nextStep}</div>
           </Card.Body>
         </Card>
 
         <Card className="admin-surface admin-user-map mb-3">
           <Card.Body>
-            <div className="admin-section-helper-title">{A('Быстрая карта профиля', 'Profile quick map', 'מפת פרופיל מהירה')}</div>
+            <div className="admin-section-helper-title">{t.adminProfileQuickMap}</div>
             <div className="admin-user-map-grid">
               <button type="button" className="admin-user-map-step" onClick={openUserSettingsModal}>
                 <strong>1. Open Settings</strong>
