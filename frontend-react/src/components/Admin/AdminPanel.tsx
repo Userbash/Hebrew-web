@@ -15,8 +15,10 @@ import {
 } from 'react-bootstrap';
 import {
   Activity,
+  AlertTriangle,
   BadgeCheck,
   BookMarked,
+  CheckCircle2,
   CircleUserRound,
   ChevronDown,
   ChevronRight,
@@ -28,6 +30,7 @@ import {
   LogOut,
   Settings,
   Shield,
+  Siren,
   UserPlus,
   Users,
   UsersRound,
@@ -327,6 +330,11 @@ const toReadableError = (message?: string) => {
   return message;
 };
 
+const getSeverity = (value: number, warnAt: number, criticalAt: number): 'healthy' | 'warning' | 'critical' => {
+  if (value >= criticalAt) return 'critical';
+  if (value >= warnAt) return 'warning';
+  return 'healthy';
+};
 export default function AdminPanel() {
   const { user, setUser, hasAnyRole } = useAuth();
 
@@ -1047,7 +1055,24 @@ export default function AdminPanel() {
     return { riskScore, dbPressure, diskPressure, memoryPressure };
   }, [systemMetrics]);
 
-  const totalRecords = usersTotal + groups.length + publications.length + logsSummary.total;
+  const topTabs = NAV_GROUPS.flatMap((group) => group.items);
+
+  const attentionItems = useMemo(() => {
+    const items: string[] = [];
+    const degradedServices = [
+      getSeverity(systemMetrics?.system.cpu.load_percent_1m || 0, 70, 90),
+      getSeverity(systemMetrics?.system.memory.used_percent || 0, 75, 90),
+      getSeverity(systemMetrics?.database.probe_latency_ms || 0, 200, 500),
+    ].filter((s) => s !== 'healthy').length;
+
+    if (degradedServices > 0) items.push(`${degradedServices} services degraded`);
+    if (visibleUsersSummary.blocked > 0) items.push(`${visibleUsersSummary.blocked} users blocked`);
+    if ((systemMetrics?.database.probe_latency_ms || 0) >= 200) items.push('DB latency rising');
+    if (logsSummary.server_errors > 0) items.push(`${logsSummary.server_errors} server errors`);
+
+    return items.slice(0, 3);
+  }, [systemMetrics, visibleUsersSummary.blocked, logsSummary.server_errors]);
+
 
   const handleLogout = async () => {
     await api.post('/auth/logout').catch(() => undefined);
@@ -1164,43 +1189,54 @@ export default function AdminPanel() {
 
       <main className="admin-main">
         <header className="admin-topbar">
-          <div className="admin-topbar-head">
-            <div className="admin-topbar-badges">
+          <div className="admin-header-row admin-header-row-main">
+            <div className="admin-topbar-title-block">
+              <div className="admin-topbar-path">{sectionMeta.groupTitle} / {sectionMeta.sectionLabel}</div>
+              <h1>{sectionGuide.title}</h1>
+              <p>{sectionGuide.description}</p>
+            </div>
+
+            <div className="admin-topbar-actions" aria-label="Page actions">
               <Badge className="badge-soft">Users: {usersTotal}</Badge>
               <Badge className="badge-soft">Groups: {groups.length}</Badge>
               <Badge className="badge-soft">Publications: {publications.length}</Badge>
-              <Badge className="badge-soft">Logs: {logsSummary.total}</Badge>
-              <Badge className="badge-soft">Records: {totalRecords}</Badge>
               <Badge className="badge-soft">Changes: {auditSummary.total}</Badge>
             </div>
           </div>
 
-          <div className="admin-topbar-title-block">
-            <div className="admin-topbar-path">{sectionMeta.groupTitle} / {sectionMeta.sectionLabel}</div>
-            <h1>{sectionGuide.title}</h1>
-            <p>{sectionGuide.description}</p>
+          <div className="admin-header-row admin-top-tabs" role="tablist" aria-label="Quick sections">
+            {topTabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={activeSection === item.id}
+                className={`admin-top-tab ${activeSection === item.id ? 'active' : ''}`}
+                onClick={() => setActiveSection(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="admin-header-row admin-context-summary" aria-live="polite">
+            <div className="admin-context-title">
+              <Siren size={16} />
+              What needs attention now
+            </div>
+            <div className="admin-context-items">
+              {attentionItems.length === 0 ? (
+                <span className="admin-context-item healthy"><CheckCircle2 size={14} />No critical signals</span>
+              ) : (
+                attentionItems.map((item) => (
+                  <span key={item} className="admin-context-item warning"><AlertTriangle size={14} />{item}</span>
+                ))
+              )}
+            </div>
           </div>
         </header>
 
-        <Card className="admin-surface admin-quick-nav mb-3">
-          <Card.Body>
-            <div className="admin-quick-nav-title">Quick sections</div>
-            <div className="admin-quick-nav-row">
-              {NAV_GROUPS.flatMap((group) => group.items).map((item) => (
-                <Button
-                  key={item.id}
-                  size="sm"
-                  variant={activeSection === item.id ? 'primary' : 'outline-light'}
-                  onClick={() => setActiveSection(item.id)}
-                >
-                  {item.label}
-                </Button>
-              ))}
-            </div>
-          </Card.Body>
-        </Card>
-
-        {(error || okMessage) && (
+{(error || okMessage) && (
           <div className="admin-message-stack">
             {error && <Alert variant="danger" className="mb-0">{error}</Alert>}
             {okMessage && <Alert variant="success" className="mb-0">{okMessage}</Alert>}

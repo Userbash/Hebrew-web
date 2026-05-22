@@ -1,0 +1,85 @@
+version: '3.9'
+
+# Admin split overlay.
+# Usage:
+# 1) Keep existing stack running from docker-compose.yml
+# 2) Run admin split as overlay: docker compose -f docker-compose.yml -f docker-compose.admin.yml up -d
+# 3) This file adds isolated admin frontend route and stricter edge controls.
+
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILES:-5}"
+    labels: "com.hebrew.service,com.hebrew.component,com.hebrew.log_pipeline"
+
+services:
+  # Extra backend labels for admin host routing to same API service.
+  backend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
+
+      # Admin domain API routing (same backend, isolated origin).
+      - "traefik.http.routers.backend-admin-api.rule=Host(`${ADMIN_DOMAIN_NAME}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend-admin-api.entrypoints=web"
+      - "traefik.http.routers.backend-admin-api.service=backend"
+      - "traefik.http.routers.backend-admin-api.middlewares=admin-api-ratelimit,admin-api-sec-headers"
+
+      # Traefik middlewares for admin API security hardening.
+      - "traefik.http.middlewares.admin-api-ratelimit.ratelimit.average=25"
+      - "traefik.http.middlewares.admin-api-ratelimit.ratelimit.burst=50"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.referrerPolicy=no-referrer"
+      - "traefik.http.middlewares.admin-api-sec-headers.headers.customRequestHeaders.X-Admin-Origin=true"
+
+  admin-frontend:
+    build:
+      context: ./frontend-react
+      dockerfile: Dockerfile
+    container_name: hebrew_ai_admin_frontend
+    environment:
+      # This variable is documentation-only unless frontend build reads it.
+      # Keep API same-origin through Traefik (recommended): /api
+      VITE_API_BASE_URL: /api
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-admin.rule=Host(`${ADMIN_DOMAIN_NAME}`)"
+      - "traefik.http.routers.frontend-admin.entrypoints=web"
+      - "traefik.http.services.frontend-admin.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend-admin.middlewares=admin-web-sec-headers"
+
+      # Admin web response headers.
+      - "traefik.http.middlewares.admin-web-sec-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.admin-web-sec-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.admin-web-sec-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.admin-web-sec-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.admin-web-sec-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.admin-web-sec-headers.headers.referrerPolicy=no-referrer"
+
+      - "com.hebrew.service=admin-frontend"
+      - "com.hebrew.component=admin-web"
+      - "com.hebrew.log_pipeline=loki"
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - web
+
+networks:
+  web:
+    name: ${WEB_NETWORK_NAME:-hebrew-web_web}
+    external: true
