@@ -92,6 +92,31 @@ const getPublicationById = async (id: string) => {
 };
 
 /**
+ * GET /api/publications/public
+ * Public read-only endpoint for published and public visibility content.
+ */
+router.get(
+  '/public',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const publicationsRes = await db.query(
+      `SELECT id, name, description, category, price, metadata, created_at, updated_at
+       FROM items
+       WHERE category = 'publication'
+         AND COALESCE(metadata->>'status', 'draft') = 'published'
+         AND COALESCE(metadata->>'visibility', 'private') = 'public'
+       ORDER BY updated_at DESC
+       LIMIT 200`
+    );
+
+    res.status(200).json({
+      success: true,
+      publications: publicationsRes.rows,
+      count: publicationsRes.rows.length,
+    });
+  })
+);
+
+/**
  * GET /api/publications
  * Admin visibility endpoint (read.any).
  */

@@ -7,10 +7,10 @@ import { Mail, Lock, Loader2, Eye, EyeOff, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getDefaultRouteForUser } from '../security/adminAccess';
 import api from '../api/client';
+import UiPreferencesControls from '../components/Layout/UiPreferencesControls';
 
 const registrationSchema = z.object({
   email: z.string().email('Некорректный email'),
@@ -46,8 +46,7 @@ const RegistrationPage: React.FC = () => {
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [usernameSuggestions, setUsernameSuggestions] = React.useState<string[]>([]);
-  const { language, setLanguage, t } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
   const { setUser } = useAuth();
   const navigate = useNavigate();
 
@@ -99,21 +98,7 @@ const RegistrationPage: React.FC = () => {
 
   return (
     <main className="login-page">
-      <div className="login-topbar">
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value as 'en' | 'ru' | 'he')}
-          className="login-select"
-          aria-label={t.languageAria}
-        >
-          <option value="en">English</option>
-          <option value="ru">Русский</option>
-          <option value="he">עברית</option>
-        </select>
-        <button onClick={toggleTheme} className="login-icon-button" aria-label={t.toggleThemeAria}>
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
-      </div>
+      <UiPreferencesControls className="login-topbar" />
 
       <section className="login-layout">
         <div className="login-copy">
@@ -122,11 +107,7 @@ const RegistrationPage: React.FC = () => {
           <p>{t.registerHeroDesc}</p>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="login-card"
-        >
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="login-card">
           <div className="login-card-header">
             <h2>{t.registerCardTitle}</h2>
           </div>
@@ -146,9 +127,9 @@ const RegistrationPage: React.FC = () => {
                       key={suggestion}
                       type="button"
                       onClick={() => setValue('username', suggestion, { shouldDirty: true, shouldValidate: true })}
-                      className="underline decoration-dotted mx-1"
+                      className="site-link-btn"
                     >
-                      {suggestion}{index < usernameSuggestions.length - 1 ? ',' : ''}
+                      {suggestion}{index < usernameSuggestions.length - 1 ? ', ' : ''}
                     </button>
                   ))}
                 </div>
@@ -189,14 +170,14 @@ const RegistrationPage: React.FC = () => {
               {errors.confirmPassword && <p className="login-error">{errors.confirmPassword.message}</p>}
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-500 font-bold">
-              <input type="checkbox" {...register('acceptTerms')} className="accent-blue-600" />
+            <label className="d-flex align-items-center gap-2 small fw-bold text-secondary">
+              <input type="checkbox" {...register('acceptTerms')} className="form-check-input m-0" />
               {t.acceptTerms}
             </label>
             {errors.acceptTerms && <p className="login-error">{errors.acceptTerms.message}</p>}
 
-            <button type="submit" disabled={isSubmitting} className="login-submit">
-              {isSubmitting ? <Loader2 className="animate-spin" /> : t.registerSubmit}
+            <button type="submit" disabled={isSubmitting} className="login-submit d-inline-flex justify-content-center align-items-center gap-2">
+              {isSubmitting ? <Loader2 className="spin" /> : t.registerSubmit}
             </button>
           </form>
 

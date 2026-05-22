@@ -15,6 +15,7 @@ import { useAuth } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 import { useLanguage } from './context/LanguageContext';
 import api from './api/client';
+import UiPreferencesControls from './components/Layout/UiPreferencesControls';
 
 export default function App() {
   const { user, setUser } = useAuth();
@@ -59,6 +60,7 @@ export default function App() {
             <p>{t.dashboardSubtitle}</p>
           </div>
           <div className="app-header-actions">
+            <UiPreferencesControls />
             <div className="app-search">
               <Search size={17} />
               <input placeholder={t.searchPlaceholder} />

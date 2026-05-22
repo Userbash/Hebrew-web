@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 export type Language = 'ru' | 'en' | 'he';
 
@@ -14,7 +15,11 @@ interface Translations {
 
   loginSettingsAria: string;
   languageAria: string;
+  languageSystem: string;
   toggleThemeAria: string;
+  themeSystem: string;
+  themeLight: string;
+  themeDark: string;
   loginHeroTitle: string;
   loginHeroDesc: string;
   loginCardKicker: string;
@@ -96,7 +101,11 @@ const translations: Record<Language, Translations> = {
 
     loginSettingsAria: 'Настройки входа',
     languageAria: 'Язык интерфейса',
+    languageSystem: 'Системный',
     toggleThemeAria: 'Переключить тему',
+    themeSystem: 'Системная',
+    themeLight: 'Светлая',
+    themeDark: 'Темная',
     loginHeroTitle: 'Учите иврит в понятном рабочем кабинете',
     loginHeroDesc: 'Войдите, чтобы продолжить уроки, повторить слова и посмотреть прогресс без лишних панелей и сложных настроек.',
     loginCardKicker: 'Личный кабинет',
@@ -176,7 +185,11 @@ const translations: Record<Language, Translations> = {
 
     loginSettingsAria: 'Login settings',
     languageAria: 'Interface language',
+    languageSystem: 'System',
     toggleThemeAria: 'Toggle theme',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     loginHeroTitle: 'Learn Hebrew in a clear workspace',
     loginHeroDesc: 'Sign in to continue lessons, review words, and track progress without extra complexity.',
     loginCardKicker: 'Personal account',
@@ -256,7 +269,11 @@ const translations: Record<Language, Translations> = {
 
     loginSettingsAria: 'הגדרות התחברות',
     languageAria: 'שפת ממשק',
+    languageSystem: 'מערכת',
     toggleThemeAria: 'החלף ערכת נושא',
+    themeSystem: 'מערכת',
+    themeLight: 'בהיר',
+    themeDark: 'כהה',
     loginHeroTitle: 'למד עברית בסביבת עבודה ברורה',
     loginHeroDesc: 'התחבר כדי להמשיך שיעורים, לחזור על מילים ולעקוב אחרי ההתקדמות בלי עומס מיותר.',
     loginCardKicker: 'אזור אישי',
@@ -328,22 +345,23 @@ const translations: Record<Language, Translations> = {
 
 interface LanguageContextType {
   language: Language;
+  languageMode: Language | 'system';
   t: Translations;
   setLanguage: (lang: Language) => void;
+  setLanguageMode: (mode: Language | 'system') => void;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 const LANGUAGE_STORAGE_KEY = 'ui_language';
+const LANGUAGE_MODE_STORAGE_KEY = 'ui_language_mode';
 
-const getInitialLanguage = (): Language => {
+const getScopedKey = (base: string, userId?: string | null) =>
+  userId ? `${base}:${userId}` : base;
+
+const detectBrowserLanguage = (): Language => {
   if (typeof window === 'undefined') {
     return 'en';
-  }
-
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  if (stored === 'ru' || stored === 'en' || stored === 'he') {
-    return stored;
   }
 
   const browserLang = window.navigator.language.split('-')[0];
@@ -352,24 +370,113 @@ const getInitialLanguage = (): Language => {
   return 'en';
 };
 
+const readStoredLanguageMode = (userId?: string | null): Language | 'system' => {
+  if (typeof window === 'undefined') {
+    return 'system';
+  }
+
+  const scoped = window.localStorage.getItem(getScopedKey(LANGUAGE_MODE_STORAGE_KEY, userId));
+  const fallback = window.localStorage.getItem(LANGUAGE_MODE_STORAGE_KEY);
+  const value = scoped || fallback;
+
+  if (value === 'ru' || value === 'en' || value === 'he' || value === 'system') {
+    return value;
+  }
+
+  return 'system';
+};
+
+const readStoredLanguage = (userId?: string | null): Language | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const scoped = window.localStorage.getItem(getScopedKey(LANGUAGE_STORAGE_KEY, userId));
+  const fallback = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  const value = scoped || fallback;
+
+  if (value === 'ru' || value === 'en' || value === 'he') {
+    return value;
+  }
+
+  return null;
+};
+
+const resolveLanguage = (mode: Language | 'system'): Language => {
+  if (mode === 'system') {
+    return detectBrowserLanguage();
+  }
+
+  return mode;
+};
+
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguage] = useState<Language>(getInitialLanguage);
+  const { user } = useAuth();
+
+  const [languageMode, setLanguageMode] = useState<Language | 'system'>(() => readStoredLanguageMode(null));
+  const [language, setLanguageState] = useState<Language>(() => {
+    const mode = readStoredLanguageMode(null);
+    const storedLanguage = readStoredLanguage(null);
+    if (mode !== 'system') return mode;
+    return storedLanguage || detectBrowserLanguage();
+  });
+
+  useEffect(() => {
+    const remoteMode = user?.ui_preferences?.languageMode;
+    const remoteLanguage = user?.ui_preferences?.language;
+
+    if (remoteMode === 'ru' || remoteMode === 'en' || remoteMode === 'he' || remoteMode === 'system') {
+      setLanguageMode(remoteMode);
+      setLanguage(resolveLanguage(remoteMode));
+      return;
+    }
+
+    if (remoteLanguage === 'ru' || remoteLanguage === 'en' || remoteLanguage === 'he') {
+      setLanguageMode(remoteLanguage);
+      setLanguage(remoteLanguage);
+      return;
+    }
+
+    const localMode = readStoredLanguageMode(user?.id ?? null);
+    setLanguageMode(localMode);
+    const localLanguage = localMode === 'system'
+      ? (readStoredLanguage(user?.id ?? null) || detectBrowserLanguage())
+      : localMode;
+    setLanguage(localLanguage);
+  }, [user?.id, user?.ui_preferences?.language, user?.ui_preferences?.languageMode]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+      window.localStorage.setItem(getScopedKey(LANGUAGE_MODE_STORAGE_KEY, user?.id ?? null), languageMode);
+      window.localStorage.setItem(getScopedKey(LANGUAGE_STORAGE_KEY, user?.id ?? null), language);
     }
 
     if (typeof document !== 'undefined') {
       document.documentElement.lang = language;
       document.documentElement.dir = language === 'he' ? 'rtl' : 'ltr';
     }
-  }, [language]);
+  }, [language, languageMode, user?.id]);
+
+  useEffect(() => {
+    if (languageMode === 'system') {
+      setLanguage(resolveLanguage('system'));
+    }
+  }, [languageMode]);
+
+  const setLanguage = (lang: Language) => {
+    setLanguageMode(lang);
+    setLanguageState(lang);
+  };
+
+  const setLanguageModeSafe = (mode: Language | 'system') => {
+    setLanguageMode(mode);
+    setLanguageState(resolveLanguage(mode));
+  };
 
   const t = translations[language];
 
   return (
-    <LanguageContext.Provider value={{ language, t, setLanguage }}>
+    <LanguageContext.Provider value={{ language, languageMode, t, setLanguage, setLanguageMode: setLanguageModeSafe }}>
       <div dir={language === 'he' ? 'rtl' : 'ltr'}>
         {children}
       </div>

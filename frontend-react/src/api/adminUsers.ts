@@ -109,4 +109,34 @@ export const adminUsersApi = {
     const { data } = await api.get(`/admin/users/${userId}/sessions`);
     return data as { success: boolean; sessions: UserSession[]; count: number };
   },
+
+  getUserPermissions: async (userId: string) => {
+    const { data } = await api.get(`/admin/users/${userId}/permissions`);
+    return data as {
+      success: boolean;
+      user: AdminUser;
+      roles: string[];
+      permissions: string[];
+      availableRoles: string[];
+      availablePermissions: string[];
+    };
+  },
+
+  updateUserPermissions: async (userId: string, payload: { roles: string[]; permissions: string[] }) => {
+    const { data } = await api.patch(`/admin/users/${userId}/permissions`, payload);
+    return data as { success: boolean; message: string; roles: string[]; permissions: string[] };
+  },
+
+  getAvailableRoles: async () => {
+    const { data } = await api.get('/admin/access/roles');
+    return data as { success: boolean; roles: Array<{ role_key: string }>; count: number };
+  },
+
+  getAvailablePermissions: async () => {
+    const { data } = await api.get('/admin/access/catalog');
+    return data as {
+      success: boolean;
+      permissions: Array<{ permission_name: string }>;
+    };
+  },
 };

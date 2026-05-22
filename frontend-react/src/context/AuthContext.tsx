@@ -20,6 +20,17 @@ export interface AccessProfile {
   isSystemBlocked: boolean;
 }
 
+export interface UserUiPreferences {
+  language?: 'ru' | 'en' | 'he';
+  languageMode?: 'system' | 'ru' | 'en' | 'he';
+  themeMode?: 'system' | 'light' | 'dark';
+  timezone?: string;
+  density?: 'compact' | 'comfortable';
+  reduceMotion?: boolean;
+  adminLandingSection?: string;
+  dashboardLayout?: 'classic' | 'focus';
+}
+
 export interface User {
   id: string;
   email: string;
@@ -34,6 +45,7 @@ export interface User {
   registered_at?: string;
   last_login?: string;
   access?: AccessProfile | null;
+  ui_preferences?: UserUiPreferences;
 }
 
 interface AuthContextValue {

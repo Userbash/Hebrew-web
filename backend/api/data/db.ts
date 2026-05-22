@@ -48,6 +48,7 @@ type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 type JsonObject = { [key: string]: JsonValue };
 
 export interface UserRow {
+    ui_preferences?: Record<string, unknown> | null;
     id: string;
     email: string;
     username: string;
@@ -131,6 +132,7 @@ const toPublicUser = (user: UserRow) => ({
     role: user.role,
     xp_total: user.xp_total,
     level: user.level,
+    ui_preferences: user.ui_preferences ?? {},
     created_at: user.created_at,
     updated_at: user.updated_at,
     registered_at: user.registered_at,
@@ -276,7 +278,7 @@ export const db = {
         }
 
         const query = `
-            SELECT id, email, username, first_name, last_name, role, xp_total, level, streak, created_at, updated_at, registered_at, last_login
+            SELECT id, email, username, first_name, last_name, role, xp_total, level, streak, created_at, updated_at, registered_at, last_login, ui_preferences
             FROM users
             WHERE id = $1 AND deleted_at IS NULL
             LIMIT 1

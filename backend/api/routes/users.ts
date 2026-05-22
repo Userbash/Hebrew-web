@@ -11,7 +11,9 @@ import {
   requirePermission,
   type RequestWithAccess,
 } from '../middleware/authorization.js';
-import { asyncHandler, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { asyncHandler, ForbiddenError, NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { setAuditContext } from '../middleware/auditTrail.js';
+import { clearAccessProfileCache, getUserAccessProfile } from '../security/rbacService.js';
 import {
   isValidEmail,
   isValidUsername,
@@ -52,17 +54,84 @@ const parseBooleanQuery = (value: unknown): boolean | undefined => {
 };
 
 const USER_SORT_COLUMNS = {
-  id: 'u.id',
-  username: 'u.username',
-  email: 'u.email',
-  created_at: 'u.created_at',
-  updated_at: 'u.updated_at',
-  registered_at: 'u.registered_at',
-  last_login: 'u.last_login',
-  xp_total: 'u.xp_total',
-  level: 'u.level',
-  publication_count: 'publication_count',
+  id: "u.id",
+  username: "u.username",
+  email: "u.email",
+  created_at: "u.created_at",
+  updated_at: "u.updated_at",
+  registered_at: "u.registered_at",
+  last_login: "u.last_login",
+  xp_total: "u.xp_total",
+  level: "u.level",
+  publication_count: "publication_count",
 } as const;
+
+const ALLOWED_UI_THEME_MODES = new Set(["system", "light", "dark"]);
+const ALLOWED_UI_LANGUAGES = new Set(["ru", "en", "he"]);
+
+interface UserUiPreferences {
+  language?: "ru" | "en" | "he";
+  languageMode?: "system" | "ru" | "en" | "he";
+  themeMode?: "system" | "light" | "dark";
+  timezone?: string;
+  density?: "compact" | "comfortable";
+  reduceMotion?: boolean;
+  adminLandingSection?: string;
+  dashboardLayout?: "classic" | "focus";
+}
+
+const sanitizeUiPreferences = (input: unknown): UserUiPreferences => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new ValidationError("preferences must be an object");
+  }
+
+  const payload = input as Record<string, unknown>;
+  const next: UserUiPreferences = {};
+
+  if (typeof payload.language === "string" && ALLOWED_UI_LANGUAGES.has(payload.language)) {
+    next.language = payload.language as UserUiPreferences["language"];
+  }
+
+  if (payload.languageMode === "system" || (typeof payload.languageMode === "string" && ALLOWED_UI_LANGUAGES.has(payload.languageMode))) {
+    next.languageMode = payload.languageMode as UserUiPreferences["languageMode"];
+  }
+
+  if (typeof payload.themeMode === "string" && ALLOWED_UI_THEME_MODES.has(payload.themeMode)) {
+    next.themeMode = payload.themeMode as UserUiPreferences["themeMode"];
+  }
+
+  if (typeof payload.timezone === "string") {
+    const trimmed = payload.timezone.trim();
+    if (trimmed.length > 0 && trimmed.length <= 64) {
+      next.timezone = trimmed;
+    }
+  }
+
+  if (payload.density === "compact" || payload.density === "comfortable") {
+    next.density = payload.density;
+  }
+
+  if (typeof payload.reduceMotion === "boolean") {
+    next.reduceMotion = payload.reduceMotion;
+  }
+
+  if (typeof payload.adminLandingSection === "string") {
+    const trimmed = payload.adminLandingSection.trim();
+    if (trimmed.length > 0 && trimmed.length <= 64) {
+      next.adminLandingSection = trimmed;
+    }
+  }
+
+  if (payload.dashboardLayout === "classic" || payload.dashboardLayout === "focus") {
+    next.dashboardLayout = payload.dashboardLayout;
+  }
+
+  if (Object.keys(next).length === 0) {
+    throw new ValidationError("No valid preference fields provided");
+  }
+
+  return next;
+};
 
 /**
  * GET /api/users/profile
@@ -118,6 +187,76 @@ router.put(
       success: true,
       message: 'Profile updated successfully',
       user,
+    });
+  })
+);
+
+/**
+ * GET /api/users/preferences
+ * Returns current user UI preferences.
+ */
+router.get(
+  "/preferences",
+  verifyToken,
+  requirePermission("users", "read", "own"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as RequestWithAuth;
+    const user = await db.getUserById(authReq.userId);
+
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    res.status(200).json({
+      success: true,
+      preferences: user.ui_preferences || {},
+    });
+  })
+);
+
+/**
+ * PUT /api/users/preferences
+ * Updates current user UI preferences.
+ */
+router.put(
+  "/preferences",
+  verifyToken,
+  requirePermission("users", "update", "own"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as RequestWithAuth;
+    const patch = sanitizeUiPreferences(req.body?.preferences ?? req.body);
+
+    const updated = await db.query(
+      `UPDATE users
+       SET ui_preferences = COALESCE(ui_preferences, '{}'::jsonb) || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND deleted_at IS NULL
+       RETURNING id, ui_preferences`,
+      [JSON.stringify(patch), authReq.userId]
+    );
+
+    const row = updated.rows[0] as { id: string; ui_preferences: Record<string, unknown> } | undefined;
+
+    if (!row) {
+      throw new NotFoundError("User not found");
+    }
+
+    const user = await db.getUserById(authReq.userId);
+    if (user) {
+      await db.cacheUser(user);
+    }
+
+    setAuditContext(res, {
+      resource: "users",
+      action: "update",
+      targetType: "user",
+      targetId: authReq.userId,
+      message: "Updated user UI preferences",
+    });
+
+    res.status(200).json({
+      success: true,
+      preferences: row.ui_preferences || {},
     });
   })
 );
@@ -634,6 +773,367 @@ router.get(
     }
 
     res.status(200).json({ success: true, user });
+  })
+);
+
+
+const ADMIN_ROLE_KEYS = new Set(['root', 'platform_admin']);
+
+const parseStringArray = (value: unknown, fieldName: string) => {
+  if (!Array.isArray(value)) {
+    throw new ValidationError(fieldName + ' must be an array of strings');
+  }
+
+  const normalized = value.map((item) => {
+    if (typeof item !== 'string') {
+      throw new ValidationError(fieldName + ' must contain only strings');
+    }
+
+    const next = item.trim().toLowerCase();
+    if (!next) {
+      throw new ValidationError(fieldName + ' contains empty value');
+    }
+
+    return next;
+  });
+
+  return Array.from(new Set(normalized));
+};
+
+const isSuperadminLike = (roleKeys: string[], legacyRole?: string | null) => {
+  if (String(legacyRole || '').toLowerCase() === 'superadmin') {
+    return true;
+  }
+
+  return roleKeys.some((role) => ADMIN_ROLE_KEYS.has(role));
+};
+
+const ensurePermissionManageAccess = async (userId: string) => {
+  const hasNamedRes = await db.query(
+    `SELECT 1
+     FROM user_roles ur
+     JOIN roles r ON r.id = ur.role_id
+     JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
+     JOIN permissions p ON p.id = rp.permission_id
+     WHERE ur.user_id = $1
+       AND ur.is_active = TRUE
+       AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+       AND p.permission_name = 'users.permissions.manage'
+     LIMIT 1`,
+    [userId]
+  );
+
+  if ((hasNamedRes.rowCount || 0) > 0) {
+    return;
+  }
+
+  const fallbackRes = await db.query(
+    `SELECT 1
+     FROM user_roles ur
+     JOIN roles r ON r.id = ur.role_id
+     JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
+     JOIN permissions p ON p.id = rp.permission_id
+     WHERE ur.user_id = $1
+       AND ur.is_active = TRUE
+       AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+       AND p.resource = 'users'
+       AND p.action = 'update'
+       AND p.scope = 'any'
+     LIMIT 1`,
+    [userId]
+  );
+
+  if ((fallbackRes.rowCount || 0) === 0) {
+    throw new ForbiddenError('Missing permission: users.permissions.manage');
+  }
+};
+
+/**
+ * GET /api/users/:id/permissions
+ * Read current role+permission snapshot for user permissions editor.
+ */
+router.get(
+  '/:id/permissions',
+  verifyToken,
+  requirePermission('users', 'read', 'any'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as RequestWithAuth;
+    await ensurePermissionManageAccess(authReq.userId);
+
+    const targetId = req.params.id;
+    const userRes = await db.query(
+      `SELECT id, email, username, role, deleted_at
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [targetId]
+    );
+
+    const targetUser = userRes.rows[0] as { id: string; email: string; username: string; role: string; deleted_at: string | null } | undefined;
+    if (!targetUser) {
+      throw new NotFoundError('User not found');
+    }
+
+    const rolesRes = await db.query(
+      `SELECT DISTINCT r.role_key
+       FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+       WHERE ur.user_id = $1
+         AND ur.is_active = TRUE
+         AND ur.revoked_at IS NULL
+         AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+       ORDER BY r.role_key`,
+      [targetId]
+    );
+
+    const permissionsRes = await db.query(
+      `SELECT DISTINCT p.permission_name
+       FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+       JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
+       JOIN permissions p ON p.id = rp.permission_id
+       WHERE ur.user_id = $1
+         AND ur.is_active = TRUE
+         AND ur.revoked_at IS NULL
+         AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+       ORDER BY p.permission_name`,
+      [targetId]
+    );
+
+    const availableRolesRes = await db.query(
+      `SELECT role_key FROM roles ORDER BY priority DESC, role_key ASC`
+    );
+
+    const availablePermissionsRes = await db.query(
+      `SELECT permission_name FROM permissions ORDER BY permission_name ASC`
+    );
+
+    res.status(200).json({
+      success: true,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        username: targetUser.username,
+        role: targetUser.role,
+        rbac_roles: rolesRes.rows.map((row) => String((row as { role_key: string }).role_key)),
+      },
+      roles: rolesRes.rows.map((row) => String((row as { role_key: string }).role_key)),
+      permissions: permissionsRes.rows.map((row) => String((row as { permission_name: string }).permission_name)),
+      availableRoles: availableRolesRes.rows.map((row) => String((row as { role_key: string }).role_key)),
+      availablePermissions: availablePermissionsRes.rows.map((row) => String((row as { permission_name: string }).permission_name)),
+    });
+  })
+);
+
+/**
+ * PATCH /api/users/:id/permissions
+ * Updates role assignments with strict security checks.
+ */
+router.patch(
+  '/:id/permissions',
+  verifyToken,
+  requirePermission('users', 'update', 'any'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as RequestWithAuth;
+    await ensurePermissionManageAccess(authReq.userId);
+
+    const targetId = req.params.id;
+    const nextRoles = parseStringArray(req.body?.roles, 'roles');
+    const nextPermissions = parseStringArray(req.body?.permissions, 'permissions');
+
+    if (targetId === authReq.userId) {
+      throw new ForbiddenError('Cannot edit own permissions');
+    }
+
+    const actorUser = await db.getUserById(authReq.userId);
+    const targetUser = await db.getUserById(targetId);
+    if (!actorUser || !targetUser) {
+      throw new NotFoundError('User not found');
+    }
+
+    const actorProfile = await getUserAccessProfile(authReq.userId);
+    const targetProfile = await getUserAccessProfile(targetId);
+    if (!actorProfile || !targetProfile) {
+      throw new NotFoundError('Access profile not found');
+    }
+
+    const actorSuperadmin = isSuperadminLike(actorProfile.roleKeys as string[], actorUser.role);
+    const targetSuperadmin = isSuperadminLike(targetProfile.roleKeys as string[], targetUser.role);
+
+    if (targetSuperadmin && !actorSuperadmin) {
+      throw new ForbiddenError('Cannot edit superadmin permissions');
+    }
+
+    const rolesRes = await db.query(
+      `SELECT id, role_key
+       FROM roles
+       WHERE role_key = ANY($1::text[])`,
+      [nextRoles]
+    );
+
+    const foundRoles = new Set(rolesRes.rows.map((row) => String((row as { role_key: string }).role_key)));
+    const unknownRoles = nextRoles.filter((role) => !foundRoles.has(role));
+    if (unknownRoles.length > 0) {
+      throw new ValidationError('Unknown roles: ' + unknownRoles.join(', '));
+    }
+
+    const permissionsRes = await db.query(
+      `SELECT permission_name
+       FROM permissions
+       WHERE permission_name = ANY($1::text[])`,
+      [nextPermissions]
+    );
+
+    const foundPermissions = new Set(permissionsRes.rows.map((row) => String((row as { permission_name: string }).permission_name)));
+    const unknownPermissions = nextPermissions.filter((permission) => !foundPermissions.has(permission));
+    if (unknownPermissions.length > 0) {
+      throw new ValidationError('Unknown permissions: ' + unknownPermissions.join(', '));
+    }
+
+    const derivedPermissionsRes = await db.query(
+      `SELECT DISTINCT p.permission_name
+       FROM role_permissions rp
+       JOIN permissions p ON p.id = rp.permission_id
+       JOIN roles r ON r.id = rp.role_id
+       WHERE rp.granted = TRUE
+         AND r.role_key = ANY($1::text[])
+       ORDER BY p.permission_name`,
+      [nextRoles]
+    );
+
+    const derivedPermissions = derivedPermissionsRes.rows.map((row) => String((row as { permission_name: string }).permission_name));
+    const derivedSet = new Set(derivedPermissions);
+    const requestedSet = new Set(nextPermissions);
+
+    const mismatch = derivedPermissions.length !== nextPermissions.length
+      || derivedPermissions.some((permission) => !requestedSet.has(permission))
+      || nextPermissions.some((permission) => !derivedSet.has(permission));
+
+    if (mismatch) {
+      throw new ValidationError('permissions must match effective permissions derived from selected roles');
+    }
+
+    const assignsAdminRole = nextRoles.some((role) => ADMIN_ROLE_KEYS.has(role));
+    if (!actorSuperadmin && nextRoles.includes('root')) {
+      throw new ForbiddenError('Only superadmin can assign superadmin role');
+    }
+
+    if (!assignsAdminRole && targetProfile.roleKeys.some((role) => ADMIN_ROLE_KEYS.has(String(role)))) {
+      const adminCountRes = await db.query(
+        `SELECT COUNT(DISTINCT ur.user_id)::int AS admin_count
+         FROM user_roles ur
+         JOIN roles r ON r.id = ur.role_id
+         JOIN users u ON u.id = ur.user_id
+         WHERE ur.is_active = TRUE
+           AND ur.revoked_at IS NULL
+           AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+           AND u.deleted_at IS NULL
+           AND r.role_key IN ('root', 'platform_admin')`
+      );
+
+      const adminCount = Number((adminCountRes.rows[0] as { admin_count?: number } | undefined)?.admin_count || 0);
+      if (adminCount <= 1) {
+        throw new ForbiddenError('Cannot remove the last administrator');
+      }
+    }
+
+    const beforeRolesRes = await db.query(
+      `SELECT DISTINCT r.role_key
+       FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+       WHERE ur.user_id = $1
+         AND ur.is_active = TRUE
+         AND ur.revoked_at IS NULL
+         AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+       ORDER BY r.role_key`,
+      [targetId]
+    );
+
+    const beforePermissionsRes = await db.query(
+      `SELECT DISTINCT p.permission_name
+       FROM user_roles ur
+       JOIN roles r ON r.id = ur.role_id
+       JOIN role_permissions rp ON rp.role_id = r.id AND rp.granted = TRUE
+       JOIN permissions p ON p.id = rp.permission_id
+       WHERE ur.user_id = $1
+         AND ur.is_active = TRUE
+         AND ur.revoked_at IS NULL
+         AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+       ORDER BY p.permission_name`,
+      [targetId]
+    );
+
+    const beforeRoles = beforeRolesRes.rows.map((row) => String((row as { role_key: string }).role_key));
+    const beforePermissions = beforePermissionsRes.rows.map((row) => String((row as { permission_name: string }).permission_name));
+
+    await db.query('BEGIN');
+
+    try {
+      await db.query(
+        `UPDATE user_roles
+         SET is_active = FALSE,
+             revoked_at = CURRENT_TIMESTAMP,
+             note = 'permissions update via admin panel'
+         WHERE user_id = $1
+           AND is_active = TRUE
+           AND revoked_at IS NULL`,
+        [targetId]
+      );
+
+      for (const roleRow of rolesRes.rows as Array<{ id: string; role_key: string }>) {
+        await db.query(
+          `INSERT INTO user_roles (user_id, role_id, assigned_by, note, is_active)
+           VALUES ($1, $2, $3, $4, TRUE)`,
+          [targetId, roleRow.id, authReq.userId, 'permissions update via admin panel']
+        );
+      }
+
+      const legacyRole = assignsAdminRole ? 'admin' : 'user';
+      await db.query(
+        `UPDATE users
+         SET role = $2,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [targetId, legacyRole]
+      );
+
+      await db.query('COMMIT');
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    }
+
+    clearAccessProfileCache(targetId);
+
+    setAuditContext(res, {
+      action: 'users.permissions.update',
+      resource: 'users.permissions',
+      targetType: 'user',
+      targetId,
+      message: 'User permissions updated',
+      metadata: {
+        actorId: authReq.userId,
+        targetUserId: targetId,
+        before: {
+          roles: beforeRoles,
+          permissions: beforePermissions,
+        },
+        after: {
+          roles: nextRoles,
+          permissions: nextPermissions,
+        },
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'User permissions updated',
+      roles: nextRoles,
+      permissions: nextPermissions,
+    });
   })
 );
 

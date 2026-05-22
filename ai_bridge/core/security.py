@@ -15,7 +15,7 @@ SECRET_PATTERNS = [
 @dataclass(slots=True)
 class SecurityPolicy:
     allow_shell: bool = True
-    shell_allowlist: list[str] = field(default_factory=lambda: ["pytest", "python -m pytest", "npm test", "npx @google/gemini-cli generate"])
+    shell_allowlist: list[str] = field(default_factory=lambda: ["pytest", "python -m pytest", "npm test", "npx @google/gemini-cli --prompt"])
     block_commands: list[str] = field(default_factory=lambda: ["rm -rf /", "curl | sh", "sudo", "chmod 777"])
 
 

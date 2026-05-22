@@ -5,16 +5,21 @@ import App from './App';
 import AdminPanel from './components/Admin/AdminPanel';
 import AdminGuard from './components/AdminGuard';
 import AuthGuard from './components/AuthGuard';
+import PermissionGuard from './components/PermissionGuard';
 import LoginForm from './components/LoginForm';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
 import RegistrationPage from './pages/RegistrationPage';
+import PublicHomePage from './pages/PublicHomePage';
+import PublicationsPage from './pages/PublicationsPage';
+import UserPermissionsPage from './pages/admin/UserPermissionsPage';
 import { getDefaultRouteForUser, isAdminUser } from './security/adminAccess';
+import './index.css';
 
 const queryClient = new QueryClient();
 
-function DashboardEntry() {
+function CabinetEntry() {
   const { user } = useAuth();
 
   if (isAdminUser(user)) {
@@ -28,14 +33,7 @@ function Router() {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0b] flex flex-col items-center justify-center text-white font-sans">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <div className="text-[10px] font-black tracking-[0.5em] uppercase opacity-50 text-blue-500">
-          Initializing 3X-UI Secure Bridge
-        </div>
-      </div>
-    );
+    return <div className="site-wrap"><div className="site-muted">Initializing...</div></div>;
   }
 
   const homeRoute = getDefaultRouteForUser(user);
@@ -43,14 +41,23 @@ function Router() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<PublicHomePage />} />
+        <Route path="/publications" element={<PublicationsPage />} />
+
         <Route path="/login" element={user ? <Navigate to={homeRoute} replace /> : <LoginForm />} />
         <Route path="/register" element={user ? <Navigate to={homeRoute} replace /> : <RegistrationPage />} />
         <Route path="/autch" element={<Navigate to="/login" replace />} />
-        <Route path="/" element={<Navigate to={homeRoute} replace />} />
 
         <Route element={<AuthGuard />}>
-          <Route path="/dashboard" element={<DashboardEntry />} />
-          <Route path="/dashboard/" element={<DashboardEntry />} />
+          <Route path="/cabinet" element={<CabinetEntry />} />
+          <Route path="/dashboard" element={<Navigate to="/cabinet" replace />} />
+
+          <Route element={<PermissionGuard resource="publications" action="read" scope="any" fallbackTo="/cabinet" />}>
+            <Route path="/moderation" element={<Navigate to="/admin" replace />} />
+          </Route>
+          <Route element={<PermissionGuard permission="users.permissions.manage" fallbackTo="/cabinet" />}>
+            <Route path="/admin/users/:userId/permissions" element={<UserPermissionsPage />} />
+          </Route>
 
           <Route element={<AdminGuard />}>
             <Route path="/admin" element={<AdminPanel />} />
@@ -67,13 +74,13 @@ function Router() {
 export default function Root() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <LanguageProvider>
-          <AuthProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          <LanguageProvider>
             <Router />
-          </AuthProvider>
-        </LanguageProvider>
-      </ThemeProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

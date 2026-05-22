@@ -12,8 +12,8 @@ export const isAdminUser = (user: User | null | undefined) => {
 
 export const getDefaultRouteForUser = (user: User | null | undefined) => {
   if (!user) {
-    return '/login';
+    return '/';
   }
 
-  return isAdminUser(user) ? '/admin' : '/dashboard';
+  return isAdminUser(user) ? '/admin' : '/cabinet';
 };

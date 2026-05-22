@@ -18,6 +18,11 @@ export interface Publication {
 }
 
 export const publicationsApi = {
+  listPublic: async () => {
+    const { data } = await api.get('/publications/public');
+    return data as { success: boolean; publications: Publication[]; count: number };
+  },
+
   list: async (params?: { search?: string; status?: string; authorId?: string }) => {
     const { data } = await api.get('/admin/publications', { params });
     return data as { success: boolean; publications: Publication[]; count: number };

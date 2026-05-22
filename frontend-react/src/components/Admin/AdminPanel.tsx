@@ -36,8 +36,9 @@ import {
   UsersRound,
   X,
 } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth, type RoleKey } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import api from '../../api/client';
 import { accessApi, type AccessGroupSummary, type CatalogPermission, type UserRoleAssignment } from '../../api/access';
 import { adminUsersApi, type AdminUser, type AdminUsersListParams, type CreateAdminUserPayload, type UserSession } from '../../api/adminUsers';
@@ -45,7 +46,10 @@ import { publicationsApi, type Publication } from '../../api/publications';
 import { adminLogsApi, type AdminLogItem } from '../../api/adminLogs';
 import { adminSystemApi, type AdminSystemMetricsResponse } from '../../api/adminSystem';
 import { adminAuditApi, type AuditEventItem, type AuditMapItem } from '../../api/adminAudit';
+import { canEditUserPermissions } from '../../security/canEditUserPermissions';
+import { hasPermission } from '../../security/rbac';
 import './AdminPanel.css';
+import UiPreferencesControls from '../Layout/UiPreferencesControls';
 
 const ADMIN_ROLES: RoleKey[] = ['root', 'platform_admin'];
 const SEARCHABLE_RBAC_ROLES = [
@@ -86,7 +90,7 @@ type SectionId =
 
 type NavGroupId = 'dashboard' | 'users' | 'groups' | 'content' | 'audit';
 
-const NAV_GROUPS: Array<{
+const NAV_GROUPS_BASE: Array<{
   id: NavGroupId;
   title: string;
   icon: React.ReactNode;
@@ -138,7 +142,7 @@ const NAV_GROUPS: Array<{
 ];
 
 
-const SECTION_GUIDE: Record<SectionId, { title: string; description: string; nextStep: string }> = {
+const SECTION_GUIDE_BASE: Record<SectionId, { title: string; description: string; nextStep: string }> = {
   overview: {
     title: 'Control center',
     description: 'Main system health, key metrics and recent platform activity in one place.',
@@ -337,6 +341,7 @@ const getSeverity = (value: number, warnAt: number, criticalAt: number): 'health
 };
 export default function AdminPanel() {
   const { user, setUser, hasAnyRole } = useAuth();
+  const { language } = useLanguage();
 
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [openNavGroups, setOpenNavGroups] = useState<Record<NavGroupId, boolean>>({
@@ -346,6 +351,39 @@ export default function AdminPanel() {
     content: true,
     audit: true,
   });
+
+
+  const A = (ru: string, en: string, he: string) => {
+    if (language === 'ru') return ru;
+    if (language === 'he') return he;
+    return en;
+  };
+
+  const NAV_GROUPS = NAV_GROUPS_BASE.map((group) => ({
+    ...group,
+    title:
+      group.id === 'dashboard' ? A('Панель', 'Dashboard', 'לוח בקרה') :
+      group.id === 'users' ? A('Пользователи', 'Users', 'משתמשים') :
+      group.id === 'groups' ? A('Группы и доступ', 'Groups & access', 'קבוצות והרשאות') :
+      group.id === 'content' ? A('Модерация контента', 'Content moderation', 'ניהול תוכן') :
+      A('Аудит и логи', 'Audit & logs', 'ביקורת ולוגים'),
+    items: group.items.map((item) => ({
+      ...item,
+      label:
+        item.id === 'overview' ? A('Обзор и состояние', 'Overview & health', 'סקירה ומצב') :
+        item.id === 'admin-map' ? A('Карта админа и логирование', 'Admin map & logging', 'מפת ניהול ולוגים') :
+        item.id === 'system-monitoring' ? A('Мониторинг системы', 'System monitoring', 'ניטור מערכת') :
+        item.id === 'user-directory' ? A('Каталог', 'Directory', 'ספרייה') :
+        item.id === 'user-create' ? A('Создать пользователя', 'Create user', 'יצירת משתמש') :
+        item.id === 'groups-catalog' ? A('Каталог групп', 'Groups catalog', 'קטלוג קבוצות') :
+        item.id === 'group-assignments' ? A('Назначения пользователей', 'User assignments', 'שיוכי משתמשים') :
+        item.id === 'publications-review' ? A('Очередь публикаций', 'Publications queue', 'תור פרסומים') :
+        item.id === 'audit-trail' ? A('Журнал изменений', 'Change audit trail', 'יומן שינויים') :
+        A('Логи API', 'API activity logs', 'לוגים של API'),
+    })),
+  }));
+
+  const SECTION_GUIDE = SECTION_GUIDE_BASE;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1090,8 +1128,8 @@ export default function AdminPanel() {
           <div className="admin-brand-main">
             <div className="admin-brand-mark">A</div>
             <div>
-              <strong>Admin Console</strong>
-              <span>Secure governance</span>
+              <strong>{A('Админ-консоль', 'Admin Console', 'קונסולת ניהול')}</strong>
+              <span>{A('Безопасное управление', 'Secure governance', 'ממשל מאובטח')}</span>
             </div>
           </div>
 
@@ -1108,7 +1146,7 @@ export default function AdminPanel() {
               </div>
 
               <div className="admin-user-meta">
-                <div className="admin-sidebar-meta-title">Operator</div>
+                <div className="admin-sidebar-meta-title">{A('Оператор', 'Operator', 'מפעיל')}</div>
                 <div className="admin-sidebar-meta-value">{currentUserDisplayName}</div>
                 <div className="admin-user-meta-sub">{currentUserRole} • {currentUserStatus}</div>
               </div>
@@ -1132,7 +1170,7 @@ export default function AdminPanel() {
                 </button>
 
                 <div className="admin-user-menu-roles" aria-hidden="true">
-                  {activeRoles.length === 0 && <Badge bg="secondary">no roles</Badge>}
+                  {activeRoles.length === 0 && <Badge bg="secondary">{A('нет ролей', 'no roles', 'ללא תפקידים')}</Badge>}
                   {activeRoles.map((role) => (
                     <Badge key={role} bg="primary">{role}</Badge>
                   ))}
@@ -1182,7 +1220,7 @@ export default function AdminPanel() {
 
         <Button variant="outline-light" className="admin-sidebar-logout" onClick={() => void handleLogout()}>
           <LogOut size={15} className="me-2" />
-          Exit admin
+          {A('Выход из админки', 'Exit admin', 'יציאה מניהול')}
         </Button>
 
       </aside>
@@ -1197,6 +1235,7 @@ export default function AdminPanel() {
             </div>
 
             <div className="admin-topbar-actions" aria-label="Page actions">
+              <UiPreferencesControls className="admin-prefs" />
               <Badge className="badge-soft">Users: {usersTotal}</Badge>
               <Badge className="badge-soft">Groups: {groups.length}</Badge>
               <Badge className="badge-soft">Publications: {publications.length}</Badge>
@@ -1222,11 +1261,11 @@ export default function AdminPanel() {
           <div className="admin-header-row admin-context-summary" aria-live="polite">
             <div className="admin-context-title">
               <Siren size={16} />
-              What needs attention now
+              {A('Что требует внимания сейчас', 'What needs attention now', 'מה דורש תשומת לב כעת')}
             </div>
             <div className="admin-context-items">
               {attentionItems.length === 0 ? (
-                <span className="admin-context-item healthy"><CheckCircle2 size={14} />No critical signals</span>
+                <span className="admin-context-item healthy"><CheckCircle2 size={14} />{A('Критичных сигналов нет', 'No critical signals', 'אין התראות קריטיות')}</span>
               ) : (
                 attentionItems.map((item) => (
                   <span key={item} className="admin-context-item warning"><AlertTriangle size={14} />{item}</span>
@@ -1246,20 +1285,20 @@ export default function AdminPanel() {
         {busy && (
           <div className="admin-progress">
             <Spinner animation="border" size="sm" />
-            <span>Processing secured request...</span>
+            <span>{A('Обработка защищенного запроса...', 'Processing secured request...', 'מעבד בקשה מאובטחת...')}</span>
           </div>
         )}
 
         <Card className="admin-surface admin-section-helper mb-3">
           <Card.Body>
-            <div className="admin-section-helper-title">What this section is for</div>
+            <div className="admin-section-helper-title">{A('Назначение раздела', 'What this section is for', 'מטרת הסעיף')}</div>
             <div className="admin-section-helper-text">{sectionGuide.nextStep}</div>
           </Card.Body>
         </Card>
 
         <Card className="admin-surface admin-user-map mb-3">
           <Card.Body>
-            <div className="admin-section-helper-title">Profile quick map</div>
+            <div className="admin-section-helper-title">{A('Быстрая карта профиля', 'Profile quick map', 'מפת פרופיל מהירה')}</div>
             <div className="admin-user-map-grid">
               <button type="button" className="admin-user-map-step" onClick={openUserSettingsModal}>
                 <strong>1. Open Settings</strong>
@@ -1784,6 +1823,11 @@ export default function AdminPanel() {
                           <td className="text-end">
                             <Button size="sm" variant="outline-light" className="me-2" onClick={() => { setSelectedUser(item); void loadAssignments(item.id); setActiveSection('group-assignments'); }}>Access</Button>
                             <Button size="sm" variant="outline-light" className="me-2" onClick={() => void loadSessions(item.id)}>Sessions</Button>
+                            {hasPermission(user, 'users.permissions.manage') && canEditUserPermissions(user, item) && (
+                              <Link className="btn btn-sm btn-outline-primary me-2" to={'/admin/users/' + item.id + '/permissions'}>
+                                Редактировать права
+                              </Link>
+                            )}
                             {!item.deleted_at && <Button size="sm" variant="outline-danger" onClick={() => void softDeleteUser(item.id)}>Delete</Button>}
                             {item.deleted_at && <Button size="sm" variant="outline-success" onClick={() => void restoreUser(item.id)}>Restore</Button>}
                           </td>
