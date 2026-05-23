@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import UiPreferencesControls from '../../components/Layout/UiPreferencesControls';
 import AccessDenied from '../../components/AccessDenied';
 import { adminUsersApi, type AdminUser } from '../../api/adminUsers';
+import { accessApi } from '../../api/access';
 import { useAuth } from '../../context/AuthContext';
 import { canEditUserPermissions } from '../../security/canEditUserPermissions';
 
@@ -25,6 +26,8 @@ export default function UserPermissionsPage() {
     availableRoles: [],
     availablePermissions: [],
   });
+  const [initialRoles, setInitialRoles] = useState<string[]>([]);
+  const [rolePermissionMap, setRolePermissionMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -34,14 +37,35 @@ export default function UserPermissionsPage() {
       setLoading(true);
       setError('');
       try {
-        const data = await adminUsersApi.getUserPermissions(userId);
+        const [data, catalog] = await Promise.all([
+          adminUsersApi.getUserPermissions(userId),
+          accessApi.getCatalog(),
+        ]);
+
+        const nextRolePermissionMap = (catalog.rolePermissions || []).reduce<Record<string, string[]>>((acc, row) => {
+          if (!row.granted) {
+            return acc;
+          }
+
+          const role = String(row.role_key);
+          if (!acc[role]) {
+            acc[role] = [];
+          }
+          acc[role].push(row.permission_name);
+          return acc;
+        }, {});
+
+        const normalizedRoles = [...data.roles].sort((a, b) => a.localeCompare(b));
+
+        setRolePermissionMap(nextRolePermissionMap);
         setTargetUser(data.user);
         setState({
-          roles: data.roles,
+          roles: normalizedRoles,
           permissions: data.permissions,
           availableRoles: data.availableRoles,
           availablePermissions: data.availablePermissions,
         });
+        setInitialRoles(normalizedRoles);
       } catch (e) {
         const apiMessage = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
         setError(apiMessage || 'Failed to load user permissions');
@@ -56,8 +80,40 @@ export default function UserPermissionsPage() {
   }, [userId]);
 
   const editable = useMemo(() => canEditUserPermissions(currentUser, targetUser), [currentUser, targetUser]);
+  const isDeletedTarget = Boolean(targetUser?.deleted_at);
+
+  const normalizedRoles = useMemo(
+    () => [...state.roles].sort((a, b) => a.localeCompare(b)),
+    [state.roles]
+  );
+
+  const derivedPermissions = useMemo(() => {
+    const union = new Set<string>();
+    for (const role of normalizedRoles) {
+      for (const permission of rolePermissionMap[role] || []) {
+        union.add(permission);
+      }
+    }
+
+    return Array.from(union).sort((a, b) => a.localeCompare(b));
+  }, [rolePermissionMap, normalizedRoles]);
+
+  const isDirty = useMemo(() => {
+    if (normalizedRoles.length !== initialRoles.length) {
+      return true;
+    }
+
+    for (let i = 0; i < normalizedRoles.length; i += 1) {
+      if (normalizedRoles[i] !== initialRoles[i]) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [normalizedRoles, initialRoles]);
 
   const toggleRole = (roleKey: string) => {
+    if (saving) return;
     setState((prev) => ({
       ...prev,
       roles: prev.roles.includes(roleKey)
@@ -67,13 +123,21 @@ export default function UserPermissionsPage() {
   };
 
   const handleSave = async () => {
-    if (!targetUser) return;
+    if (!targetUser || saving || !isDirty || isDeletedTarget) return;
+
     setSaving(true);
     setError('');
     try {
+      const latest = await adminUsersApi.getUserPermissions(targetUser.id);
+      if (latest.user?.deleted_at) {
+        setTargetUser(latest.user);
+        setError('Cannot update permissions for a deleted user.');
+        return;
+      }
+
       await adminUsersApi.updateUserPermissions(targetUser.id, {
-        roles: state.roles,
-        permissions: state.permissions,
+        roles: normalizedRoles,
+        permissions: derivedPermissions,
       });
       navigate('/admin');
     } catch (e) {
@@ -110,6 +174,7 @@ export default function UserPermissionsPage() {
         </section>
 
         {error && <div className="site-error">{error}</div>}
+        {isDeletedTarget && <div className="site-error">User is deleted. Access controls are disabled.</div>}
 
         <section className="site-card">
           <h3>Roles</h3>
@@ -120,6 +185,7 @@ export default function UserPermissionsPage() {
                   type="checkbox"
                   checked={state.roles.includes(role)}
                   onChange={() => toggleRole(role)}
+                  disabled={saving || isDeletedTarget}
                 />
                 <span>{role}</span>
               </label>
@@ -130,7 +196,7 @@ export default function UserPermissionsPage() {
         <section className="site-card mt-3">
           <h3>Effective permissions</h3>
           <div className="d-flex flex-wrap gap-2">
-            {state.permissions.map((permission) => (
+            {derivedPermissions.map((permission) => (
               <code key={permission} className="site-code">{permission}</code>
             ))}
           </div>
@@ -143,7 +209,7 @@ export default function UserPermissionsPage() {
         </section>
 
         <div className="site-cta-row">
-          <button className="site-btn site-btn-primary" disabled={saving} onClick={() => void handleSave()}>
+          <button className="site-btn site-btn-primary" disabled={saving || !isDirty || isDeletedTarget} onClick={() => void handleSave()}>
             {saving ? 'Saving...' : 'Save'}
           </button>
           <Link to="/admin" className="site-btn site-btn-secondary">Cancel</Link>

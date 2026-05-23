@@ -40,11 +40,24 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
 
+    // Never auto-retry on limiter responses. UI should surface retryAfter and wait for user action.
+    if (error.response?.status === 429) {
+      throw error;
+    }
+
     if (!originalRequest || error.response?.status !== 401) {
       throw error;
     }
 
-    if (originalRequest._retry || isAuthRoute(originalRequest.url)) {
+    const requestMethod = String(originalRequest.method || 'GET').toUpperCase();
+    const requestData = originalRequest.data && typeof originalRequest.data === 'object'
+      ? (originalRequest.data as Record<string, unknown>)
+      : null;
+    const idempotencyHeader = (originalRequest.headers as Record<string, unknown> | undefined)?.['x-idempotency-key']
+      || (originalRequest.headers as Record<string, unknown> | undefined)?.['X-Idempotency-Key'];
+    const hasIdempotencyKey = Boolean(requestData?.idempotencyKey || idempotencyHeader);
+
+    if ((["POST", "PATCH", "DELETE"].includes(requestMethod) && !hasIdempotencyKey) || originalRequest._retry || isAuthRoute(originalRequest.url)) {
       throw error;
     }
 

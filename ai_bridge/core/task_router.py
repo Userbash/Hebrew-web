@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from .agent_registry import AgentRegistry
 from .load_balancer import LoadBalancer
+from .model_selector import evaluate_risk_context
 from .models import AgentRecord, AgentStatus, ExecutionPlan, Priority, Task, TaskAcceptance, TaskStatus, TaskType
+
+logger = logging.getLogger(__name__)
 
 CAPABILITY_BY_TASK_TYPE = {
     TaskType.PLAN: "plan",
@@ -16,24 +20,11 @@ CAPABILITY_BY_TASK_TYPE = {
     TaskType.RESEARCH: "research",
 }
 
-HIGH_RISK_KEYWORDS = {
-    "security",
-    "secret",
-    "production",
-    "migration",
-    "destructive",
-    "auth",
-    "rbac",
-    "permission",
-    "payment",
-}
-
-
 class TaskRouter:
     def __init__(self, registry: AgentRegistry, load_balancer: LoadBalancer) -> None:
         self.registry = registry
         self.load_balancer = load_balancer
-        # Economy mode: reduce Codex calls for low/medium-risk tasks.
+        # Economy mode: reduce Codex/OpenAI calls for low/medium-risk tasks.
         self.codex_economy_mode = os.getenv("AI_BRIDGE_CODEX_ECONOMY_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     def decompose(self, task: Task) -> ExecutionPlan:
@@ -48,8 +39,7 @@ class TaskRouter:
         if not candidates:
             return TaskAcceptance(task.task_id, TaskStatus.REJECTED, None, self.estimate_complexity(task), f"No available agent for capability {capability}")
 
-        preferred = self._apply_economy_policy(task, capability, candidates)
-        chosen_pool = preferred or candidates
+        chosen_pool = self._apply_economy_policy(task, candidates)
 
         agent = self.load_balancer.choose(chosen_pool, capability)
         if not agent:
@@ -65,29 +55,62 @@ class TaskRouter:
             if capability in agent.capabilities and agent.status not in {AgentStatus.OFFLINE, AgentStatus.DISABLED, AgentStatus.FAILED}
         ]
 
-    def _apply_economy_policy(self, task: Task, capability: str, candidates: list[AgentRecord]) -> list[AgentRecord]:
+    def _apply_economy_policy(self, task: Task, candidates: list[AgentRecord]) -> list[AgentRecord]:
         if not self.codex_economy_mode:
             return candidates
 
-        if self._requires_codex_priority(task):
-            codex_candidates = [agent for agent in candidates if agent.type.value == "codex"]
-            return codex_candidates or candidates
+        complexity = self.estimate_complexity(task)
+        high_risk = self._requires_openai_priority(task)
 
-        # Keep Codex as fallback, prefer alternative providers for non-critical work.
-        non_codex = [agent for agent in candidates if agent.type.value != "codex"]
+        if complexity in {"low", "medium"} and not high_risk:
+            logger.info("[ROUTING] non-openai preferred for low/medium task")
+            non_openai = [agent for agent in candidates if agent.provider != "openai"]
+            if non_openai:
+                preferred_group = self._preferred_non_openai_group(task, complexity, non_openai)
+                if preferred_group:
+                    return preferred_group
 
-        # If the capability exists on alternative agents, route there first.
-        if non_codex:
-            return non_codex
+            fallback_openai = [agent for agent in candidates if agent.provider == "openai"]
+            if fallback_openai:
+                logger.warning("[FALLBACK] mistral unavailable -> openai gpt-coding-standard")
+                standard = [agent for agent in fallback_openai if agent.model_name == "gpt-coding-standard"]
+                return standard or fallback_openai
+
+        openai_first = [agent for agent in candidates if agent.provider == "openai"]
+        if openai_first:
+            if high_risk or complexity in {"high", "critical"}:
+                secure = [agent for agent in openai_first if agent.model_name == "gpt-senior-secure"]
+                return secure or openai_first
+            return openai_first
 
         return candidates
 
-    def _requires_codex_priority(self, task: Task) -> bool:
+    @staticmethod
+    def _preferred_non_openai_group(task: Task, complexity: str, candidates: list[AgentRecord]) -> list[AgentRecord]:
+        local_agents = [agent for agent in candidates if agent.provider == "local"]
+        mistral_agents = [agent for agent in candidates if agent.provider == "mistral"]
+        gemini_agents = [agent for agent in candidates if agent.provider == "google"]
+        other_agents = [agent for agent in candidates if agent.provider not in {"local", "mistral", "google"}]
+
+        if complexity == "low":
+            return local_agents or mistral_agents or gemini_agents or other_agents
+
+        if task.type in {TaskType.CODE, TaskType.FIX, TaskType.TEST}:
+            return mistral_agents or local_agents or gemini_agents or other_agents
+
+        if task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
+            return gemini_agents or local_agents or mistral_agents or other_agents
+
+        return mistral_agents or gemini_agents or local_agents or other_agents
+
+    def _requires_openai_priority(self, task: Task) -> bool:
         if task.priority in {Priority.HIGH, Priority.CRITICAL}:
             return True
-
+        if self.estimate_complexity(task) in {"high", "critical"}:
+            return True
         text = task.input.description.lower()
-        return any(word in text for word in HIGH_RISK_KEYWORDS)
+        risk = evaluate_risk_context(text)
+        return risk.high_risk
 
     @staticmethod
     def estimate_complexity(task: Task) -> str:

@@ -43,6 +43,7 @@ class Orchestrator:
         self.console = UserConsole()
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}
+        self.live_trace_rows: list[dict[str, object]] = []
 
     def attach_local_agent(self, agent_id: str, agent: BaseAgent, agent_type: str = "custom", critical: bool = False, model_name: str = "local-small", provider: str = "local") -> None:
         self.local_agents[agent_id] = agent
@@ -58,26 +59,82 @@ class Orchestrator:
 
     def run_task(self, task: Task) -> AgentResult:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
+
+        choice = self.model_selector.select(task)
+        self.console.emit(
+            "MODEL_SELECTION",
+            f"task_id={task.task_id} task_type={task.type.value} detected_keywords={choice.detected_keywords or []} "
+            f"matched_high_risk_rules={choice.matched_high_risk_rules or []} "
+            f"matched_low_risk_exemptions={choice.matched_low_risk_exemptions or []} "
+            f"final_complexity={choice.complexity.value} selected_provider={choice.provider} selected_model={choice.model_name} "
+            f"secondary_review={choice.requires_secondary_review} reason={choice.reason}",
+        )
+
         self.autoscaler.ensure_capacity(capability)
         decision = self.scheduler.schedule(task)
         if decision.requires_orchestrator:
             self.console.emit("SCHEDULER", f"Orchestrator route: {decision.reason}")
         else:
             self.console.emit("SCHEDULER", f"P2P route allowed: {decision.reason}")
+
         acceptance = self.router.route(task)
         if acceptance.status == TaskStatus.REJECTED or not acceptance.assigned_agent:
             self.console.emit("ROUTING", acceptance.message)
+            self.live_trace_rows.append(
+                {
+                    "task_id": task.task_id,
+                    "task_type": task.type.value,
+                    "detected_keywords": choice.detected_keywords or [],
+                    "matched_high_risk_rules": choice.matched_high_risk_rules or [],
+                    "matched_low_risk_exemptions": choice.matched_low_risk_exemptions or [],
+                    "final_complexity": choice.complexity.value,
+                    "selected_provider": choice.provider,
+                    "selected_model": choice.model_name,
+                    "router_agent": None,
+                    "router_provider": None,
+                    "fallback": False,
+                    "secondary_review": choice.requires_secondary_review,
+                    "reason": acceptance.message,
+                }
+            )
             return AgentResult(task.task_id, "orchestrator", TaskStatus.FAILED, {"summary": acceptance.message, "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [acceptance.message], [])
 
         agent_id = acceptance.assigned_agent
         agent_record = self.registry.get(agent_id)
+        fallback = bool(choice.provider != "openai" and agent_record and agent_record.provider == "openai")
+
+        self.console.emit(
+            "ROUTING",
+            f"task_id={task.task_id} router_agent={agent_id} router_provider={agent_record.provider if agent_record else '-'} "
+            f"fallback={fallback} secondary_review={choice.requires_secondary_review}",
+        )
+
+        self.live_trace_rows.append(
+            {
+                "task_id": task.task_id,
+                "task_type": task.type.value,
+                "detected_keywords": choice.detected_keywords or [],
+                "matched_high_risk_rules": choice.matched_high_risk_rules or [],
+                "matched_low_risk_exemptions": choice.matched_low_risk_exemptions or [],
+                "final_complexity": choice.complexity.value,
+                "selected_provider": choice.provider,
+                "selected_model": choice.model_name,
+                "router_agent": agent_id,
+                "router_provider": agent_record.provider if agent_record else None,
+                "fallback": fallback,
+                "secondary_review": choice.requires_secondary_review,
+                "reason": choice.reason,
+            }
+        )
+
         if agent_record:
             agent_record.metrics.queue_depth = max(0, agent_record.metrics.queue_depth - 1)
             if task.assigned_model:
                 agent_record.metrics.model_name = task.assigned_model
             self.lifecycle.mark_busy(agent_record, task)
-            self.console.emit("ROUTING", f"{task.type.value} передан агенту {agent_id}")
+            self.console.emit("EXECUTION", f"task_id={task.task_id} agent={agent_id} stage=start")
             self.console.agent_status(agent_record, task, progress=35, stage="выполняет задачу")
+
         try:
             agent = self.local_agents.get(agent_id)
             if not agent:
@@ -89,6 +146,14 @@ class Orchestrator:
                 self.metrics.record_result(agent_record, result)
                 self.kpi.apply_priority_policy(agent_record)
             self.results[task.task_id] = result
+            self.console.emit("EXECUTION", f"task_id={task.task_id} agent={agent_id} status={result.status.value}")
+
+            if choice.requires_secondary_review:
+                self.console.emit(
+                    "SECONDARY_REVIEW",
+                    f"task_id={task.task_id} enabled=true reason={choice.reason}",
+                )
+
             if not quality.passed:
                 self.console.emit("REVIEW", f"Качество ниже порога: {', '.join(quality.issues)}")
             ok, fix_task = self.feedback.evaluate(task, result)
@@ -104,6 +169,7 @@ class Orchestrator:
                 self.autoscaler.scale_down_idle()
 
     def run(self, root_task: Task) -> dict:
+        self.live_trace_rows = []
         self.console.emit("AGENTS", f"Найдено агентов: {len(self.registry.list_agents())}, доступно: {len(self.registry.ready_agents())}")
         self.healthcheck.check_all()
         plan = self.create_execution_plan(root_task)
@@ -120,9 +186,9 @@ class Orchestrator:
                 final_results.append(result)
                 if result.status != TaskStatus.DONE:
                     merged = self.merger.merge(final_results)
-                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
+                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
                 completed.add(task.task_id)
                 pending.pop(task.task_id)
         merged = self.merger.merge(final_results)
         self.console.emit("DONE", "Все критерии выполнены")
-        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
+        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}

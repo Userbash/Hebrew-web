@@ -33,6 +33,32 @@ agents:
     model_name: "gpt-test-standard"
     provider: "openai"
 
+  - id: "mistral-main"
+    type: "custom"
+    endpoint: "local://mistral"
+    capabilities:
+      - "code"
+      - "fix"
+      - "refactor"
+      - "docs"
+      - "test"
+    model_name: "mistral-small-or-medium"
+    provider: "mistral"
+    critical: false
+
+  - id: "gemini-cli-main"
+    type: "custom"
+    endpoint: "local://gemini-cli"
+    capabilities:
+      - "code"
+      - "docs"
+      - "research"
+      - "review"
+      - "test"
+    model_name: "gemini-cli"
+    provider: "google"
+    critical: false
+
 load_balancing:
   strategy: "weighted_score"
   healthcheck_interval_sec: 30
@@ -71,9 +97,25 @@ modules:
 
 models:
   low_complexity: "local-small"
-  medium_complexity: "gpt-coding-standard"
+
+  medium_complexity: "mistral-small-or-medium"
+  medium_code: "mistral-small-or-medium"
+  medium_docs: "gemini-cli"
+  medium_research: "gemini-cli"
+  medium_test: "mistral-small-or-medium"
+
   high_complexity: "gpt-coding-large"
   critical_complexity: "gpt-senior-secure"
+
+  fallback_model: "gpt-coding-standard"
+
+routing_policy:
+  prefer_non_openai_for_low_medium: true
+  prefer_local_for_low: true
+  prefer_mistral_for_medium_code: true
+  prefer_gemini_for_docs_research: true
+  openai_only_for_high_risk: true
+  fallback_to_openai_on_failure: true
 
 lifecycle:
   idle_shutdown_sec: 900

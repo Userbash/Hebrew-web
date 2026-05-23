@@ -1,5 +1,12 @@
 import api from './client';
 
+const createIdempotencyKey = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idemp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -95,13 +102,20 @@ export const adminUsersApi = {
     return data as { success: boolean; message: string; user: AdminUser };
   },
 
-  softDelete: async (userId: string) => {
-    const { data } = await api.delete(`/admin/users/${userId}`);
+  softDelete: async (userId: string, confirmToken = 'DELETE', idempotencyKey?: string) => {
+    const finalIdempotencyKey = idempotencyKey || createIdempotencyKey();
+    const { data } = await api.delete(`/admin/users/${userId}?confirm=${encodeURIComponent(confirmToken)}`, {
+      headers: { 'x-idempotency-key': finalIdempotencyKey },
+      data: { confirm: confirmToken, idempotencyKey: finalIdempotencyKey },
+    });
     return data as { success: boolean; message: string; userId: string };
   },
 
-  restore: async (userId: string) => {
-    const { data } = await api.patch(`/admin/users/${userId}/restore`);
+  restore: async (userId: string, idempotencyKey?: string) => {
+    const finalIdempotencyKey = idempotencyKey || createIdempotencyKey();
+    const { data } = await api.patch(`/admin/users/${userId}/restore`, { idempotencyKey: finalIdempotencyKey }, {
+      headers: { 'x-idempotency-key': finalIdempotencyKey },
+    });
     return data as { success: boolean; message: string; user: AdminUser };
   },
 

@@ -65,6 +65,13 @@ const SEARCHABLE_RBAC_ROLES = [
   'user',
 ];
 
+const createIdempotencyKey = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idemp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
 const USER_SORT_OPTIONS: Array<{ value: NonNullable<AdminUsersListParams['sortBy']>; label: string }> = [
   { value: 'created_at', label: 'Created at' },
   { value: 'updated_at', label: 'Updated at' },
@@ -340,6 +347,13 @@ const getSeverity = (value: number, warnAt: number, criticalAt: number): 'health
   if (value >= warnAt) return 'warning';
   return 'healthy';
 };
+
+const toRetryAfterError = (retryAfter?: number) => {
+  if (!retryAfter || retryAfter <= 0) {
+    return 'Too many admin write requests, please retry later.';
+  }
+  return `Too many admin write requests, please retry in ${retryAfter}s.`;
+};
 export default function AdminPanel() {
   const { user, setUser, hasAnyRole } = useAuth();
   const { t } = useLanguage();
@@ -427,6 +441,9 @@ export default function AdminPanel() {
 
   const [selectedRole, setSelectedRole] = useState<RoleKey>('user');
   const [assignmentNote, setAssignmentNote] = useState('');
+  const [roleMutationBusy, setRoleMutationBusy] = useState(false);
+  const [pendingUserMutations, setPendingUserMutations] = useState<Record<string, boolean>>({});
+  const roleMutationLockRef = useRef(false);
 
   const [selectedGroupKey, setSelectedGroupKey] = useState('');
   const [groupForm, setGroupForm] = useState({ roleKey: '', title: '', description: '', priority: 150 });
@@ -703,8 +720,14 @@ export default function AdminPanel() {
       await action();
       setOkMessage(successMessage);
     } catch (actionError) {
+      const status = (actionError as { response?: { status?: number } })?.response?.status;
+      const retryAfter = (actionError as { response?: { data?: { details?: { retryAfter?: number } } } })?.response?.data?.details?.retryAfter;
       const apiMessage = (actionError as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(toReadableError(apiMessage));
+      if (status === 429) {
+        setError(toRetryAfterError(retryAfter));
+      } else {
+        setError(toReadableError(apiMessage));
+      }
     } finally {
       setBusy(false);
     }
@@ -818,6 +841,13 @@ export default function AdminPanel() {
   };
 
   const loadAssignments = async (userId: string) => {
+    const target = users.find((item) => item.id === userId) || selectedUser;
+    if (target?.deleted_at) {
+      setError('Deleted users cannot be changed in access controls.');
+      setUserAssignments([]);
+      return;
+    }
+
     await withAction(async () => {
       const assignmentData = await accessApi.getUserAccess(userId);
       setUserAssignments(assignmentData.assignments);
@@ -833,41 +863,72 @@ export default function AdminPanel() {
   };
 
   const assignRole = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || roleMutationBusy || roleMutationLockRef.current) return;
+    if (selectedUser.deleted_at) {
+      setError('Cannot assign roles to a deleted user.');
+      return;
+    }
 
-    await withAction(async () => {
-      await accessApi.assignRole(selectedUser.id, selectedRole, assignmentNote || undefined, null);
-      const assignmentData = await accessApi.getUserAccess(selectedUser.id);
-      setUserAssignments(assignmentData.assignments);
-      setAssignmentNote('');
-      await reloadUsers();
-    }, `Role ${selectedRole} assigned to ${selectedUser.username}`);
+    roleMutationLockRef.current = true;
+    setRoleMutationBusy(true);
+    try {
+      await withAction(async () => {
+        await accessApi.assignRole(selectedUser.id, selectedRole, assignmentNote || undefined, null, createIdempotencyKey());
+        await loadAssignments(selectedUser.id);
+        setAssignmentNote('');
+      }, `Role ${selectedRole} assigned to ${selectedUser.username}`);
+    } finally {
+      setRoleMutationBusy(false);
+      roleMutationLockRef.current = false;
+    }
   };
 
   const revokeRole = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || roleMutationBusy || roleMutationLockRef.current) return;
+    if (selectedUser.deleted_at) {
+      setError('Cannot revoke roles from a deleted user.');
+      return;
+    }
 
-    await withAction(async () => {
-      await accessApi.revokeRole(selectedUser.id, selectedRole, assignmentNote || undefined);
-      const assignmentData = await accessApi.getUserAccess(selectedUser.id);
-      setUserAssignments(assignmentData.assignments);
-      setAssignmentNote('');
-      await reloadUsers();
-    }, `Role ${selectedRole} revoked from ${selectedUser.username}`);
+    roleMutationLockRef.current = true;
+    setRoleMutationBusy(true);
+    try {
+      await withAction(async () => {
+        await accessApi.revokeRole(selectedUser.id, selectedRole, assignmentNote || undefined, createIdempotencyKey());
+        await loadAssignments(selectedUser.id);
+        setAssignmentNote('');
+      }, `Role ${selectedRole} revoked from ${selectedUser.username}`);
+    } finally {
+      setRoleMutationBusy(false);
+      roleMutationLockRef.current = false;
+    }
   };
 
   const toggleBlockState = async (blocked: boolean) => {
-    if (!selectedUser) return;
+    if (!selectedUser || roleMutationBusy || roleMutationLockRef.current) return;
+    if (selectedUser.deleted_at) {
+      setError('Cannot change block status for a deleted user.');
+      return;
+    }
+    if (Boolean(selectedUser.is_system_blocked) === blocked) return;
 
-    await withAction(async () => {
-      await accessApi.setBlockedState(
-        selectedUser.id,
-        blocked,
-        assignmentNote || (blocked ? 'Blocked from admin panel' : 'Unblocked from admin panel')
-      );
-      setAssignmentNote('');
-      await reloadUsers();
-    }, blocked ? `${selectedUser.username} has been blocked` : `${selectedUser.username} has been unblocked`);
+    roleMutationLockRef.current = true;
+    setRoleMutationBusy(true);
+    try {
+      await withAction(async () => {
+        await accessApi.setBlockedState(
+          selectedUser.id,
+          blocked,
+          assignmentNote || (blocked ? 'Blocked from admin panel' : 'Unblocked from admin panel'),
+          createIdempotencyKey()
+        );
+        setAssignmentNote('');
+        await reloadUsers();
+      }, blocked ? `${selectedUser.username} has been blocked` : `${selectedUser.username} has been unblocked`);
+    } finally {
+      setRoleMutationBusy(false);
+      roleMutationLockRef.current = false;
+    }
   };
 
   const updateUser = async (userToUpdate: AdminUser) => {
@@ -903,17 +964,40 @@ export default function AdminPanel() {
   };
 
   const softDeleteUser = async (userId: string) => {
-    await withAction(async () => {
-      await adminUsersApi.softDelete(userId);
-      await reloadUsers();
-    }, 'User soft-deleted');
+    if (busy || roleMutationBusy || pendingUserMutations[userId]) return;
+    const confirmed = typeof window !== 'undefined' ? window.confirm('Type-confirmed action: delete this user?') : true;
+    if (!confirmed) return;
+
+    setPendingUserMutations((prev) => ({ ...prev, [userId]: true }));
+    try {
+      await withAction(async () => {
+        await adminUsersApi.softDelete(userId, 'DELETE', createIdempotencyKey());
+        await reloadUsers();
+        if (selectedUser?.id === userId) {
+          setSelectedUser(null);
+          setUserAssignments([]);
+          if (activeSection === 'group-assignments') {
+            setError('Selected user was deleted. Access controls are disabled for this record.');
+          }
+        }
+      }, 'User soft-deleted');
+    } finally {
+      setPendingUserMutations((prev) => ({ ...prev, [userId]: false }));
+    }
   };
 
   const restoreUser = async (userId: string) => {
-    await withAction(async () => {
-      await adminUsersApi.restore(userId);
-      await reloadUsers();
-    }, 'User restored');
+    if (busy || roleMutationBusy || pendingUserMutations[userId]) return;
+
+    setPendingUserMutations((prev) => ({ ...prev, [userId]: true }));
+    try {
+      await withAction(async () => {
+        await adminUsersApi.restore(userId, createIdempotencyKey());
+        await reloadUsers();
+      }, 'User restored');
+    } finally {
+      setPendingUserMutations((prev) => ({ ...prev, [userId]: false }));
+    }
   };
 
   const createGroup = async () => {
@@ -1818,13 +1902,13 @@ export default function AdminPanel() {
                           <td className="text-end">
                             <Button size="sm" variant="outline-light" className="me-2" onClick={() => { setSelectedUser(item); void loadAssignments(item.id); setActiveSection('group-assignments'); }}>Access</Button>
                             <Button size="sm" variant="outline-light" className="me-2" onClick={() => void loadSessions(item.id)}>Sessions</Button>
-                            {hasPermission(user, 'users.permissions.manage') && canEditUserPermissions(user, item) && (
+                            {hasPermission(user, 'users.permissions.manage') && canEditUserPermissions(user, item) && !item.deleted_at && (
                               <Link className="btn btn-sm btn-outline-primary me-2" to={'/admin/users/' + item.id + '/permissions'}>
                                 Редактировать права
                               </Link>
                             )}
-                            {!item.deleted_at && <Button size="sm" variant="outline-danger" onClick={() => void softDeleteUser(item.id)}>Delete</Button>}
-                            {item.deleted_at && <Button size="sm" variant="outline-success" onClick={() => void restoreUser(item.id)}>Restore</Button>}
+                            {!item.deleted_at && <Button size="sm" variant="outline-danger" disabled={busy || roleMutationBusy || pendingUserMutations[item.id]} onClick={() => void softDeleteUser(item.id)}>Delete</Button>}
+                            {item.deleted_at && <Button size="sm" variant="outline-success" disabled={busy || roleMutationBusy || pendingUserMutations[item.id]} onClick={() => void restoreUser(item.id)}>Restore</Button>}
                           </td>
                         </tr>
                       ))}
@@ -1845,7 +1929,7 @@ export default function AdminPanel() {
                         <Col md={4}><Form.Control type="number" value={selectedUser.level} placeholder="Level" onChange={(e) => setSelectedUser({ ...selectedUser, level: Number.parseInt(e.target.value || '1', 10) })} /></Col>
                       </Row>
                       <div className="mt-3 text-end">
-                        <Button onClick={() => void updateUser(selectedUser)}>Save User</Button>
+                        <Button disabled={Boolean(selectedUser.deleted_at) || busy || roleMutationBusy || pendingUserMutations[selectedUser.id]} onClick={() => void updateUser(selectedUser)}>Save User</Button>
                       </div>
                     </Card.Body>
                   </Card>
@@ -1979,6 +2063,7 @@ export default function AdminPanel() {
                   <div className="mb-3">
                     <strong>{selectedUser.username}</strong>
                     <span className="text-secondary ms-2">{selectedUser.email}</span>
+                    {selectedUser.deleted_at && <Badge bg="danger" className="ms-2">Deleted</Badge>}
                   </div>
 
                   <Row className="g-3 mb-3">
@@ -1991,11 +2076,11 @@ export default function AdminPanel() {
                   </Row>
 
                   <div className="d-flex gap-2 justify-content-end flex-wrap mb-3">
-                    <Button variant="outline-light" onClick={() => void loadAssignments(selectedUser.id)}>Refresh</Button>
-                    <Button variant="success" onClick={() => void assignRole()}>Assign Role</Button>
-                    <Button variant="warning" onClick={() => void revokeRole()}>Revoke Role</Button>
-                    <Button variant="danger" onClick={() => void toggleBlockState(true)}>Block</Button>
-                    <Button variant="outline-success" onClick={() => void toggleBlockState(false)}>Unblock</Button>
+                    <Button variant="outline-light" disabled={busy || roleMutationBusy || Boolean(selectedUser.deleted_at)} onClick={() => void loadAssignments(selectedUser.id)}>Refresh</Button>
+                    <Button variant="success" disabled={busy || roleMutationBusy || Boolean(selectedUser.deleted_at)} onClick={() => void assignRole()}>Assign Role</Button>
+                    <Button variant="warning" disabled={busy || roleMutationBusy || Boolean(selectedUser.deleted_at)} onClick={() => void revokeRole()}>Revoke Role</Button>
+                    <Button variant="danger" disabled={busy || roleMutationBusy || Boolean(selectedUser.deleted_at)} onClick={() => void toggleBlockState(true)}>Block</Button>
+                    <Button variant="outline-success" disabled={busy || roleMutationBusy || Boolean(selectedUser.deleted_at)} onClick={() => void toggleBlockState(false)}>Unblock</Button>
                   </div>
 
                   <div className="table-responsive">

@@ -1,6 +1,13 @@
 import api from './client';
 import type { RoleKey, AccessProfile } from '../context/AuthContext';
 
+const createIdempotencyKey = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idemp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export interface CatalogRole {
   id: string;
   management_key: string;
@@ -113,11 +120,17 @@ export const accessApi = {
     };
   },
 
-  assignRole: async (userId: string, roleKey: RoleKey, note?: string, expiresAt?: string | null) => {
-    const { data } = await api.post(`/admin/access/users/${userId}/roles`, {
+  assignRole: async (userId: string, roleKey: RoleKey, note?: string, expiresAt?: string | null, idempotencyKey?: string) => {
+    const finalIdempotencyKey = idempotencyKey || createIdempotencyKey();
+    const payload = {
       roleKey,
       note,
       expiresAt: expiresAt ?? null,
+      idempotencyKey: finalIdempotencyKey,
+    };
+
+    const { data } = await api.post('/admin/access/users/' + userId + '/roles', payload, {
+      headers: { 'x-idempotency-key': finalIdempotencyKey },
     });
 
     return data as {
@@ -127,9 +140,11 @@ export const accessApi = {
     };
   },
 
-  revokeRole: async (userId: string, roleKey: RoleKey, note?: string) => {
+  revokeRole: async (userId: string, roleKey: RoleKey, note?: string, idempotencyKey?: string) => {
+    const finalIdempotencyKey = idempotencyKey || createIdempotencyKey();
     const { data } = await api.delete(`/admin/access/users/${userId}/roles/${roleKey}`, {
-      data: { note },
+      headers: { 'x-idempotency-key': finalIdempotencyKey },
+      data: { note, idempotencyKey: finalIdempotencyKey },
     });
 
     return data as {
@@ -139,10 +154,14 @@ export const accessApi = {
     };
   },
 
-  setBlockedState: async (userId: string, blocked: boolean, note?: string) => {
+  setBlockedState: async (userId: string, blocked: boolean, note?: string, idempotencyKey?: string) => {
+    const finalIdempotencyKey = idempotencyKey || createIdempotencyKey();
     const { data } = await api.patch(`/admin/access/users/${userId}/block`, {
       blocked,
       note,
+      idempotencyKey: finalIdempotencyKey,
+    }, {
+      headers: { 'x-idempotency-key': finalIdempotencyKey },
     });
 
     return data as {
