@@ -14,6 +14,8 @@ from .models import (
     Task,
     TaskType,
     TaskWeight,
+    TaskEnvelope,
+    TaskGraph
 )
 from .task_router import CAPABILITY_BY_TASK_TYPE
 
@@ -30,13 +32,11 @@ BLOCKED_STATUSES = {
 }
 LOW_COST_BUSY_TYPES = {TaskType.DOCS, TaskType.RESEARCH}
 
-
 @dataclass(slots=True)
 class RetryPolicy:
     retry_limit: int = 3
     timeout_sec: int = 900
     escalate_after_failures: int = 3
-
 
 class SmartScheduler:
     """Priority-aware scheduler for hybrid orchestrator and P2P routing."""
@@ -45,6 +45,45 @@ class SmartScheduler:
         self.registry = registry
         self.retry_policy = retry_policy or RetryPolicy()
         self.decisions: list[SchedulerDecision] = []
+
+    def schedule_envelope(self, envelope: TaskEnvelope, graph: TaskGraph | None = None) -> SchedulerDecision:
+        """Schedule a network-like TaskEnvelope, enforcing DAG dependency checks and security policies."""
+        if graph and envelope.dependencies:
+            for dep in envelope.dependencies:
+                if getattr(graph, f"{dep}_status", None) == "failed":
+                    decision = SchedulerDecision(envelope.task_id, "orchestrator", None, True, "Dependency failed", 0.0)
+                    self.decisions.append(decision)
+                    return decision
+
+        priority_map = {Priority.LOW: 2, Priority.NORMAL: 5, Priority.HIGH: 8, Priority.CRITICAL: 10, "low": 2, "normal": 5, "high": 8, "critical": 10}
+        p_val = priority_map.get(envelope.priority, 5)
+        
+        text = str(envelope.payload.objective).lower()
+        risky_terms = {"rollback", "migration", "secret", "security", "auth", "database", "billing", "api", "schema"}
+        requires_orchestrator = (
+            envelope.priority in {Priority.CRITICAL, "critical"}
+            or envelope.target_capability in ORCHESTRATOR_CAPABILITIES
+            or any(term in text for term in risky_terms)
+        )
+
+        task_score = p_val * 0.5 + (8 if requires_orchestrator else 2) * 0.5
+        
+        candidates = [agent for agent in self.registry.list_agents() if envelope.target_capability in agent.capabilities or envelope.target_capability == "any"]
+        
+        if not candidates:
+            decision = SchedulerDecision(envelope.task_id, "orchestrator", None, True, "No ready agent for required capability", task_score)
+        else:
+            agent = max(candidates, key=lambda a: self.agent_score(a, envelope.target_capability))
+            score = self.agent_score(agent, envelope.target_capability)
+            readiness = self.readiness(agent)
+            
+            if requires_orchestrator:
+                decision = SchedulerDecision(envelope.task_id, "orchestrator", agent.id, True, "High-risk or strategic task", task_score, score, readiness.readiness)
+            else:
+                decision = SchedulerDecision(envelope.task_id, "p2p", agent.id, False, "Local low-risk task can use direct agent workflow", task_score, score, readiness.readiness)
+                
+        self.decisions.append(decision)
+        return decision
 
     def task_weight(self, task: Task) -> TaskWeight:
         priority_map = {

@@ -518,3 +518,141 @@ class SchedulerDecision:
             "agent_score": self.agent_score,
             "readiness": self.readiness.value if self.readiness else None,
         }
+
+@dataclass(slots=True)
+class SecurityPolicy:
+    requires_approval: bool = False
+    allowed_roles: list[str] = field(default_factory=list)
+    blocked_actions: list[str] = field(default_factory=list)
+
+@dataclass(slots=True)
+class TaskPayload:
+    objective: str
+    input_data: dict[str, Any]
+    context: dict[str, Any]
+    acceptance_criteria: list[str]
+    expected_output_format: str
+    artifacts: list[str] = field(default_factory=list)
+
+@dataclass(slots=True)
+class TaskEnvelope:
+    protocol_version: str
+    task_id: str
+    parent_task_id: str | None
+    trace_id: str
+    correlation_id: str | None
+    source_agent: str
+    target_agent: str | None
+    target_capability: str
+    priority: Priority
+    qos_class: str
+    ttl: int
+    deadline: datetime | None
+    hop_count: int
+    max_hops: int
+    retry_count: int
+    max_retries: int
+    security_policy: SecurityPolicy
+    context_scope: str
+    dependencies: list[str]
+    payload: TaskPayload
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+@dataclass(slots=True)
+class ResultPayload:
+    task_id: str
+    status: TaskStatus
+    output: dict[str, Any]
+    artifacts: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    confidence: float = 1.0
+    completed_criteria: list[str] = field(default_factory=list)
+    failed_criteria: list[str] = field(default_factory=list)
+
+@dataclass(slots=True)
+class ResultEnvelope:
+    protocol_version: str
+    result_id: str
+    task_id: str
+    trace_id: str
+    correlation_id: str | None
+    source_agent: str
+    target_agent: str | None
+    status: TaskStatus
+    payload: ResultPayload
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+@dataclass(slots=True)
+class TaskGraph:
+    root_task_id: str
+    nodes: dict[str, TaskEnvelope] = field(default_factory=dict)
+    edges: dict[str, list[str]] = field(default_factory=dict)
+    status: str = "pending"
+    merge_strategy: str = "all_required"
+
+class ProtocolError(Exception):
+    pass
+
+def encapsulate(payload: TaskPayload, metadata: dict[str, Any]) -> TaskEnvelope:
+    task_id = metadata.get("task_id") or str(uuid4())
+    trace_id = metadata.get("trace_id") or str(uuid4())
+    return TaskEnvelope(
+        protocol_version="1.0",
+        task_id=task_id,
+        parent_task_id=metadata.get("parent_task_id"),
+        trace_id=trace_id,
+        correlation_id=metadata.get("correlation_id"),
+        source_agent=metadata.get("source_agent", "system"),
+        target_agent=metadata.get("target_agent"),
+        target_capability=metadata.get("target_capability", "any"),
+        priority=metadata.get("priority", Priority.NORMAL),
+        qos_class=metadata.get("qos_class", "best_effort"),
+        ttl=metadata.get("ttl", 3600),
+        deadline=metadata.get("deadline"),
+        hop_count=0,
+        max_hops=metadata.get("max_hops", 10),
+        retry_count=0,
+        max_retries=metadata.get("max_retries", 3),
+        security_policy=metadata.get("security_policy", SecurityPolicy()),
+        context_scope=metadata.get("context_scope", "global"),
+        dependencies=metadata.get("dependencies", []),
+        payload=payload
+    )
+
+def decapsulate(envelope: TaskEnvelope, agent_capabilities: list[str]) -> TaskPayload:
+    if envelope.protocol_version != "1.0":
+        raise ProtocolError(f"Unsupported protocol version: {envelope.protocol_version}")
+    
+    if envelope.deadline and datetime.now(UTC) > envelope.deadline:
+        raise ProtocolError(f"Deadline exceeded for task {envelope.task_id}")
+    
+    if envelope.ttl <= 0:
+        raise ProtocolError(f"TTL expired for task {envelope.task_id}")
+        
+    if envelope.hop_count >= envelope.max_hops:
+        raise ProtocolError(f"Max hops ({envelope.max_hops}) exceeded for task {envelope.task_id}")
+        
+    if envelope.target_capability != "any" and envelope.target_capability not in agent_capabilities:
+        raise ProtocolError(f"Agent lacks required capability: {envelope.target_capability}")
+        
+    return envelope.payload
+
+def task_to_envelope(task: Task) -> TaskEnvelope:
+    payload = TaskPayload(
+        objective=task.input.description,
+        input_data={"constraints": task.input.constraints},
+        context={"project": task.context.project, "repo_path": task.context.repo_path, "branch": task.context.branch},
+        acceptance_criteria=task.input.acceptance_criteria,
+        expected_output_format="text",
+        artifacts=task.input.files
+    )
+    return encapsulate(payload, {
+        "task_id": task.task_id,
+        "parent_task_id": task.parent_task_id,
+        "priority": task.priority,
+        "target_capability": task.required_capability or "any",
+        "target_agent": task.assigned_model,
+        "dependencies": task.dependencies
+    })

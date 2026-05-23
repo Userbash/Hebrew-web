@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, UTC
 
 from .agent_registry import AgentRegistry
 from .load_balancer import LoadBalancer
 from .model_selector import evaluate_risk_context
-from .models import AgentRecord, AgentStatus, ExecutionPlan, Priority, Task, TaskAcceptance, TaskStatus, TaskType
+from .models import AgentRecord, AgentStatus, ExecutionPlan, Priority, Task, TaskAcceptance, TaskStatus, TaskType, TaskEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,52 @@ class TaskRouter:
     def __init__(self, registry: AgentRegistry, load_balancer: LoadBalancer) -> None:
         self.registry = registry
         self.load_balancer = load_balancer
-        # Economy mode: reduce Codex/OpenAI calls for low/medium-risk tasks.
         self.codex_economy_mode = os.getenv("AI_BRIDGE_CODEX_ECONOMY_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     def decompose(self, task: Task) -> ExecutionPlan:
         from .task_decomposer import TaskDecomposer
-
         return TaskDecomposer().decompose(task)
+
+    def route_envelope(self, envelope: TaskEnvelope) -> TaskAcceptance:
+        """Route a network-like TaskEnvelope based on policy, QoS, and risk."""
+        capability = envelope.target_capability
+        candidates = self._candidate_agents(capability)
+
+        if not candidates:
+            return TaskAcceptance(envelope.task_id, TaskStatus.REJECTED, None, "high", f"No available agent for capability {capability}")
+            
+        if envelope.deadline and datetime.now(UTC) > envelope.deadline:
+            logger.warning(f"Envelope {envelope.task_id} deadline exceeded. Rejecting.")
+            return TaskAcceptance(envelope.task_id, TaskStatus.REJECTED, None, "high", "Deadline exceeded before routing")
+            
+        if envelope.security_policy.requires_approval:
+            logger.info(f"Envelope {envelope.task_id} requires human approval.")
+            return TaskAcceptance(envelope.task_id, TaskStatus.WAITING_INPUT, None, "critical", "Requires manual security approval")
+
+        chosen_pool = self._apply_economy_policy_envelope(envelope, candidates)
+
+        agent = self._select_best_agent(chosen_pool, envelope)
+        if not agent:
+            return TaskAcceptance(envelope.task_id, TaskStatus.REJECTED, None, "high", f"No healthy agent for capability {capability} under QoS requirements")
+
+        agent.metrics.queue_depth += 1
+        return TaskAcceptance(envelope.task_id, TaskStatus.ACCEPTED, agent.id, "medium", "Task accepted")
+
+    def _select_best_agent(self, candidates: list[AgentRecord], envelope: TaskEnvelope) -> AgentRecord | None:
+        def score(a: AgentRecord) -> float:
+            base = 100.0
+            base -= a.metrics.queue_depth * 10
+            base -= a.metrics.avg_latency_ms * 0.01
+            base -= a.metrics.error_rate * 50
+            if envelope.priority in {Priority.HIGH, Priority.CRITICAL, "high", "critical"}:
+                base += a.kpi.quality_score * 20
+            return base
+
+        valid_candidates = [c for c in candidates if score(c) > 0]
+        if not valid_candidates:
+            return None
+            
+        return max(valid_candidates, key=score)
 
     def route(self, task: Task) -> TaskAcceptance:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
@@ -55,6 +95,18 @@ class TaskRouter:
             if capability in agent.capabilities and agent.status not in {AgentStatus.OFFLINE, AgentStatus.DISABLED, AgentStatus.FAILED}
         ]
 
+    def _apply_economy_policy_envelope(self, envelope: TaskEnvelope, candidates: list[AgentRecord]) -> list[AgentRecord]:
+        if not self.codex_economy_mode:
+            return candidates
+            
+        risk = evaluate_risk_context(envelope.payload.objective)
+        
+        if not risk.high_risk and envelope.priority not in {Priority.CRITICAL, Priority.HIGH, "critical", "high"}:
+            non_openai = [agent for agent in candidates if agent.provider != "openai"]
+            if non_openai:
+                return non_openai
+        return candidates
+
     def _apply_economy_policy(self, task: Task, candidates: list[AgentRecord]) -> list[AgentRecord]:
         if not self.codex_economy_mode:
             return candidates
@@ -63,7 +115,6 @@ class TaskRouter:
         high_risk = self._requires_openai_priority(task)
 
         if complexity in {"low", "medium"} and not high_risk:
-            logger.info("[ROUTING] non-openai preferred for low/medium task")
             non_openai = [agent for agent in candidates if agent.provider != "openai"]
             if non_openai:
                 preferred_group = self._preferred_non_openai_group(task, complexity, non_openai)
@@ -72,7 +123,6 @@ class TaskRouter:
 
             fallback_openai = [agent for agent in candidates if agent.provider == "openai"]
             if fallback_openai:
-                logger.warning("[FALLBACK] mistral unavailable -> openai gpt-coding-standard")
                 standard = [agent for agent in fallback_openai if agent.model_name == "gpt-coding-standard"]
                 return standard or fallback_openai
 
