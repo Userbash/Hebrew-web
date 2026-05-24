@@ -1,78 +1,96 @@
-# Contributing to Hebrew Web App
+# Contributing to Hebrew AI Platform
 
-Thank you for your interest in contributing! Here's how you can help.
+Thank you for contributing. This guide defines the minimum engineering and documentation standards for pull requests.
 
-## Getting Started
-
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/your-username/hebrew-web-app.git`
-3. Create a feature branch: `git checkout -b feature/your-feature`
-4. Make your changes
-5. Test your changes
-6. Push and submit a pull request
-
-## Development Setup
+## 1. Local Setup
 
 ```bash
-# Install backend dependencies
-cd backend && npm install
-# (Frontend is static; no npm install needed)
+# Root dependencies (test runner + docs checks)
+npm install
 
-# Install root test runner dependencies
-cd .. && npm install
+# Backend dependencies
+cd backend && npm install && cd ..
 
-# Configure environment
+# Frontend dependencies
+cd frontend-react && npm install && cd ..
+
+# Environment
 cp .env.example .env
-
-# Start development services using Docker Compose
-docker compose up --build
 ```
 
-## Testing
+## 2. Branching
+
+- Create a focused branch per change.
+- Prefer branch names such as:
+  - `feat/<scope>-<short-description>`
+  - `fix/<scope>-<short-description>`
+  - `docs/<scope>-<short-description>`
+
+## 3. Commit Standard (Conventional Commits)
+
+Use commit messages in this format:
+
+```text
+type(scope): short summary
+```
+
+Allowed `type` values:
+- `feat`
+- `fix`
+- `refactor`
+- `perf`
+- `test`
+- `docs`
+- `build`
+- `ci`
+- `chore`
+
+Examples:
+- `feat(auth): add refresh token rotation checks`
+- `fix(admin): prevent system role deletion`
+- `docs(api): add publications route contract`
+
+## 4. Required Validation Before PR
+
+Run these checks locally:
 
 ```bash
-# Run all tests before submitting PR
 npm test
-
-# Test specific component (example: view backend logs)
-docker compose logs -f backend
+npm run docs:check
+cd backend && npm run lint && npm run build && cd ..
+cd frontend-react && npm run lint && npm run build && cd ..
+python3 -m pytest ai_bridge/tests
 ```
 
-## Code Standards
+## 5. Documentation Requirements
 
-- Use meaningful variable names
-- Add comments for complex logic
-- Keep functions small and focused
-- Test your changes thoroughly
+If your PR changes behavior, update the matching docs in the same PR:
+- API changes -> `docs/API/*`
+- Architecture/security flow changes -> `docs/ARCHITECTURE.md`, `docs/SECURITY_CHANGELOG.md`
+- Migration changes -> `docs/DB_MIGRATION_PLAYBOOK.md` notes and release manifest references
+- Any release-significant change -> `CHANGELOG.md`
 
-## Pull Request Process
+## 6. Pull Request Requirements
 
-1. Ensure all tests pass: `npm test`
-2. Update README.md if needed
-3. Describe changes clearly in PR description
-4. Wait for review and address feedback
+Use `.github/PULL_REQUEST_TEMPLATE.md` and complete all required sections:
+- traceability (issue/ADR/docs)
+- risk assessment
+- migration and rollback notes
+- testing evidence
 
-## Bug Reports
+## 7. Versioning and Release
 
-Include:
-- Description of the bug
-- Steps to reproduce
-- Expected behavior
-- Actual behavior
-- Environment (Docker version, OS, etc.)
+Follow:
+- `docs/VERSIONING_POLICY.md`
+- `docs/RELEASE_MANIFEST_TEMPLATE.md`
+- `CHANGELOG.md`
 
-## Feature Requests
+Any breaking change must be explicitly marked and justified.
 
-Describe:
-- The feature you'd like
-- Why it's useful
-- How it should work
-- Any implementation ideas
+## 8. Security Expectations
 
-## Questions?
+For changes affecting auth, authorization, secrets, or audit:
+- update `docs/SECURITY_CHANGELOG.md`
+- update `docs/RBAC_MATRIX.md` if role/permission behavior changes
+- include security impact in PR template
 
-- Open a Discussion on GitHub
-- Create an Issue for bugs
-- Check existing Issues/Discussions
-
-Thank you for contributing!

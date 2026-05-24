@@ -1,0 +1,43 @@
+# Documentation Index
+
+## Core
+
+- `ARCHITECTURE.md` - system architecture and runtime flows
+- `PROJECT_FULL_DOCUMENTATION_EN.md` - full project deep-dive
+- `AI_BRIDGE_ARCHITECTURE.md` - AI Bridge-specific architecture
+
+## Governance and Process
+
+- `DOCUMENTATION_GOVERNANCE.md` - required documentation update rules and CI enforcement
+- `VERSIONING_POLICY.md` - semantic versioning and release rules
+- `TRACEABILITY_POLICY.md` - required issue-to-release traceability chain
+- `ENVIRONMENT_VERSIONING.md` - environment reproducibility/version controls
+- `RELEASE_MANIFEST_TEMPLATE.md` - release metadata template
+- `DB_MIGRATION_PLAYBOOK.md` - migration and rollback standards
+
+## Security and Access
+
+- `RBAC_MATRIX.md` - role/permission governance map
+- `SECURITY_CHANGELOG.md` - security-impact change history
+
+## Operations
+
+- `RUNBOOKS/OPERATIONS_RUNBOOK.md` - startup/deploy operations
+- `RUNBOOKS/INCIDENT_RESPONSE_RUNBOOK.md` - incident handling flow
+
+## API Contracts
+
+- `API/README.md` - API documentation structure and rules
+- `API/ERRORS.md` - standard error model
+- `API/VERSIONING.md` - API compatibility/versioning approach
+- `API/routes/*` - route module coverage
+
+## Architecture Decisions
+
+- `ADR/README.md` - ADR process and index
+- `ADR/0000-template.md` - ADR template
+- `ADR/0001-documentation-governance-and-versioning-baseline.md` - accepted baseline ADR
+
+## Quality and Coverage
+
+- `TEST_COVERAGE_MAP.md` - current test coverage map and risk gaps

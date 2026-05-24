@@ -117,3 +117,33 @@ npm run blocklist:update
 ### Custom blocked domains
 Add one domain per line in:
 - `backend/database/email-domain-blocklist.custom.txt`
+
+## Documentation and Governance
+
+### Core documentation index
+- `docs/ARCHITECTURE.md` - system architecture and runtime flows
+- `docs/API/README.md` - API contract documentation map
+- `docs/ADR/README.md` - architecture decision records
+- `docs/RUNBOOKS/OPERATIONS_RUNBOOK.md` - operational procedures
+- `docs/RUNBOOKS/INCIDENT_RESPONSE_RUNBOOK.md` - incident response process
+- `docs/VERSIONING_POLICY.md` - semantic versioning and release rules
+- `docs/DB_MIGRATION_PLAYBOOK.md` - migration/rollback guidance
+- `docs/RBAC_MATRIX.md` - role/permission governance map
+- `docs/SECURITY_CHANGELOG.md` - security-impact change log
+- `docs/TRACEABILITY_POLICY.md` - issue-to-release traceability requirements
+- `CHANGELOG.md` - release-facing history of changes
+
+### Documentation quality checks
+```bash
+npm run docs:check
+```
+
+This runs:
+- markdown local-link validation
+- API route-to-documentation coverage validation
+
+### Versioning and release discipline
+- Use semantic version tags: `vX.Y.Z`
+- Update `CHANGELOG.md` for each release
+- Complete release manifest from `docs/RELEASE_MANIFEST_TEMPLATE.md`
+- Include migration and rollback notes for any schema-affecting release

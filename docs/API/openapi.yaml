@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: Hebrew AI Platform API
+  version: 1.0.0
+  description: Baseline API contract skeleton. Expand endpoint schemas per route module.
+servers:
+  - url: http://localhost:3001/api
+paths:
+  /health:
+    get:
+      summary: Backend health probe
+      responses:
+        "200":
+          description: Health payload
+  /auth/login:
+    post:
+      summary: User login
+      responses:
+        "200":
+          description: Authenticated response
+        "401":
+          description: Invalid credentials
+  /auth/register:
+    post:
+      summary: User registration
+      responses:
+        "201":
+          description: User created
+        "400":
+          description: Validation failed
+  /admin/health:
+    get:
+      summary: Admin scope health probe
+      responses:
+        "200":
+          description: Admin health payload
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+      required: [success, message]
+

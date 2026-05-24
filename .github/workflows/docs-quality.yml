@@ -1,0 +1,37 @@
+name: Documentation Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - production
+      - main
+      - master
+
+jobs:
+  docs-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify markdown local links
+        run: npm run docs:check:links
+
+      - name: Verify API route documentation coverage
+        run: npm run docs:check:api
+
+      - name: Verify route/doc change coupling
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: npm run docs:check:coupling
