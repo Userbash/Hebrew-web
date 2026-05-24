@@ -1,0 +1,4 @@
+# Custom blocked email domains
+# One domain per line, examples:
+# spam-domain.example
+# subdomain.temp-mail.example

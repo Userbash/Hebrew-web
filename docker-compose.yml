@@ -26,7 +26,7 @@ services:
       - "443:443"
       - "8080:8080" # Dashboard
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
     labels:
       com.hebrew.service: "traefik"
       com.hebrew.component: "edge"
@@ -174,8 +174,8 @@ services:
     command: ["-config.file=/etc/promtail/config.yaml"]
     volumes:
       - ./infra/loki/promtail-config.yaml:/etc/promtail/config.yaml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/lib/docker/containers:ro
+      - ${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - promtail_positions:/tmp
     depends_on:
       loki:

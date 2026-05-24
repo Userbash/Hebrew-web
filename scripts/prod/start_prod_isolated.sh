@@ -13,8 +13,30 @@ REDIS_VOLUME_NAME="${REDIS_VOLUME_NAME:-hebrew_redisdata}"
 AVATAR_VOLUME_NAME="${AVATAR_VOLUME_NAME:-hebrew_avatar_uploads}"
 CERTS_DIR="${CERTS_DIR:-$PROJECT_ROOT/infra/edge/certs}"
 
+BACKEND_IMAGE="localhost/hebrew-backend:latest"
+FRONTEND_IMAGE="localhost/hebrew-frontend:latest"
+
 EDGE_CONF_TEMPLATE="$PROJECT_ROOT/infra/edge/nginx.prod.conf.template"
 EDGE_CONF_RENDERED="$PROJECT_ROOT/infra/edge/nginx.prod.conf"
+
+image_exists() {
+  "$BRIDGE_CMD" podman image exists "$1"
+}
+
+validate_required_env() {
+  if [ "${#JWT_SECRET}" -lt 32 ]; then
+    echo "[prod] ERROR: JWT_SECRET must be at least 32 characters"
+    exit 1
+  fi
+
+  if [ "$APP_DOMAIN_NAME" = "app.local" ] || [ "$ADMIN_DOMAIN_NAME" = "admin.local" ]; then
+    echo "[prod] ERROR: APP_DOMAIN_NAME/ADMIN_DOMAIN_NAME must be real domains in production"
+    exit 1
+  fi
+}
+
+echo "[prod] Validating required env..."
+validate_required_env
 
 echo "[prod] Rendering edge config..."
 mkdir -p "$CERTS_DIR"
@@ -35,6 +57,11 @@ echo "[prod] Building backend/frontend images..."
 cd "$PROJECT_ROOT"
 bash scripts/build_abstracted.sh
 
+if ! image_exists "$BACKEND_IMAGE" || ! image_exists "$FRONTEND_IMAGE"; then
+  echo "[prod] ERROR: required images are missing after build"
+  exit 1
+fi
+
 echo "[prod] Creating isolated network and volumes..."
 $BRIDGE_CMD podman network create hebrew-net || true
 $BRIDGE_CMD podman volume create "$PG_VOLUME_NAME" >/dev/null || true
@@ -53,14 +80,14 @@ $BRIDGE_CMD podman run -d --pull=never \
   -e POSTGRES_DB=hebrew_ai_db \
   -v "$PG_VOLUME_NAME":/var/lib/postgresql/data:Z \
   --security-opt no-new-privileges \
-  postgres:16-alpine
+  docker.io/library/postgres:16-alpine
 
 $BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_redis \
   --network hebrew-net \
   -v "$REDIS_VOLUME_NAME":/data:Z \
   --security-opt no-new-privileges \
-  redis:7-alpine
+  docker.io/library/redis:7-alpine
 
 $BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_backend \
@@ -79,19 +106,19 @@ $BRIDGE_CMD podman run -d --pull=never \
   -e REDIS_PORT=6379 \
   -e CORS_ORIGINS="https://$APP_DOMAIN_NAME,https://$ADMIN_DOMAIN_NAME" \
   -v "$AVATAR_VOLUME_NAME":/app/public/uploads/avatars:Z \
-  localhost/hebrew-backend:latest
+  "$BACKEND_IMAGE"
 
 $BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_frontend \
   --network hebrew-net \
   --security-opt no-new-privileges \
-  localhost/hebrew-frontend:latest
+  "$FRONTEND_IMAGE"
 
 $BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_admin_frontend \
   --network hebrew-net \
   --security-opt no-new-privileges \
-  localhost/hebrew-frontend:latest
+  "$FRONTEND_IMAGE"
 
 echo "[prod] Starting edge proxy (only 80/443 exposed)..."
 $BRIDGE_CMD podman run -d --pull=never \

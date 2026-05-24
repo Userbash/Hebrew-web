@@ -1,10 +1,10 @@
 #!/bin/bash
+set -euo pipefail
 
 # Bridge Manager - A unified interface for running commands on the host machine
 # from within an isolated environment (Flatpak/Container).
 
 BRIDGE_LOG="/var/tmp/bridge_access.log"
-PODMAN_SOCK="/run/user/1000/podman/podman.sock"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -16,18 +16,27 @@ log_access() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] COMMAND: $@" >> "$BRIDGE_LOG"
 }
 
+resolve_podman_socket() {
+    local uid
+    uid="${HOST_UID:-$(id -u)}"
+    local runtime_dir="/run/user/${uid}"
+    local sock="${PODMAN_SOCK:-${runtime_dir}/podman/podman.sock}"
+    echo "$sock"
+}
+
 detect_bridge_method() {
     if [ -f "/.flatpak-info" ]; then
         echo "flatpak-spawn"
-    elif [ -n "$IS_CONTAINER" ] || [ -f "/.dockerenv" ]; then
-        echo "ssh" 
+    elif [ -n "${IS_CONTAINER:-}" ] || [ -f "/.dockerenv" ]; then
+        echo "ssh"
     else
         echo "direct"
     fi
 }
 
 run_on_host() {
-    local method=$(detect_bridge_method)
+    local method
+    method=$(detect_bridge_method)
     log_access "$@"
 
     case "$method" in
@@ -35,7 +44,13 @@ run_on_host() {
             # If the command starts with podman, pass the socket explicitly
             if [[ "$1" == "podman" ]]; then
                 shift
-                flatpak-spawn --host podman --remote --url unix://"$PODMAN_SOCK" "$@"
+                local podman_sock
+                podman_sock="$(resolve_podman_socket)"
+                if flatpak-spawn --host ls "$podman_sock" >/dev/null 2>&1; then
+                    flatpak-spawn --host podman --remote --url "unix://${podman_sock}" "$@"
+                else
+                    flatpak-spawn --host podman "$@"
+                fi
             else
                 flatpak-spawn --host "$@"
             fi
@@ -47,7 +62,13 @@ run_on_host() {
             # Fallback to host podman command if available
             if [[ "$1" == "podman" ]]; then
                 shift
-                podman --remote --url unix://"$PODMAN_SOCK" "$@"
+                local podman_sock
+                podman_sock="$(resolve_podman_socket)"
+                if [[ -S "$podman_sock" ]]; then
+                    podman --remote --url "unix://${podman_sock}" "$@"
+                else
+                    podman "$@"
+                fi
             else
                 "$@"
             fi
@@ -59,7 +80,7 @@ run_on_host() {
 auto_repair() {
     local tool=$1
     echo -e "${YELLOW}Attempting to repair access for tool: $tool${NC}"
-    
+
     # Example: if tool is missing, try to find it or install it
     if ! run_on_host which "$tool" > /dev/null 2>&1; then
         echo -e "${YELLOW}Tool $tool not found on host. Attempting discovery...${NC}"
@@ -69,8 +90,8 @@ auto_repair() {
 }
 
 # Main entry point
-if [ "$1" == "--repair" ]; then
-    auto_repair "$2"
+if [ "${1:-}" == "--repair" ]; then
+    auto_repair "${2:-}"
 elif [ "$#" -gt 0 ]; then
     run_on_host "$@"
 else
