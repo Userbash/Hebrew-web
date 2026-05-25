@@ -13,7 +13,7 @@ jobs:
     env:
       DOMAIN_NAME: localhost
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Deploy to Server
         shell: bash
