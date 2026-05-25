@@ -621,6 +621,15 @@ export const db = {
                 duration: row.duration ? Number(row.duration) : null,
                 updatedAt: row.updated_at,
             })),
+            currentLesson: activeLessonsRes.rows[0]
+                ? {
+                    lessonId: activeLessonsRes.rows[0].lesson_id,
+                    title: activeLessonsRes.rows[0].name,
+                    progressPercent: Number(activeLessonsRes.rows[0].progress_percent || 0),
+                    duration: activeLessonsRes.rows[0].duration ? Number(activeLessonsRes.rows[0].duration) : null,
+                    updatedAt: activeLessonsRes.rows[0].updated_at,
+                }
+                : null,
             recentActivities: recentActivityRes.rows.map((row) => ({
                 title: row.title,
                 happenedAt: row.happened_at,

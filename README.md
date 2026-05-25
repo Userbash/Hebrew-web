@@ -1,149 +1,126 @@
-# Hebrew AI Platform
+# Language School Platform
 
-A learning workspace for the Hebrew language, integrated with a multi-agent AI orchestration layer.
+A full-stack learning platform with one consistent product flow:
+public website -> login -> student workspace -> admin console.
 
-![UI Preview](images/images.png)
+This project exists to solve a common real problem:
+- learners need a clean place to study and track progress,
+- teams need safe content management and moderation,
+- administrators need control, visibility, and audit-ready operations.
 
-## Architecture Overview
+The platform keeps these parts in one system, with shared design and shared access rules.
 
-The platform consists of four primary components designed for performance, security, and scalability:
+## Why this project exists
 
-### 1. AI Bridge Orchestration
-A Python-based multi-agent runtime that manages task decomposition and execution across multiple LLM providers.
-- **Capability Routing**: Directs tasks to specialized agents (Codex, Reviewer, Tester, Planner).
-- **Quality Gates**: Iterative feedback loops to ensure result accuracy.
-- **Smart Scheduling**: Priority-aware load balancing based on agent health, latency, and success rates.
+Most small learning products split into disconnected tools.
+That causes repeated work, unstable progress logic, and weak operational control.
 
-### 2. Data Layer
-- **Replicated PostgreSQL**: Master-Replica setup to ensure data durability and separate write operations from high-volume reads.
-- **Full-Text Search**: Optimized Hebrew search using PostgreSQL GIN indexes and `tsvector`.
-- **Performance Caching**: Redis-backed session management.
+This project is built to provide:
+- one identity and access model for all areas,
+- one backend source of truth for progress and permissions,
+- one UI language across public, student, and admin screens,
+- one deployable stack for development and production.
 
-### 3. Secure Isolation (BridgeOS)
-Designed for execution within isolated development environments (Flatpak/Containers).
-- **Host Bridge**: A secure gateway for interacting with host-level utilities like Docker and Podman.
-- **Command Whitelisting**: Strict audit trails and security policies governing host-to-container communication.
+## Product areas
 
-### 4. Frontend
-- **React + TypeScript**: Type-safe, component-driven UI.
-- **Tailwind CSS**: A dark-themed, minimal interface focused on distraction-free learning.
-- **Vite**: Fast development and build toolchain.
+1. Public website
+- clear product message,
+- public content and entry points,
+- direct path to sign in.
 
----
+2. Login and account access
+- focused authentication screen,
+- secure session-based access,
+- role-aware routing after sign in.
 
-## Project Structure
+3. Student workspace
+- dashboard with lessons, progress, and activity,
+- personal settings and profile controls,
+- simple flow to continue learning sessions.
 
-```text
-├── ai_bridge/          # Python AI Orchestration Layer
-│   ├── core/           # Routing, Load Balancing, Security
-│   └── agents/         # LLM Provider Abstractions
-├── backend/            # TypeScript / Node.js API
-│   ├── database/       # Migrations & Master-Replica logic
-│   └── api/            # Security Middleware & Controllers
-├── frontend-react/     # Vite / React / Tailwind Frontend
-├── scripts/            # Infrastructure & BridgeOS scripts
-└── infra/              # Observability (Grafana, Loki)
-```
+4. Admin console
+- user and group management,
+- moderation and publication workflows,
+- audit and system metrics in one place.
 
----
+## Screenshots
 
-## Getting Started
+### Student dashboard
+![Student Dashboard](images/dashboard-overview.png)
 
-### 1. Initialize Secure Bridge
-Grant the isolated environment access to required host utilities:
+### Admin console
+![Admin Console](images/admin-console-overview.png)
+
+### Public homepage
+![Public Homepage](images/public-homepage.png)
+
+## Architecture summary
+
+- `frontend-react/`: React + TypeScript user interface
+- `backend/`: Node.js + TypeScript API and business logic
+- `ai_bridge/`: task orchestration and worker runtime module
+- `infra/`: observability and deployment support files
+- `scripts/`: local and container automation scripts
+
+## Core principles
+
+- Backend owns business truth.
+- Role-based access is enforced server-side.
+- Progress is state-driven, not button-driven.
+- Security and audit trails are part of normal operations.
+- Design language stays consistent across all product areas.
+
+## Getting started
+
+1. Prepare environment
 ```bash
-bash scripts/bridge/auto_bridge.sh
+cp .env.example .env
 ```
 
-### 2. Setup Data Infrastructure
-Provision the replicated database and Redis:
+2. Start infrastructure and services
 ```bash
 bash scripts/start_replicated_db.sh
-```
-
-### 3. Build & Launch
-Build the container images and start the services:
-```bash
 bash scripts/build_abstracted.sh
 bash scripts/start_manual.sh
 ```
 
-- **Web Interface**: `http://localhost:8081`
-- **Backend API**: `http://localhost:3001`
+3. Open apps
+- Web: `http://localhost:8081`
+- API: `http://localhost:3001`
 
----
+## Development commands
 
-## Testing
-
-### AI Bridge Tests
+Frontend:
 ```bash
+cd frontend-react
+npm install
+npm run dev
+npm run build
+```
+
+Backend:
+```bash
+cd backend
+npm install
+npm run dev
+npm run build
+```
+
+Tests:
+```bash
+npm test
 python3 -m pytest ai_bridge/tests
 ```
 
-### Full System Tests
-```bash
-npm test
-```
+## Documentation
 
-## Security
-All communication with the host machine is audited. Direct execution is disabled. To allow new host commands, update `scripts/bridge/whitelist.txt`.
+See `docs/` for:
+- architecture,
+- API references,
+- operations runbooks,
+- migration and release policies,
+- RBAC and security governance.
 
-## Registration Security (Email)
+## License
 
-Backend registration now includes:
-- duplicate checks for both `email` and `username`
-- 8 semantic username suggestions when only `username` is already taken
-- disposable/throwaway email detection
-- domain blocklist/allowlist checks
-- automatic periodic blocklist updates from open sources
-
-### Configure
-Use `.env` keys:
-- `CORS_ORIGINS`
-- `EMAIL_DOMAIN_BLOCKLIST`
-- `EMAIL_DOMAIN_ALLOWLIST`
-- `EMAIL_DOMAIN_BLOCKLIST_SOURCES`
-- `EMAIL_DOMAIN_BLOCKLIST_AUTO_UPDATE`
-- `EMAIL_DOMAIN_BLOCKLIST_UPDATE_INTERVAL_MINUTES`
-- `EMAIL_DOMAIN_BLOCKLIST_CACHE_FILE`
-- `EMAIL_DOMAIN_BLOCKLIST_CUSTOM_FILE`
-
-### Manual blocklist refresh
-```bash
-cd backend
-npm run blocklist:update
-```
-
-### Custom blocked domains
-Add one domain per line in:
-- `backend/database/email-domain-blocklist.custom.txt`
-
-## Documentation and Governance
-
-### Core documentation index
-- `docs/ARCHITECTURE.md` - system architecture and runtime flows
-- `docs/API/README.md` - API contract documentation map
-- `docs/ADR/README.md` - architecture decision records
-- `docs/RUNBOOKS/OPERATIONS_RUNBOOK.md` - operational procedures
-- `docs/RUNBOOKS/INCIDENT_RESPONSE_RUNBOOK.md` - incident response process
-- `docs/VERSIONING_POLICY.md` - semantic versioning and release rules
-- `docs/DB_MIGRATION_PLAYBOOK.md` - migration/rollback guidance
-- `docs/RBAC_MATRIX.md` - role/permission governance map
-- `docs/SECURITY_CHANGELOG.md` - security-impact change log
-- `docs/TRACEABILITY_POLICY.md` - issue-to-release traceability requirements
-- `CHANGELOG.md` - release-facing history of changes
-
-### Documentation quality checks
-```bash
-npm run docs:check
-```
-
-This runs:
-- markdown local-link validation
-- API route-to-documentation coverage validation
-
-### Versioning and release discipline
-- Use semantic version tags: `vX.Y.Z`
-- Update `CHANGELOG.md` for each release
-- Complete release manifest from `docs/RELEASE_MANIFEST_TEMPLATE.md`
-- Include migration and rollback notes for any schema-affecting release
+MIT (see `LICENSE`).

@@ -1365,3 +1365,60 @@ button {
   background: #245de0;
   border-color: #245de0;
 }
+
+/* School dashboard dark-surface consistency */
+.school-page .school-user-badge {
+  background: rgba(15, 23, 42, 0.75);
+  color: #e5edf9;
+  border: 1px solid rgba(100, 116, 139, 0.5);
+}
+
+.school-page .school-user-badge svg {
+  opacity: 0.9;
+}
+
+.school-page .school-inline-alert,
+.school-page .alert-info,
+.school-page .alert-secondary,
+.school-page .alert-success,
+.school-page .alert-danger {
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  background: rgba(15, 23, 42, 0.66);
+  color: #dbe7fb;
+}
+
+.school-page .alert-info {
+  border-color: rgba(59, 130, 246, 0.55);
+}
+
+.school-page .alert-success {
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.school-page .alert-danger {
+  border-color: rgba(244, 63, 94, 0.55);
+}
+
+.school-page .progress {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(100, 116, 139, 0.45);
+}
+
+.school-page .progress-bar {
+  background: linear-gradient(90deg, #2563eb, #1d4ed8);
+  color: #f8fbff;
+}
+
+.school-page .school-search-wrap {
+  background: rgba(15, 23, 42, 0.56);
+  border-color: rgba(100, 116, 139, 0.45);
+}
+
+.school-page .school-search-wrap input::placeholder {
+  color: #8ea0ba;
+}
+
+.school-page .school-search-wrap:focus-within {
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}

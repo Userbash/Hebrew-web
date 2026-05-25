@@ -37,6 +37,13 @@ interface DashboardData {
     duration: number | null;
     updatedAt: string;
   }>;
+  currentLesson: {
+    lessonId: string;
+    title: string;
+    progressPercent: number;
+    duration: number | null;
+    updatedAt: string;
+  } | null;
   recentActivities: Array<{
     title: string;
     happenedAt: string;
@@ -237,7 +244,7 @@ export default function App() {
                       <CheckCircle2 size={14} />
                       {t.systemOnline}
                     </Badge>
-                    <Badge bg="light" text="dark" className="d-inline-flex align-items-center gap-1 px-3 py-2 border">
+                    <Badge className="school-user-badge d-inline-flex align-items-center gap-1 px-3 py-2">
                       <UserRound size={14} />
                       {user?.email || 'student@example.com'}
                     </Badge>
@@ -255,7 +262,11 @@ export default function App() {
                             <h2 className="h4 mb-2">{t.dayReadyTitle}</h2>
                             <p className="text-secondary mb-0">{t.dayReadyDesc}</p>
                           </div>
-                          <Button variant="primary">{t.continueLesson}</Button>
+                          {dashboard?.currentLesson ? (
+                            <Button variant="primary" onClick={() => setActiveTab('lessons')}>
+                              {t.continueLesson}
+                            </Button>
+                          ) : null}
                         </div>
                       </Card.Body>
                     </Card>
@@ -333,7 +344,7 @@ export default function App() {
                         ))}
                         {(!dashboard?.activeLessonItems || dashboard.activeLessonItems.length === 0) && (
                           <Col>
-                            <Alert variant="secondary" className="mb-0">Нет активных уроков. Начните урок из каталога, и он появится здесь.</Alert>
+                            <Alert variant="secondary" className="mb-0 school-inline-alert">Нет активных уроков. Начните урок из каталога, и он появится здесь.</Alert>
                           </Col>
                         )}
                       </Row>
