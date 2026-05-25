@@ -41,3 +41,14 @@
 ## Quality and Coverage
 
 - `TEST_COVERAGE_MAP.md` - current test coverage map and risk gaps
+
+## Orchestrator Hardening
+
+- `AI_BRIDGE_HARDENING_BACKLOG.md` - micro-task backlog with owners, dependencies, and DoD
+- `AI_BRIDGE_EXECUTION_PLAN_R1_R4.md` - encapsulated by-agent plan and decapsulated release execution model
+
+## Session Memory
+
+- `AI_BRIDGE_SESSION_MEMORY.md` - architecture and security model for temporary session memory
+- `AI_BRIDGE_SESSION_MEMORY_BACKLOG.md` - micro-task decomposition and ownership map
+- `AI_BRIDGE_SESSION_MEMORY_RELEASE_PLAN.md` - decapsulated R1-R4 rollout plan

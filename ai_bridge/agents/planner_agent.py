@@ -8,5 +8,5 @@ class PlannerAgent(BaseAgent):
     def __init__(self, agent_id: str = "planneragent") -> None:
         super().__init__(agent_id, ['plan'])
 
-    def run(self, task: Task) -> AgentResult:
+    def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         return self.result(task, "Created task graph and dependencies.")

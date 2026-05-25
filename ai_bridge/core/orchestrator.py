@@ -19,6 +19,7 @@ from .quality_analyzer import QualityAnalyzer
 from .security_gate import SecurityGate
 from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
+from .session_memory import MemoryScope, SessionMemory
 from .task_decomposer import TaskDecomposer
 from .task_router import CAPABILITY_BY_TASK_TYPE, TaskRouter
 from .user_console import UserConsole
@@ -45,6 +46,7 @@ class Orchestrator:
         self.console = UserConsole()
         self.security_gate = SecurityGate()
         self.host_bridge = HostBridge()
+        self.session_memory = SessionMemory()
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}
         self.live_trace_rows: list[dict[str, object]] = []
@@ -61,6 +63,34 @@ class Orchestrator:
         plan = self.decomposer.decompose(task)
         self.console.emit("PLAN", f"Создано атомарных задач: {len(plan.atomic_tasks)}")
         return plan
+
+    def _load_memory_context(self, task: Task, agent_id: str) -> dict[str, object]:
+        scope_name = (task.memory_scope or "task").lower()
+        scope = MemoryScope.TASK
+        if scope_name == "session":
+            scope = MemoryScope.SESSION
+        elif scope_name == "agent":
+            scope = MemoryScope.AGENT
+        elif scope_name == "capability":
+            scope = MemoryScope.CAPABILITY
+
+        if scope == MemoryScope.SESSION:
+            identifier = task.session_id or "default"
+        elif scope == MemoryScope.AGENT:
+            identifier = agent_id
+        elif scope == MemoryScope.CAPABILITY:
+            identifier = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
+        else:
+            identifier = task.task_id
+
+        context: dict[str, object] = {}
+        if task.cache_policy == "write_only":
+            return context
+        for key in task.memory_keys:
+            value = self.session_memory.get(scope, identifier, key)
+            if value is not None:
+                context[key] = value
+        return context
 
     def run_task(self, task: Task) -> AgentResult:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
@@ -144,13 +174,35 @@ class Orchestrator:
             agent = self.local_agents.get(agent_id)
             if not agent:
                 return AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": "No local executor for routed agent", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, ["No local executor"], [])
-            result = agent.run(task)
+            memory_context = self._load_memory_context(task, agent_id)
+            result = agent.run(task, memory_context=memory_context)
             quality = self.quality.analyze(task, result)
             if agent_record:
                 agent_record.metrics.quality_score = quality.score
                 self.metrics.record_result(agent_record, result)
                 self.kpi.apply_priority_policy(agent_record)
             self.results[task.task_id] = result
+            if task.cache_policy in {"write_only", "read_write"}:
+                scope_name = (task.memory_scope or "task").lower()
+                scope = MemoryScope.TASK
+                if scope_name == "session":
+                    scope = MemoryScope.SESSION
+                elif scope_name == "agent":
+                    scope = MemoryScope.AGENT
+                elif scope_name == "capability":
+                    scope = MemoryScope.CAPABILITY
+
+                if scope == MemoryScope.SESSION:
+                    identifier = task.session_id or "default"
+                elif scope == MemoryScope.AGENT:
+                    identifier = agent_id
+                elif scope == MemoryScope.CAPABILITY:
+                    identifier = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
+                else:
+                    identifier = task.task_id
+
+                self.session_memory.set(scope, identifier, "last_result", result.as_dict(), ttl_sec=task.memory_ttl_sec)
+                self.session_memory.set(scope, identifier, "last_summary", result.output.get("summary", ""), ttl_sec=task.memory_ttl_sec)
             self.console.emit("EXECUTION", f"task_id={task.task_id} agent={agent_id} status={result.status.value}")
 
             if choice.requires_secondary_review:

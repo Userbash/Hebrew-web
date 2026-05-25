@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import os
-import subprocess
 
 from .base_agent import BaseAgent
+from ai_bridge.core.external_ai_bridge import ExternalAIBridge
 from ai_bridge.core.models import Task, TaskStatus
 from ai_bridge.core.security import SecurityManager
 
@@ -12,29 +14,32 @@ class GeminiCLIAgent(BaseAgent):
         self.security = security_manager
         self.timeout_sec = self._resolve_timeout()
 
-    def run(self, task: Task):
+    def run(self, task: Task, memory_context: dict | None = None):
         prompt = str(task.input.description)
-        cmd = ["npx", "@google/gemini-cli", "--prompt", prompt, "--output-format", "text"]
-
-        if not self.security.validate_shell_command(" ".join(cmd)):
+        # Validate command intent before executing external CLI.
+        intent_cmd = "npx @google/gemini-cli --prompt"
+        if not self.security.validate_shell_command(intent_cmd):
             return self.result(task, "Security violation: CLI command not allowed", TaskStatus.FAILED)
 
         self.active_tasks += 1
         try:
-            if self.host_bridge is not None:
-                result = self.host_bridge.execute(cmd, timeout=self.timeout_sec, capture_output=True, text=True, check=False)
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout_sec)
+            bridge = ExternalAIBridge(self.host_bridge)
+            bridge_result = bridge.run_gemini_cli(task, prompt, timeout_sec=self.timeout_sec)
 
-            if result.returncode == 0:
-                return self.result(task, result.stdout.strip(), TaskStatus.DONE)
+            if bridge_result.ok:
+                return self.result(task, bridge_result.output, TaskStatus.DONE)
 
-            self.last_error = result.stderr
-            return self.result(task, "CLI execution failed", TaskStatus.FAILED, errors=[result.stderr])
-        except subprocess.TimeoutExpired as e:
-            self.last_error = str(e)
-            return self.result(task, "CLI execution timed out", TaskStatus.FAILED, errors=[str(e)])
-        except Exception as e:
+            self.last_error = bridge_result.error
+            summary = f"Gemini CLI unavailable (model={bridge_result.model}, attempts={bridge_result.attempts})"
+            if "timeout" in bridge_result.error.lower():
+                summary = "CLI execution timed out"
+            return self.result(
+                task,
+                summary,
+                TaskStatus.FAILED,
+                errors=[bridge_result.error],
+            )
+        except Exception as e:  # pragma: no cover - guardrail
             self.last_error = str(e)
             return self.result(task, "CLI execution error", TaskStatus.FAILED, errors=[str(e)])
         finally:

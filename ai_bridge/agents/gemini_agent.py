@@ -14,7 +14,7 @@ class GeminiAgent(BaseAgent):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
 
-    def run(self, task: Task) -> AgentResult:
+    def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         try:
             self.active_tasks += 1
             response = self.model.generate_content(task.input.data)

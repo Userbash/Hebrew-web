@@ -13,7 +13,7 @@ class ExternalAIAgent(BaseAgent):
         self.security = security or SecurityManager()
         self.protocol = protocol or RestProtocol()
 
-    def run(self, task: Task) -> AgentResult:
+    def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         payload = {
             "task_id": task.task_id,
             "type": task.type.value,

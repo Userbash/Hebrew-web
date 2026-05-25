@@ -34,7 +34,7 @@ class BaseAgent(ABC):
         self.host_bridge = bridge
 
     @abstractmethod
-    def run(self, task: Task) -> AgentResult:
+    def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         raise NotImplementedError
 
     def result(self, task: Task, summary: str, status: TaskStatus = TaskStatus.DONE, confidence: float = 0.9, errors: list[str] | None = None) -> AgentResult:

@@ -8,5 +8,5 @@ class CodexAgent(BaseAgent):
     def __init__(self, agent_id: str = "codexagent") -> None:
         super().__init__(agent_id, ['code', 'fix', 'refactor'])
 
-    def run(self, task: Task) -> AgentResult:
+    def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         return self.result(task, "Implemented requested code changes.")

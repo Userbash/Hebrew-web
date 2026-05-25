@@ -19,3 +19,7 @@ Architecture Decision Records (ADRs) capture important technical decisions and t
 
 - `0001-documentation-governance-and-versioning-baseline.md`
 
+
+- `0002-ai-bridge-runtime-hardening-and-reliability-roadmap.md` (Proposed)
+
+- `0003-ai-bridge-session-memory.md` (Proposed)

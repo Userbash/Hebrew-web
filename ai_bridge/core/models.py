@@ -266,6 +266,12 @@ class Task:
     complexity: Complexity | None = None
     assigned_model: str | None = None
     expected_output: str | None = None
+    session_id: str | None = None
+    memory_scope: str = "task"
+    memory_keys: list[str] = field(default_factory=list)
+    memory_ttl_sec: int | None = None
+    cache_policy: str = "read_write"
+    repo_fingerprint: str | None = None
 
 
 @dataclass(slots=True)
@@ -556,6 +562,12 @@ class TaskEnvelope:
     context_scope: str
     dependencies: list[str]
     payload: TaskPayload
+    session_id: str | None = None
+    memory_scope: str = "task"
+    memory_keys: list[str] = field(default_factory=list)
+    memory_ttl_sec: int | None = None
+    cache_policy: str = "read_write"
+    repo_fingerprint: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -617,6 +629,12 @@ def encapsulate(payload: TaskPayload, metadata: dict[str, Any]) -> TaskEnvelope:
         max_retries=metadata.get("max_retries", 3),
         security_policy=metadata.get("security_policy", SecurityPolicy()),
         context_scope=metadata.get("context_scope", "global"),
+        session_id=metadata.get("session_id"),
+        memory_scope=metadata.get("memory_scope", "task"),
+        memory_keys=metadata.get("memory_keys", []),
+        memory_ttl_sec=metadata.get("memory_ttl_sec"),
+        cache_policy=metadata.get("cache_policy", "read_write"),
+        repo_fingerprint=metadata.get("repo_fingerprint"),
         dependencies=metadata.get("dependencies", []),
         payload=payload
     )
@@ -654,5 +672,11 @@ def task_to_envelope(task: Task) -> TaskEnvelope:
         "priority": task.priority,
         "target_capability": task.required_capability or "any",
         "target_agent": task.assigned_model,
+        "session_id": task.session_id,
+        "memory_scope": task.memory_scope,
+        "memory_keys": task.memory_keys,
+        "memory_ttl_sec": task.memory_ttl_sec,
+        "cache_policy": task.cache_policy,
+        "repo_fingerprint": task.repo_fingerprint,
         "dependencies": task.dependencies
     })

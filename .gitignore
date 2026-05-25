@@ -70,3 +70,12 @@ backend/node_modules/
 
 # Generated email blocklist cache
 backend/database/email-domain-blocklist.cache.txt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/

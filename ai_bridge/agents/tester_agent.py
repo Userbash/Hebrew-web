@@ -11,5 +11,5 @@ class TesterAgent(BaseAgent):
     def __init__(self, agent_id: str = "testeragent") -> None:
         super().__init__(agent_id, ['test', 'ci'])
 
-    def run(self, task: Task) -> AgentResult:
+    def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         return self.result(task, "Created and ran tests for acceptance criteria.")
