@@ -1,7 +1,3 @@
-/**
- * Lessons Routes
- */
-
 import express, { Request, Response } from 'express';
 import { db, ItemRow } from '../data/db.js';
 import { verifyToken, RequestWithAuth } from '../middleware/auth.js';
@@ -17,10 +13,6 @@ const withCompletionFlag = (lessons: ItemRow[], acquiredIds: Set<string>) => {
     }));
 };
 
-/**
- * GET /api/lessons
- * Get all lessons with optional difficulty filter.
- */
 router.get('/', verifyToken, requirePermission('lessons', 'read', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const difficulty = typeof req.query.difficulty === 'string' ? req.query.difficulty.trim() : '';
 
@@ -37,17 +29,9 @@ router.get('/', verifyToken, requirePermission('lessons', 'read', 'any'), asyncH
         lessons = withCompletionFlag(lessons, acquiredIds);
     }
 
-    res.status(200).json({
-        success: true,
-        lessons,
-        count: lessons.length,
-    });
+    res.status(200).json({ success: true, data: { lessons, count: lessons.length } });
 }));
 
-/**
- * GET /api/lessons/:id
- * Get lesson by ID.
- */
 router.get('/:id', verifyToken, requirePermission('lessons', 'read', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const lesson = await db.getLessonById(id);
@@ -66,19 +50,68 @@ router.get('/:id', verifyToken, requirePermission('lessons', 'read', 'any'), asy
         };
     }
 
+    res.status(200).json({ success: true, data: { lesson: lessonData } });
+}));
+
+router.post('/:id/start', verifyToken, requirePermission('progress', 'read', 'own'), asyncHandler(async (req: Request, res: Response) => {
+    const lessonId = req.params.id as string;
+    const lesson = await db.getLessonById(lessonId);
+
+    if (!lesson) {
+        throw new NotFoundError('Lesson not found');
+    }
+
+    const authReq = req as RequestWithAuth;
+    await db.startLessonProgress(authReq.userId, lessonId);
+
+    res.status(200).json({ success: true, data: { lessonId, status: 'in_progress' } });
+}));
+
+router.post('/:id/progress', verifyToken, requirePermission('progress', 'read', 'own'), asyncHandler(async (req: Request, res: Response) => {
+    const lessonId = req.params.id as string;
+    const lesson = await db.getLessonById(lessonId);
+
+    if (!lesson) {
+        throw new NotFoundError('Lesson not found');
+    }
+
+    const progressPercent = Number(req.body?.progressPercent);
+    if (!Number.isFinite(progressPercent)) {
+        throw new ValidationError('progressPercent must be a number');
+    }
+
+    const authReq = req as RequestWithAuth;
+    const state = await db.updateLessonProgressPercent(authReq.userId, lessonId, progressPercent);
+
     res.status(200).json({
         success: true,
-        lesson: lessonData,
+        data: {
+            lessonId,
+            status: state.status,
+            progressPercent: state.progress_percent,
+        },
     });
 }));
 
-/**
- * POST /api/lessons/:id/complete
- * Marks lesson as completed and applies XP once.
- */
+router.get('/:id/progress', verifyToken, requirePermission('progress', 'read', 'own'), asyncHandler(async (req: Request, res: Response) => {
+    const lessonId = req.params.id as string;
+    const authReq = req as RequestWithAuth;
+
+    const rows = await db.query(
+        `SELECT status, progress_percent, started_at, last_activity_at, completed_at
+         FROM user_lesson_progress
+         WHERE user_id = $1 AND lesson_id = $2
+         LIMIT 1`,
+        [authReq.userId, lessonId]
+    );
+
+    const row = rows.rows[0] || null;
+    res.status(200).json({ success: true, data: { lessonId, progress: row } });
+}));
+
 router.post('/:id/complete', verifyToken, requirePermission('progress', 'read', 'own'), asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id as string;
-    const lesson = await db.getLessonById(id);
+    const lessonId = req.params.id as string;
+    const lesson = await db.getLessonById(lessonId);
 
     if (!lesson) {
         throw new NotFoundError('Lesson not found');
@@ -86,21 +119,20 @@ router.post('/:id/complete', verifyToken, requirePermission('progress', 'read', 
 
     const authReq = req as RequestWithAuth;
     const xpReward = typeof lesson.metadata?.xpReward === 'number' ? lesson.metadata.xpReward : 50;
-    const userProgress = await db.completeItemWithXp(authReq.userId, id, xpReward);
+    const result = await db.completeLessonWorkflow(authReq.userId, lessonId, xpReward);
 
     res.status(200).json({
         success: true,
-        message: 'Lesson marked as completed',
-        xpEarned: userProgress.xpEarned,
-        userLevel: userProgress.level,
-        userXp: userProgress.xp_total,
+        data: {
+            lessonId,
+            status: 'completed',
+            xpEarned: result.xpEarned,
+            userLevel: result.level,
+            userXp: result.xp_total,
+        },
     });
 }));
 
-/**
- * POST /api/lessons
- * Create lesson (admin only).
- */
 router.post('/', verifyToken, requirePermission('lessons', 'create', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const { title, description, difficulty, duration, content, xpReward } = req.body;
 
@@ -117,17 +149,9 @@ router.post('/', verifyToken, requirePermission('lessons', 'create', 'any'), asy
         xpReward: typeof xpReward === 'number' ? xpReward : 50,
     });
 
-    res.status(201).json({
-        success: true,
-        message: 'Lesson created successfully',
-        lesson,
-    });
+    res.status(201).json({ success: true, data: { lesson } });
 }));
 
-/**
- * PUT /api/lessons/:id
- * Update lesson.
- */
 router.put('/:id', verifyToken, requirePermission('lessons', 'update', 'any'), asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
 
@@ -144,11 +168,7 @@ router.put('/:id', verifyToken, requirePermission('lessons', 'update', 'any'), a
         throw new NotFoundError('Lesson not found');
     }
 
-    res.status(200).json({
-        success: true,
-        message: 'Lesson updated successfully',
-        lesson,
-    });
+    res.status(200).json({ success: true, data: { lesson } });
 }));
 
 export default router;

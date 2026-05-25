@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { Mail, Lock, Loader2, Eye, EyeOff, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { Alert, Button, Card, Col, Container, Form, InputGroup, Row } from 'react-bootstrap';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { getDefaultRouteForUser } from '../security/adminAccess';
@@ -38,7 +39,6 @@ type RegistrationForm = z.infer<typeof registrationSchema>;
 interface RegisterErrorResponse {
   message?: string;
   field?: 'email' | 'username' | 'both';
-  code?: string;
   suggestions?: string[];
 }
 
@@ -46,6 +46,7 @@ const RegistrationPage: React.FC = () => {
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [usernameSuggestions, setUsernameSuggestions] = React.useState<string[]>([]);
+  const [globalError, setGlobalError] = React.useState('');
   const { t } = useLanguage();
   const { setUser } = useAuth();
   const navigate = useNavigate();
@@ -57,6 +58,7 @@ const RegistrationPage: React.FC = () => {
 
   const onSubmit = async (data: RegistrationForm) => {
     setUsernameSuggestions([]);
+    setGlobalError('');
 
     try {
       const response = await api.post('/auth/register', {
@@ -92,100 +94,106 @@ const RegistrationPage: React.FC = () => {
         return;
       }
 
-      setError('email', { message });
+      setGlobalError(message);
     }
   };
 
   return (
-    <main className="login-page">
+    <main className="login-page school-landing-bg">
       <UiPreferencesControls className="login-topbar" />
+      <Container>
+        <Row className="align-items-center g-4">
+          <Col lg={7}>
+            <div className="login-copy">
+              <div className="login-badge">Language School</div>
+              <h1>{t.registerHeroTitle}</h1>
+              <p>{t.registerHeroDesc}</p>
+            </div>
+          </Col>
+          <Col lg={5}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="login-card">
+                <Card.Body>
+                  <div className="login-card-header">
+                    <h2>{t.registerCardTitle}</h2>
+                  </div>
 
-      <section className="login-layout">
-        <div className="login-copy">
-          <div className="login-badge">Hebrew AI</div>
-          <h1>{t.registerHeroTitle}</h1>
-          <p>{t.registerHeroDesc}</p>
-        </div>
+                  <Form onSubmit={handleSubmit(onSubmit)} className="login-form">
+                    <Form.Group>
+                      <Form.Label>{t.usernameLabel}</Form.Label>
+                      <InputGroup className="login-input-wrap">
+                        <InputGroup.Text><User size={18} /></InputGroup.Text>
+                        <Form.Control {...register('username')} type="text" placeholder={t.usernamePlaceholder} autoComplete="username" />
+                      </InputGroup>
+                      {errors.username && <div className="login-error mt-1">{errors.username.message}</div>}
+                      {usernameSuggestions.length > 0 && (
+                        <div className="login-card-kicker mt-1">
+                          Варианты username: {usernameSuggestions.map((suggestion, index) => (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => setValue('username', suggestion, { shouldDirty: true, shouldValidate: true })}
+                              className="site-link-btn"
+                            >
+                              {suggestion}{index < usernameSuggestions.length - 1 ? ', ' : ''}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </Form.Group>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="login-card">
-          <div className="login-card-header">
-            <h2>{t.registerCardTitle}</h2>
-          </div>
+                    <Form.Group>
+                      <Form.Label>{t.emailLabel}</Form.Label>
+                      <InputGroup className="login-input-wrap">
+                        <InputGroup.Text><Mail size={18} /></InputGroup.Text>
+                        <Form.Control {...register('email')} type="email" placeholder="name@example.com" autoComplete="email" />
+                      </InputGroup>
+                      {errors.email && <div className="login-error mt-1">{errors.email.message}</div>}
+                    </Form.Group>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="login-form">
-            <label className="login-field">
-              <span>{t.usernameLabel}</span>
-              <div className="login-input-wrap">
-                <User size={18} />
-                <input {...register('username')} type="text" placeholder={t.usernamePlaceholder} autoComplete="username" />
-              </div>
-              {errors.username && <p className="login-error">{errors.username.message}</p>}
-              {usernameSuggestions.length > 0 && (
-                <div className="login-card-kicker">
-                  Варианты username: {usernameSuggestions.map((suggestion, index) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => setValue('username', suggestion, { shouldDirty: true, shouldValidate: true })}
-                      className="site-link-btn"
-                    >
-                      {suggestion}{index < usernameSuggestions.length - 1 ? ', ' : ''}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </label>
+                    <Form.Group>
+                      <Form.Label>{t.passwordLabel}</Form.Label>
+                      <InputGroup className="login-input-wrap">
+                        <InputGroup.Text><Lock size={18} /></InputGroup.Text>
+                        <Form.Control {...register('password')} type={showPassword ? 'text' : 'password'} placeholder={t.registerPasswordPlaceholder} autoComplete="new-password" />
+                        <Button type="button" variant="outline-secondary" onClick={() => setShowPassword(!showPassword)} className="login-password-toggle">
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </Button>
+                      </InputGroup>
+                      <div className="login-card-kicker mt-1">{t.passwordRulesHint}</div>
+                      {errors.password && <div className="login-error mt-1">{errors.password.message}</div>}
+                    </Form.Group>
 
-            <label className="login-field">
-              <span>{t.emailLabel}</span>
-              <div className="login-input-wrap">
-                <Mail size={18} />
-                <input {...register('email')} type="email" placeholder="name@example.com" autoComplete="email" />
-              </div>
-              {errors.email && <p className="login-error">{errors.email.message}</p>}
-            </label>
+                    <Form.Group>
+                      <Form.Label>{t.confirmPasswordLabel}</Form.Label>
+                      <InputGroup className="login-input-wrap">
+                        <InputGroup.Text><Lock size={18} /></InputGroup.Text>
+                        <Form.Control {...register('confirmPassword')} type={showConfirmPassword ? 'text' : 'password'} placeholder={t.confirmPasswordPlaceholder} autoComplete="new-password" />
+                        <Button type="button" variant="outline-secondary" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="login-password-toggle">
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </Button>
+                      </InputGroup>
+                      {errors.confirmPassword && <div className="login-error mt-1">{errors.confirmPassword.message}</div>}
+                    </Form.Group>
 
-            <label className="login-field">
-              <span>{t.passwordLabel}</span>
-              <div className="login-input-wrap">
-                <Lock size={18} />
-                <input {...register('password')} type={showPassword ? 'text' : 'password'} placeholder={t.registerPasswordPlaceholder} autoComplete="new-password" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="login-password-toggle">
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <p className="login-card-kicker">{t.passwordRulesHint}</p>
-              {errors.password && <p className="login-error">{errors.password.message}</p>}
-            </label>
+                    <Form.Check type="checkbox" className="small" label={t.acceptTerms} {...register('acceptTerms')} />
+                    {errors.acceptTerms && <div className="login-error mt-1">{errors.acceptTerms.message}</div>}
+                    {globalError && <Alert variant="danger" className="py-2 mb-0">{globalError}</Alert>}
 
-            <label className="login-field">
-              <span>{t.confirmPasswordLabel}</span>
-              <div className="login-input-wrap">
-                <Lock size={18} />
-                <input {...register('confirmPassword')} type={showConfirmPassword ? 'text' : 'password'} placeholder={t.confirmPasswordPlaceholder} autoComplete="new-password" />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="login-password-toggle">
-                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              {errors.confirmPassword && <p className="login-error">{errors.confirmPassword.message}</p>}
-            </label>
+                    <Button type="submit" disabled={isSubmitting} className="login-submit d-inline-flex justify-content-center align-items-center gap-2">
+                      {isSubmitting ? <Loader2 className="spin" /> : t.registerSubmit}
+                    </Button>
+                  </Form>
 
-            <label className="d-flex align-items-center gap-2 small fw-bold text-secondary">
-              <input type="checkbox" {...register('acceptTerms')} className="form-check-input m-0" />
-              {t.acceptTerms}
-            </label>
-            {errors.acceptTerms && <p className="login-error">{errors.acceptTerms.message}</p>}
-
-            <button type="submit" disabled={isSubmitting} className="login-submit d-inline-flex justify-content-center align-items-center gap-2">
-              {isSubmitting ? <Loader2 className="spin" /> : t.registerSubmit}
-            </button>
-          </form>
-
-          <div className="login-footer-link">
-            {t.alreadyHasAccount} <Link to="/login">{t.signIn}</Link>
-          </div>
-        </motion.div>
-      </section>
+                  <div className="login-footer-link">
+                    {t.alreadyHasAccount} <Link to="/login">{t.signIn}</Link>
+                  </div>
+                </Card.Body>
+              </Card>
+            </motion.div>
+          </Col>
+        </Row>
+      </Container>
     </main>
   );
 };

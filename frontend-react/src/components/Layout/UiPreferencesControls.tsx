@@ -13,8 +13,7 @@ const LANGUAGE_OPTIONS: Array<{ value: Language | 'system'; label: string }> = [
   { value: 'system', label: '__SYSTEM__' },
   { value: 'en', label: 'English' },
   { value: 'ru', label: 'Русский' },
-  { value: 'he', label: 'עברית' },
-];
+  ];
 
 export default function UiPreferencesControls({ className = '' }: UiPreferencesControlsProps) {
   const { languageMode, setLanguage, setLanguageMode, t } = useLanguage();

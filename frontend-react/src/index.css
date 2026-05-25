@@ -1073,3 +1073,295 @@ button {
   color: #eaf2ff;
   background: #0f172a;
 }
+
+/* Unified Language School theme */
+.school-landing-bg {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(245, 158, 11, 0.15), transparent 28%),
+    radial-gradient(circle at 88% 82%, rgba(14, 165, 233, 0.16), transparent 34%),
+    linear-gradient(180deg, #f9fbff 0%, #eef4ff 100%);
+}
+
+.school-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(251, 191, 36, 0.14), transparent 30%),
+    radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.12), transparent 32%),
+    #f2f6fc;
+}
+
+.school-page-dark {
+  background:
+    radial-gradient(circle at 15% 15%, rgba(251, 191, 36, 0.12), transparent 30%),
+    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.14), transparent 32%),
+    #0b1220;
+}
+
+.school-panel {
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.school-page-dark .school-panel {
+  background: rgba(17, 24, 39, 0.85);
+  border-color: rgba(100, 116, 139, 0.45);
+  color: #f8fafc;
+}
+
+.school-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #0f172a;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.school-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.school-title {
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.08;
+}
+
+.school-nav-item {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  background: transparent;
+}
+
+.school-nav-item.active {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.school-search-wrap {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.school-search-wrap input {
+  border: 0;
+  outline: 0;
+  width: 100%;
+  background: transparent;
+  color: inherit;
+}
+
+.school-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+@media (max-width: 768px) {
+  .school-title {
+    font-size: 30px;
+  }
+}
+
+/* Public page usability tune */
+.school-public-page {
+  color: #e6edf8;
+}
+
+.school-public-page .site-prefs {
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.school-public-page .school-hero-panel {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(16, 45, 92, 0.9));
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+.school-public-page .school-hero-panel h1 {
+  color: #f8fbff;
+}
+
+.school-public-page .school-hero-text {
+  color: #b8c6db;
+  max-width: 920px;
+}
+
+.school-public-page .school-feature-card,
+.school-public-page .school-map-card {
+  background: rgba(11, 23, 43, 0.86);
+  border-color: rgba(100, 116, 139, 0.42);
+  color: #e5edf9;
+}
+
+.school-public-page .school-feature-card p,
+.school-public-page .school-map-card p {
+  color: #a9b9d0;
+}
+
+.school-public-page .btn-outline-light {
+  border-color: rgba(203, 213, 225, 0.6);
+  color: #e9f1ff;
+}
+
+.school-public-page .btn-outline-light:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.school-panel-inner {
+  border-color: rgba(100, 116, 139, 0.35);
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.school-page .nav-pills .nav-link {
+  border: 1px solid rgba(100, 116, 139, 0.4);
+  color: #c7d4ea;
+  border-radius: 12px;
+}
+
+.school-page .nav-pills .nav-link.active {
+  background: rgba(37, 99, 235, 0.22);
+  border-color: rgba(59, 130, 246, 0.62);
+  color: #ffffff;
+}
+
+.school-page .form-control,
+.school-page .form-select {
+  background: rgba(15, 23, 42, 0.66);
+  border-color: rgba(100, 116, 139, 0.45);
+  color: #ecf3ff;
+}
+
+.school-page .form-control:disabled {
+  background: rgba(15, 23, 42, 0.42);
+  color: #a9b6ca;
+}
+
+.school-avatar-preview,
+.school-avatar-fallback {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  border: 1px solid rgba(100, 116, 139, 0.45);
+}
+
+.school-avatar-preview {
+  object-fit: cover;
+}
+
+.school-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+}
+
+/* Login input dark-theme consistency (Bootstrap InputGroup + browser autofill) */
+.login-card .input-group-text {
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+
+.login-card .login-input-wrap .form-control {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  box-shadow: none;
+}
+
+.login-card .login-input-wrap .form-control::placeholder {
+  color: #8ea0ba;
+}
+
+.login-card .login-input-wrap .form-control:focus {
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+
+.login-card .login-input-wrap .form-control:-webkit-autofill,
+.login-card .login-input-wrap .form-control:-webkit-autofill:hover,
+.login-card .login-input-wrap .form-control:-webkit-autofill:focus,
+.login-card .login-input-wrap .form-control:-webkit-autofill:active {
+  -webkit-text-fill-color: #e9f1ff;
+  -webkit-box-shadow: 0 0 0 1000px #0f172a inset;
+  box-shadow: 0 0 0 1000px #0f172a inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.login-card .login-input-wrap .btn.login-password-toggle {
+  border: 0;
+  background: transparent;
+  color: #9fb0c8;
+}
+
+.login-card .login-input-wrap .btn.login-password-toggle:hover,
+.login-card .login-input-wrap .btn.login-password-toggle:focus {
+  background: transparent;
+  color: #dbe7fb;
+  box-shadow: none;
+}
+
+/* Login contrast fix */
+.login-card {
+  color: #eaf2ff;
+}
+
+.login-card .login-card-header h2,
+.login-card .login-card-header p,
+.login-card .login-card-kicker,
+.login-card .login-field > span,
+.login-card .login-footer-link,
+.login-card .login-footer-link a {
+  color: #d9e7ff;
+}
+
+.login-card .login-field > span {
+  font-weight: 700;
+}
+
+.login-card .login-input-wrap {
+  background: #0f172a;
+  border-color: #3a4b66;
+  color: #eaf2ff;
+}
+
+.login-card .login-input-wrap svg {
+  color: #a8bfdc;
+}
+
+.login-card .login-submit {
+  background: #2f6df6;
+  border-color: #2f6df6;
+  color: #ffffff;
+}
+
+.login-card .login-submit:hover {
+  background: #245de0;
+  border-color: #245de0;
+}

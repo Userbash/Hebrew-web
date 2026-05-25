@@ -12,7 +12,7 @@ export default function WelcomePage() {
       <div className="site-wrap">
         <UiPreferencesControls className="site-prefs" />
         <section className="site-hero">
-          <p className="site-kicker">Hebrew AI Platform</p>
+          <p className="site-kicker">Language School Platform</p>
           <h1>Единая среда: Public, Cabinet, Admin</h1>
           <p>
             Одна визуальная система, единая логика навигации и предсказуемый UX для всех частей сайта.

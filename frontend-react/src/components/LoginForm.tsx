@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { Alert, Button, Card, Col, Container, Form, InputGroup, Row } from 'react-bootstrap';
 import { useLanguage } from '../context/LanguageContext';
 import axios from 'axios';
 import api from '../api/client';
@@ -39,79 +40,84 @@ export default function LoginForm() {
   };
 
   return (
-    <main className="login-page">
+    <main className="login-page school-landing-bg">
       <UiPreferencesControls className="login-topbar" />
+      <Container>
+        <Row className="align-items-center g-4">
+          <Col lg={7}>
+            <div className="login-copy">
+              <div className="login-badge">Language School</div>
+              <h1>{t.loginHeroTitle}</h1>
+              <p>{t.loginHeroDesc}</p>
+            </div>
+          </Col>
+          <Col lg={5}>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="login-card">
+                <Card.Body>
+                  <div className="login-card-header">
+                    <span className="login-card-kicker">{t.loginCardKicker}</span>
+                    <h2>{t.loginCardTitle}</h2>
+                    <p>{t.loginCardDesc}</p>
+                  </div>
 
-      <section className="login-layout">
-        <div className="login-copy">
-          <div className="login-badge">Hebrew AI</div>
-          <h1>{t.loginHeroTitle}</h1>
-          <p>{t.loginHeroDesc}</p>
-        </div>
+                  <Form onSubmit={handleSubmit} className="login-form">
+                    <Form.Group>
+                      <Form.Label>{t.emailLabel}</Form.Label>
+                      <InputGroup className="login-input-wrap">
+                        <InputGroup.Text><Mail size={18} /></InputGroup.Text>
+                        <Form.Control
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="name@example.com"
+                          autoComplete="email"
+                          required
+                        />
+                      </InputGroup>
+                    </Form.Group>
 
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="login-card"
-        >
-          <div className="login-card-header">
-            <span className="login-card-kicker">{t.loginCardKicker}</span>
-            <h2>{t.loginCardTitle}</h2>
-            <p>{t.loginCardDesc}</p>
-          </div>
+                    <Form.Group>
+                      <Form.Label>{t.passwordLabel}</Form.Label>
+                      <InputGroup className="login-input-wrap">
+                        <InputGroup.Text><Lock size={18} /></InputGroup.Text>
+                        <Form.Control
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder={t.passwordPlaceholder}
+                          autoComplete="current-password"
+                          minLength={1}
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="outline-secondary"
+                          onClick={() => setShowPassword((value) => !value)}
+                          className="login-password-toggle"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </Button>
+                      </InputGroup>
+                    </Form.Group>
 
-          <form onSubmit={handleSubmit} className="login-form">
-            <label className="login-field">
-              <span>{t.emailLabel}</span>
-              <div className="login-input-wrap">
-                <Mail size={18} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-            </label>
+                    {error && <Alert variant="danger" className="py-2 mb-0" role="alert">{error}</Alert>}
 
-            <label className="login-field">
-              <span>{t.passwordLabel}</span>
-              <div className="login-input-wrap">
-                <Lock size={18} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t.passwordPlaceholder}
-                  autoComplete="current-password"
-                  minLength={1}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="login-password-toggle"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </label>
+                    <Button type="submit" className="login-submit" disabled={isSubmitting}>
+                      {isSubmitting ? t.loginSubmitting : t.login}
+                    </Button>
+                  </Form>
 
-            {error && <p className="login-error" role="alert">{error}</p>}
-
-            <button type="submit" className="login-submit" disabled={isSubmitting}>
-              {isSubmitting ? t.loginSubmitting : t.login}
-            </button>
-          </form>
-
-          <div className="login-footer-link">
-            {t.noAccount} <Link to="/register">{t.createAccess}</Link>
-          </div>
-        </motion.div>
-      </section>
+                  <div className="login-footer-link">
+                    {t.noAccount} <Link to="/register">{t.createAccess}</Link>
+                  </div>
+                </Card.Body>
+              </Card>
+            </motion.div>
+          </Col>
+        </Row>
+      </Container>
     </main>
   );
 }

@@ -21,9 +21,9 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className="app-sidebar">
       <div className="app-brand">
-        <div className="app-brand-mark">א</div>
+        <div className="app-brand-mark">LS</div>
         <div>
-          <strong>Hebrew AI</strong>
+          <strong>Language School</strong>
           <span>Learning console</span>
         </div>
       </div>

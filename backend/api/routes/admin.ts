@@ -9,6 +9,7 @@ import publicationsRoutes from './publications.js';
 import logsRoutes from './logs.js';
 import systemMetricsRoutes from './systemMetrics.js';
 import auditEventsRoutes from './auditEvents.js';
+import adminProgressRoutes from './adminProgress.js';
 
 const router = express.Router();
 
@@ -37,5 +38,6 @@ router.use('/publications', publicationsRoutes);
 router.use('/logs', logsRoutes);
 router.use('/system', systemMetricsRoutes);
 router.use('/audit', auditEventsRoutes);
+router.use('/progress', adminProgressRoutes);
 
 export default router;
