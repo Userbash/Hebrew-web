@@ -29,13 +29,18 @@ class BaseAgent(ABC):
             last_error=self.last_error,
         )
 
-
     def set_host_bridge(self, bridge: HostBridge) -> None:
         self.host_bridge = bridge
 
     @abstractmethod
     def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
         raise NotImplementedError
+
+    def execute(self, task: Task, memory_context: dict | None = None) -> AgentResult:
+        return self.run(task, memory_context=memory_context)
+
+    def healthcheck(self) -> AgentHealth:
+        return self.health()
 
     def result(self, task: Task, summary: str, status: TaskStatus = TaskStatus.DONE, confidence: float = 0.9, errors: list[str] | None = None) -> AgentResult:
         return AgentResult(

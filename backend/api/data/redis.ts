@@ -7,12 +7,14 @@ let disabledUntil = 0;
 const RETRY_COOLDOWN_MS = 30_000;
 const DEFAULT_TTL_SECONDS = 300;
 
+const runningInContainer = Boolean(process.env.IS_CONTAINER || process.env.CONTAINER || process.env.KUBERNETES_SERVICE_HOST);
+
 const getRedisUrl = () => {
     if (process.env.REDIS_URL) {
         return process.env.REDIS_URL;
     }
 
-    const host = process.env.REDIS_HOST || '127.0.0.1';
+    const host = process.env.REDIS_HOST || (runningInContainer ? 'redis' : '127.0.0.1');
     const port = process.env.REDIS_PORT || '6379';
     return `redis://${host}:${port}`;
 };

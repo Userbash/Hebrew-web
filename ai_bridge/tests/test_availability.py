@@ -19,9 +19,9 @@ def test_check_gemini_success(mock_run: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
     avail = ModelAvailability()
     health = avail.check_gemini()
-    
+
     assert health.provider == "gemini"
-    assert health.status == ProviderStatus.AVAILABLE
+    assert health.status == ProviderStatus.HEALTHY
     assert health.latency_ms >= 0
 
 
@@ -30,7 +30,7 @@ def test_check_gemini_auth_fail(mock_run: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="API key invalid")
     avail = ModelAvailability()
     health = avail.check_gemini()
-    
+
     assert health.status == ProviderStatus.AUTH_FAILED
     assert "API key invalid" in health.error
 
@@ -40,8 +40,8 @@ def test_check_gemini_quota_fail(mock_run: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Resource exhausted (429)")
     avail = ModelAvailability()
     health = avail.check_gemini()
-    
-    assert health.status == ProviderStatus.QUOTA_EXHAUSTED
+
+    assert health.status == ProviderStatus.QUOTA_EXCEEDED
 
 
 def test_check_mistral_auth_missing() -> None:
@@ -53,18 +53,12 @@ def test_check_mistral_auth_missing() -> None:
 
 def test_is_provider_ready_cache() -> None:
     avail = ModelAvailability()
-    health_ok = ProviderHealth("gemini", ProviderStatus.AVAILABLE, 10.0, datetime.now(UTC))
-    
+    health_ok = ProviderHealth("gemini", ProviderStatus.HEALTHY, 10.0, datetime.now(UTC))
+
     with patch.object(avail, "check_gemini", return_value=health_ok) as mock_check:
-        # First call should check
         assert avail.is_provider_ready("gemini") is True
         assert mock_check.call_count == 1
-        
-        # Second call: check if it uses cache. 
-        # is_provider_ready uses self._health_cache.get(provider).
-        # check_gemini populates it.
-        # But we mocked check_gemini, so it won't execute its real body.
-        # Let's populate it manually for the test.
+
         avail._health_cache["gemini"] = health_ok
         assert avail.is_provider_ready("gemini") is True
         assert mock_check.call_count == 1

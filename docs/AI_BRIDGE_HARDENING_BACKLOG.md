@@ -102,3 +102,52 @@ Scope: orchestrator, runtime isolation, reliability, governance, CI/CD hardening
 3. SC + DB as R2
 4. AG + FE/CD as R3
 5. Distributed/event-driven/multi-tenant as R4
+
+## 10) API Telemetry Reliability & Error Taxonomy (Logs 1454)
+
+Input snapshot: total=1454, success=1332, blocked=88, errors=34.
+
+### Decomposition (Micro Tasks)
+
+| ID | Task | Owner Agent | SP | Dependencies | DoD |
+|---|---|---|---:|---|---|
+| AP-01 | Add `/api/admin/logs/codes` endpoint with grouped status code distribution and top failing paths | CodexAgent | 3 | - | Endpoint returns code histogram + path/action slices |
+| AP-02 | Add warning tiers in API summary (`warn`, `critical`) based on blocked/error ratio and p95 latency | CodexAgent + ReviewerAgent | 3 | AP-01 | Summary includes deterministic severity flags |
+| AP-03 | Normalize auth telemetry reasons to strict enum (`invalid_password`,`user_not_found`,`locked`,`token_invalid`,`permission_denied`) | CodexAgent | 2 | - | No free-form reason drift in telemetry metadata |
+| AP-04 | Add per-code SLO checks in CI smoke (`401`,`403`,`404`,`409`,`423`,`500`) | TesterAgent | 3 | AP-01 | CI artifact includes code-frequency sanity checks |
+| AP-05 | Add blocked/error drilldown widgets in admin panel with trend + top codes | DocsAgent + CodexAgent | 3 | AP-01, AP-02 | Admin UI shows top blocked/error codes and endpoints |
+| AP-06 | Add telemetry write-failure alerting metric (`telemetry_insert_failures_total`) | CodexAgent | 2 | - | Failures visible in metrics/logs and alertable |
+| AP-07 | Add runbook section: interpretation of blocked vs error and operator actions per status code | DocsAgent | 2 | AP-02 | Runbook includes response matrix by HTTP code |
+| AP-08 | Add regression tests for outcome classifier (`success/blocked/error`) including 423 lock case | TesterAgent | 2 | - | Tests protect classifier behavior |
+| AP-09 | Add policy review for over-blocking paths (auth lock threshold, forbidden checks) | ReviewerAgent | 2 | AP-03 | Review report with approved threshold policy |
+| AP-10 | Add orchestrator-side incident hook when API error ratio exceeds threshold | PlannerAgent + CodexAgent | 3 | AP-02, AP-06 | Bridge receives incident task when threshold crossed |
+
+### Encapsulation by AI Agents
+
+- PlannerAgent:
+  - Build rollout order AP-01 -> AP-03 -> AP-08 -> AP-02 -> AP-04/AP-05 -> AP-07 -> AP-10.
+  - Define release gates for blocked/error ratio.
+- CodexAgent:
+  - Implement backend telemetry/query changes in existing routes/middleware.
+  - Implement metrics and incident hooks without adding parallel duplicate modules.
+- TesterAgent:
+  - Add classifier + API summary tests and CI checks for code distribution regressions.
+- ReviewerAgent:
+  - Validate taxonomy consistency and over-blocking policy impact.
+- DocsAgent:
+  - Update admin/logs interpretation and runbook response matrix.
+- GeminiCLIAgent:
+  - Generate draft anomaly explanations from code histogram (non-final).
+- MistralAgent:
+  - Generate draft remediation suggestions for top failing paths (non-final).
+
+### Decapsulation (Unified Ready Variant)
+
+- One telemetry contract across middleware/routes/admin UI:
+  - stable outcome classifier,
+  - normalized reason codes,
+  - grouped status-code analytics,
+  - operator severity and response guidance.
+- Single operational workflow:
+  - detect (AP-02/AP-06) -> diagnose (AP-01/AP-05) -> act (AP-07/AP-09) -> prevent regression (AP-04/AP-08).
+- No new parallel subsystem: only incremental changes to existing telemetry/logs modules and orchestrator hooks.

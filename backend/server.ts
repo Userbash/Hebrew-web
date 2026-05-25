@@ -12,14 +12,11 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from 'dotenv';
 
-// Get current directory
 const __filename: string = fileURLToPath(import.meta.url);
 const __dirname: string = dirname(__filename);
 
-// Load environment variables
 config({ path: join(__dirname, '..', '.env') });
 
-// Import routes
 import authRoutes from './api/routes/auth.js';
 import itemsRoutes from './api/routes/items.js';
 import lessonsRoutes from './api/routes/lessons.js';
@@ -32,7 +29,6 @@ import accessControlRoutes from './api/routes/accessControl.js';
 import adminRoutes from './api/routes/admin.js';
 import profileAvatarRoutes from './api/routes/profileAvatar.js';
 
-// Import middleware
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
 import { telemetryMiddleware } from './api/middleware/telemetry.js';
 import { auditTrailMiddleware } from './api/middleware/auditTrail.js';
@@ -43,10 +39,17 @@ import {
 } from './api/security/emailDomainBlocklist.js';
 import { runMigrations } from './api/data/migrations.js';
 
-// Initialize Express app
 const app = express();
 app.set('trust proxy', 1);
 const PORT: string | number = process.env.BACKEND_PORT || 3001;
+
+const startupState: {
+    degraded: boolean;
+    reason: string | null;
+} = {
+    degraded: false,
+    reason: null,
+};
 
 const normalizeOrigin = (origin: string) => {
     try {
@@ -64,17 +67,13 @@ const wildcardPatternToRegExp = (pattern: string) => {
     return new RegExp(`^${escaped}$`, 'i');
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// MIDDLEWARE
-// ═══════════════════════════════════════════════════════════════════════════
-
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],
+            imgSrc: ["'self'", 'data:', 'https:'],
             connectSrc: [
                 "'self'",
                 'http://localhost:3001',
@@ -87,7 +86,7 @@ app.use(helmet({
 }));
 app.use(cookieParser());
 app.use(compression());
-app.use(apiLimiter); // Protect all routes by default
+app.use(apiLimiter);
 
 const configuredOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
@@ -144,13 +143,11 @@ app.use(telemetryMiddleware);
 app.use(auditTrailMiddleware);
 app.use(express.static(join(__dirname, '..', 'public')));
 
-// ═══════════════════════════════════════════════════════════════════════════
-// API ROUTES
-// ═══════════════════════════════════════════════════════════════════════════
-
 app.get('/api/health', (req: Request, res: Response) => {
     res.status(200).json({
-        status: 'OK',
+        status: startupState.degraded ? 'DEGRADED' : 'OK',
+        degraded: startupState.degraded,
+        reason: startupState.reason,
         emailBlocklist: getEmailDomainBlocklistStatus(),
     });
 });
@@ -171,18 +168,41 @@ app.use(notFound);
 app.use(errorHandler);
 
 const bootstrap = async () => {
+    const allowDegradedStartup =
+        process.env.BACKEND_ALLOW_DEGRADED_START === '1'
+        || process.env.BACKEND_ALLOW_DEGRADED_START === 'true'
+        || process.env.BACKEND_ALLOW_DEGRADED_START === 'yes'
+        || process.env.NODE_ENV !== 'production';
+
     try {
         await runMigrations();
-        await initEmailDomainBlocklistAutomation();
-
-        app.listen(PORT, () => {
-            console.log(`Backend Server Started on http://localhost:${PORT}`);
-            console.log('[CORS] Allowed origin patterns:', allowedOriginPatterns);
-        });
     } catch (error) {
-        console.error('[BOOTSTRAP] Startup failed:', error);
-        process.exit(1);
+        if (!allowDegradedStartup) {
+            console.error('[BOOTSTRAP] Startup failed: database/migrations unavailable', error);
+            process.exit(1);
+        }
+
+        startupState.degraded = true;
+        startupState.reason = 'database_unavailable';
+        console.warn('[BOOTSTRAP] Starting in degraded mode: database unavailable, migration stage skipped');
     }
+
+    try {
+        await initEmailDomainBlocklistAutomation();
+    } catch (error) {
+        startupState.degraded = true;
+        startupState.reason = startupState.reason || 'email_blocklist_automation_unavailable';
+        console.warn('[BOOTSTRAP] Email blocklist automation unavailable, continuing in degraded mode');
+        console.warn(error);
+    }
+
+    app.listen(PORT, () => {
+        console.log(`Backend Server Started on http://localhost:${PORT}`);
+        console.log('[CORS] Allowed origin patterns:', allowedOriginPatterns);
+        if (startupState.degraded) {
+            console.warn(`[BOOTSTRAP] Runtime state: DEGRADED (${startupState.reason})`);
+        }
+    });
 };
 
 void bootstrap();

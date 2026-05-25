@@ -31,3 +31,10 @@ def test_bridge_fallbacks_to_next_model_on_capacity_error(monkeypatch):
     assert result.ok is True
     assert len(calls) >= 2
     assert result.output == "ok"
+
+
+def test_classify_error_timeout_types():
+    assert ExternalAIBridge.classify_error("connection timed out") == "tcp_timeout"
+    assert ExternalAIBridge.classify_error("gateway timeout 504") == "api_timeout"
+    assert ExternalAIBridge.classify_error("resource_exhausted 429") == "quota_exhaustion"
+    assert ExternalAIBridge.classify_error("invalid api key") == "auth_fail"

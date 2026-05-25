@@ -21,6 +21,9 @@ from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
 from .session_memory import MemoryScope, SessionMemory
 from .availability import ModelAvailability
+
+
+TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
 from .task_decomposer import TaskDecomposer
 from .task_router import CAPABILITY_BY_TASK_TYPE, TaskRouter
 from .user_console import UserConsole
@@ -93,6 +96,21 @@ class Orchestrator:
             if value is not None:
                 context[key] = value
         return context
+
+    def _find_fallback_agent(self, capability: str, providers: list[str], exclude: set[str]) -> str | None:
+        for provider in providers:
+            for record in self.registry.list_agents():
+                if record.id in exclude:
+                    continue
+                if record.provider != provider:
+                    continue
+                if capability not in record.capabilities:
+                    continue
+                if record.status.value in {"offline", "disabled", "failed"}:
+                    continue
+                if record.id in self.local_agents:
+                    return record.id
+        return None
 
     def run_task(self, task: Task) -> AgentResult:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
@@ -184,6 +202,25 @@ class Orchestrator:
                 return AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": "No local executor for routed agent", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, ["No local executor"], [])
             memory_context = self._load_memory_context(task, agent_id)
             result = agent.run(task, memory_context=memory_context)
+
+            is_gemini = bool(agent_record and agent_record.provider in {"google", "gemini", "gemini-cli"})
+            result_errors = " ".join(result.errors or [])
+            classified = ""
+            if result_errors:
+                try:
+                    from .external_ai_bridge import ExternalAIBridge
+                    classified = ExternalAIBridge.classify_error(result_errors)
+                except Exception:
+                    classified = ""
+
+            if result.status == TaskStatus.FAILED and is_gemini and classified in TIMEOUT_ERROR_TYPES:
+                fallback_chain = ["mistral", "local"]
+                fallback_agent_id = self._find_fallback_agent(capability, fallback_chain, exclude={agent_id})
+                if fallback_agent_id:
+                    self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={fallback_agent_id} reason={classified}")
+                    fallback_agent = self.local_agents.get(fallback_agent_id)
+                    if fallback_agent:
+                        result = fallback_agent.run(task, memory_context=memory_context)
             quality = self.quality.analyze(task, result)
             if agent_record:
                 agent_record.metrics.quality_score = quality.score

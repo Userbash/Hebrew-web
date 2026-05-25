@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Full API contract test suite.
  * Validates the current backend behavior with cookie-based sessions.

@@ -10,6 +10,8 @@ const __dirname = dirname(__filename);
 
 config({ path: join(__dirname, '../../..', '.env') });
 
+const runningInContainer = Boolean(process.env.IS_CONTAINER || process.env.CONTAINER || process.env.KUBERNETES_SERVICE_HOST);
+
 const requiredInProduction = (name: string, fallback: string) => {
     const value = process.env[name];
 
@@ -31,10 +33,10 @@ const buildPoolConfig = () => {
     }
 
     return {
-        host: process.env.DB_HOST || '127.0.0.1',
+        host: process.env.DB_HOST || (runningInContainer ? 'postgres' : '127.0.0.1'),
         port: parseInt(process.env.DB_PORT || '5432', 10),
         user: requiredInProduction('DB_USER', 'postgres'),
-        ['password']: requiredInProduction('DB_PASSWORD', ''),
+        ['password']: requiredInProduction('DB_PASSWORD', process.env.POSTGRES_PASSWORD || 'postgres'),
         database: requiredInProduction('DB_NAME', 'hebrew_ai_db'),
         max: 20,
         idleTimeoutMillis: 30000,
@@ -221,6 +223,7 @@ const buildSearchQuery = (searchTerm: string, category?: string) => {
 
 export const db = {
     query: (text: string, params?: unknown[]) => pool.query(text, params),
+    connect: () => pool.connect(),
 
     createUser: async (email: string, passwordHash: string, username: string, firstName: string, lastName: string) => {
         const query = `

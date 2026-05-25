@@ -10,6 +10,8 @@ PG_VOLUME_NAME="${PG_VOLUME_NAME:-hebrew_pgdata}"
 REDIS_VOLUME_NAME="${REDIS_VOLUME_NAME:-hebrew_redisdata}"
 AVATAR_VOLUME_NAME="${AVATAR_VOLUME_NAME:-hebrew_avatar_uploads}"
 JWT_SECRET="${JWT_SECRET:-dev_local_jwt_secret_2026_change_me}"
+BACKEND_PORT="${BACKEND_PORT:-3001}"
+FRONTEND_PORT="${FRONTEND_PORT:-8081}"
 
 wait_http_ok() {
   local name="$1"
@@ -39,13 +41,22 @@ validate_secret() {
   fi
 }
 
+assert_port_free() {
+  local port="$1"
+  local owner=""
+  owner="$(ss -ltn 2>/dev/null | awk '{print $4}' | grep -E ":${port}$" || true)"
+  if [ -n "$owner" ]; then
+    echo "[ERROR] Port ${port} is already in use. Stop conflicting process/container and retry."
+    exit 1
+  fi
+}
+
 echo "Starting project containers manually via BridgeOS..."
 validate_secret
 
-if [[ ! -d "$PROJECT_ROOT/backend" ]] && ! image_exists "$BACKEND_IMAGE"; then
-  echo "[ERROR] Backend source directory is missing: $PROJECT_ROOT/backend"
-  echo "[ERROR] Backend image is also missing: $BACKEND_IMAGE"
-  echo "Run build after restoring backend sources."
+if ! image_exists "$BACKEND_IMAGE"; then
+  echo "[ERROR] Backend image is missing: $BACKEND_IMAGE"
+  echo "Run: bash scripts/build_abstracted.sh"
   exit 1
 fi
 
@@ -65,6 +76,9 @@ $BRIDGE_CMD podman volume create "$AVATAR_VOLUME_NAME" >/dev/null || true
 
 echo "Removing old containers if present..."
 $BRIDGE_CMD podman rm -f hebrew_ai_frontend hebrew_ai_backend hebrew_ai_redis hebrew_ai_postgres >/dev/null 2>&1 || true
+
+assert_port_free "$BACKEND_PORT"
+assert_port_free "$FRONTEND_PORT"
 
 echo "Starting Postgres..."
 $BRIDGE_CMD podman run -d --pull=never \
@@ -90,7 +104,7 @@ $BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_backend \
   --security-opt no-new-privileges \
   --network hebrew-net \
-  -p 3001:3001 \
+  -p ${BACKEND_PORT}:3001 \
   -e NODE_ENV=production \
   -e PORT=3001 \
   -e JWT_SECRET="$JWT_SECRET" \
@@ -109,13 +123,13 @@ $BRIDGE_CMD podman run -d --pull=never \
   --name hebrew_ai_frontend \
   --security-opt no-new-privileges \
   --network hebrew-net \
-  -p 8081:80 \
+  -p ${FRONTEND_PORT}:80 \
   "$FRONTEND_IMAGE"
 
-wait_http_ok "backend" "http://127.0.0.1:3001/api/health" 45
-wait_http_ok "frontend" "http://127.0.0.1:8081" 30
-wait_http_ok "frontend-api-proxy" "http://127.0.0.1:8081/api/health" 30
+wait_http_ok "backend" "http://127.0.0.1:${BACKEND_PORT}/api/health" 45
+wait_http_ok "frontend" "http://127.0.0.1:${FRONTEND_PORT}" 30
+wait_http_ok "frontend-api-proxy" "http://127.0.0.1:${FRONTEND_PORT}/api/health" 30
 
 echo "Containers started."
-echo "Backend: http://localhost:3001"
-echo "Frontend: http://localhost:8081"
+echo "Backend: http://localhost:${BACKEND_PORT}"
+echo "Frontend: http://localhost:${FRONTEND_PORT}"

@@ -49,8 +49,22 @@ R1 (implemented):
 - Bridge + agent integration and tests.
 
 R2:
+- R2-GEM-01 Migrate deprecated `google.generativeai` SDK.
 - Dynamic token estimation from structured output metadata.
 - Multi-provider fallback chain (Gemini -> Mistral -> local).
+
+R2 decomposition (encapsulated by agents):
+- PlannerAgent: split migration by API surface and release gates.
+- CodexAgent: replace SDK usage in existing Gemini modules (`agents/gemini_agent.py`, bridge adapters), no new modules.
+- TesterAgent: add compatibility tests for generation and timeout handling.
+- ReviewerAgent: validate auth/quota/timeout failure taxonomy parity before/after migration.
+- DocsAgent: update migration notes and rollback path in existing docs.
+- GeminiCLIAgent/MistralAgent: runtime-only validation, no finalize rights.
+
+R2 decapsulation (unified ready variant):
+- Existing Gemini-related modules are modified in place under orchestrator flow.
+- Error taxonomy unified: tcp_timeout/api_timeout/sdk_hang/quota_exhaustion/auth_fail.
+- Fallback path ready: Gemini timeout => Mistral => local agent.
 
 R3:
 - Cost-aware routing and SLO-based adaptive retry windows.

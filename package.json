@@ -8,7 +8,8 @@
     "docs:check:links": "node scripts/ci/check-doc-links.mjs",
     "docs:check:api": "node scripts/ci/check-api-doc-coverage.mjs",
     "docs:check:coupling": "node scripts/ci/check-api-doc-change-coupling.mjs",
-    "docs:check": "npm run docs:check:links && npm run docs:check:api"
+    "docs:check": "npm run docs:check:links && npm run docs:check:api",
+    "ci:build": "npm --prefix backend ci && npm --prefix backend run build && npm --prefix frontend-react ci && npm --prefix frontend-react run build"
   },
   "author": "Hebrew Web App Team",
   "license": "MIT",

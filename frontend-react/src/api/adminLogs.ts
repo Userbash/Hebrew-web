@@ -44,11 +44,31 @@ export interface AdminLogsResponse {
     authenticated?: number;
     locked_accounts?: number;
   };
+  severity?: {
+    level: 'healthy' | 'warn' | 'critical';
+    blocked_ratio: number;
+    error_ratio: number;
+    avg_response_ms: number;
+  };
   pagination: {
     page: number;
     limit: number;
     total: number;
     totalPages: number;
+  };
+}
+
+export interface AdminLogsCodesResponse {
+  success: boolean;
+  histogram: {
+    status_codes: Array<{ status_code: number; count: number }>;
+    failing_paths: Array<{
+      method: string;
+      path: string;
+      status_code: number;
+      outcome: 'success' | 'error' | 'blocked';
+      count: number;
+    }>;
   };
 }
 
@@ -74,6 +94,10 @@ export interface AdminLogsListParams {
 export const adminLogsApi = {
   list: async (params: AdminLogsListParams) => {
     const { data } = await api.get<AdminLogsResponse>('/admin/logs', { params });
+    return data;
+  },
+  codes: async (params: AdminLogsListParams & { top?: number } = {}) => {
+    const { data } = await api.get<AdminLogsCodesResponse>('/admin/logs/codes', { params });
     return data;
   },
 };

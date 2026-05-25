@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+#!/usr/bin/env node
 
 /**
  * Quick API smoke suite.

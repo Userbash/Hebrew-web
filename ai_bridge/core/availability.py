@@ -10,11 +10,12 @@ from .env_loader import load_env_file
 
 
 class ProviderStatus(Enum):
-    AVAILABLE = "available"
-    UNREACHABLE = "unreachable"
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    TIMEOUT = "timeout"
     AUTH_FAILED = "auth_failed"
-    QUOTA_EXHAUSTED = "quota_exhausted"
-    UNKNOWN = "unknown"
+    QUOTA_EXCEEDED = "quota_exceeded"
+    OFFLINE = "offline"
 
 
 @dataclass(slots=True)
@@ -42,27 +43,24 @@ class ModelAvailability:
 
     def check_gemini(self) -> ProviderHealth:
         start = datetime.now(UTC)
-        # We check Gemini availability by trying to list models or running a minimal echo.
-        # Here we use the gemini-cli as a proxy for reachability.
         cmd = ["npx", "@google/gemini-cli", "--prompt", "echo ok", "--model", "gemini-2.5-flash-lite", "--output-format", "text"]
         try:
-            # Short timeout for healthcheck
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
             if proc.returncode == 0:
-                health = ProviderHealth("gemini", ProviderStatus.AVAILABLE, latency, datetime.now(UTC))
+                health = ProviderHealth("gemini", ProviderStatus.HEALTHY, latency, datetime.now(UTC))
             else:
                 stderr = proc.stderr.lower()
-                status = ProviderStatus.UNREACHABLE
+                status = ProviderStatus.OFFLINE
                 if any(marker in stderr for marker in ["auth", "api key", "api_key", "invalid key", "401", "403"]):
                     status = ProviderStatus.AUTH_FAILED
                 elif any(marker in stderr for marker in ["quota", "429", "exhausted", "limit"]):
-                    status = ProviderStatus.QUOTA_EXHAUSTED
+                    status = ProviderStatus.QUOTA_EXCEEDED
                 health = ProviderHealth("gemini", status, latency, datetime.now(UTC), error=proc.stderr.strip())
         except subprocess.TimeoutExpired:
-            health = ProviderHealth("gemini", ProviderStatus.UNREACHABLE, 15000.0, datetime.now(UTC), error="timeout")
+            health = ProviderHealth("gemini", ProviderStatus.TIMEOUT, 15000.0, datetime.now(UTC), error="timeout")
         except Exception as exc:
-            health = ProviderHealth("gemini", ProviderStatus.UNKNOWN, 0.0, datetime.now(UTC), error=str(exc))
+            health = ProviderHealth("gemini", ProviderStatus.DEGRADED, 0.0, datetime.now(UTC), error=str(exc))
 
         self._health_cache["gemini"] = health
         return health
@@ -72,9 +70,7 @@ class ModelAvailability:
         if not api_key:
             return ProviderHealth("mistral", ProviderStatus.AUTH_FAILED, 0.0, datetime.now(UTC), error="MISTRAL_API_KEY not set")
 
-        # Basic reachability check could be a lightweight HTTP request.
-        # For now, we return UNKNOWN if we haven't implemented a real ping.
-        return ProviderHealth("mistral", ProviderStatus.AVAILABLE, 0.0, datetime.now(UTC))
+        return ProviderHealth("mistral", ProviderStatus.HEALTHY, 0.0, datetime.now(UTC))
 
     def check_all(self) -> dict[str, ProviderHealth]:
         return {
@@ -90,6 +86,6 @@ class ModelAvailability:
             elif provider == "mistral":
                 health = self.check_mistral()
             else:
-                return True # Assume unknown providers (or local) are ready
+                return True
 
-        return health.status == ProviderStatus.AVAILABLE
+        return health.status in {ProviderStatus.HEALTHY, ProviderStatus.DEGRADED}
