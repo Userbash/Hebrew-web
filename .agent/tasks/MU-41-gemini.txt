@@ -1,0 +1,30 @@
+Ты внешний сабагент Gemini CLI.
+
+Задача:
+IMPLEMENT: reduce prompt token bloat
+
+Файл:
+ai_bridge/core/external_ai_bridge.py
+
+Правила:
+- не изменяй код напрямую;
+- верни только отчет;
+- не пиши общие фразы;
+- укажи конкретные строки;
+- укажи риск;
+- предложи исправление;
+- форматируй ответ строго по шаблону.
+
+Шаблон ответа:
+
+task_id: MU-41
+agent: gemini
+file: ai_bridge/core/external_ai_bridge.py
+status:
+
+FOUND:
+FIXED_SUGGESTION:
+CHANGED_FILES:
+COMMANDS_TO_VERIFY:
+RISKS:
+NEXT:

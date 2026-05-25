@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from ai_bridge.agents.base_agent import BaseAgent
 
-from .agent_autoscaler import AgentAutoscaler
-from .agent_lifecycle import AgentLifecycleManager
+from .agent_factory import AgentFactory
 from .agent_registry import AgentRegistry
 from .feedback_loop import FeedbackLoop
 from .healthcheck import HealthChecker
@@ -33,30 +32,33 @@ from .user_console import UserConsole
 
 class Orchestrator:
     def __init__(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
-        self.registry = registry or AgentRegistry()
-        self.lifecycle = AgentLifecycleManager(idle_shutdown_sec=idle_shutdown_sec)
-        self.autoscaler = AgentAutoscaler(self.registry, self.lifecycle)
-        self.load_balancer = LoadBalancer()
-        self.model_selector = ModelSelector()
-        self.decomposer = TaskDecomposer(self.model_selector)
-        self.router = TaskRouter(self.registry, self.load_balancer)
-        self.orchestration_config = OrchestrationConfig.from_env()
-        self.scheduler = SmartScheduler(self.registry)
-        self.message_bus = MessageBus()
-        self.healthcheck = HealthChecker(self.registry)
+        components = AgentFactory.build(registry=registry, retry_limit=retry_limit, idle_shutdown_sec=idle_shutdown_sec)
+        self.registry = components.registry
+        self.lifecycle = components.lifecycle
+        self.autoscaler = components.autoscaler
+        self.load_balancer = components.load_balancer
+        self.model_selector = components.model_selector
+        self.decomposer = components.decomposer
+        self.router = components.router
+        self.orchestration_config = components.orchestration_config
+        self.scheduler = components.scheduler
+        self.message_bus = components.message_bus
+        self.healthcheck = components.healthcheck
         self.availability = ModelAvailability()
-        self.feedback = FeedbackLoop(retry_limit=retry_limit)
-        self.metrics = MetricsCollector()
-        self.kpi = KPIEvaluator()
-        self.quality = QualityAnalyzer()
-        self.merger = ResultMerger()
-        self.console = UserConsole()
-        self.security_gate = SecurityGate()
-        self.host_bridge = HostBridge()
-        self.session_memory = SessionMemory()
+        self.feedback = components.feedback
+        self.metrics = components.metrics
+        self.kpi = components.kpi
+        self.quality = components.quality
+        self.merger = components.merger
+        self.console = components.console
+        self.security_gate = components.security_gate
+        self.host_bridge = components.host_bridge
+        self.session_memory = components.session_memory
+        self.memory_consolidator = components.memory_consolidator
         self.module_manager = KernelModuleManager()
         self.module_manager.register(AIActivityModule())
         self.module_manager.load("ai_activity")
+        self.session_memory.hybrid.start_background_tasks()
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}
         self.live_trace_rows: list[dict[str, object]] = []
@@ -106,6 +108,9 @@ class Orchestrator:
         if task.cache_policy == "write_only":
             return context
         for key in task.memory_keys:
+            normalized = key.lower()
+            if "thought" in normalized or normalized.endswith(":errors") or normalized == "errors":
+                continue
             value = self.session_memory.get(scope, identifier, key)
             if value is not None:
                 context[key] = value
@@ -259,6 +264,24 @@ class Orchestrator:
                 self.metrics.record_result(agent_record, result)
                 self.kpi.apply_priority_policy(agent_record)
             self.results[task.task_id] = result
+            command_summary = result.output.get("summary", "")
+            raw_thoughts = result.output.get("thoughts")
+            if raw_thoughts:
+                if isinstance(raw_thoughts, list):
+                    for item in raw_thoughts:
+                        self.session_memory.hybrid.append_agent_thought(session_id=task.session_id or task.task_id, agent_id=agent_id, thought=str(item))
+                else:
+                    self.session_memory.hybrid.append_agent_thought(session_id=task.session_id or task.task_id, agent_id=agent_id, thought=str(raw_thoughts))
+            if result.errors:
+                for error in result.errors:
+                    self.session_memory.hybrid.append_agent_error(session_id=task.session_id or task.task_id, agent_id=agent_id, error=str(error))
+            self.session_memory.hybrid.remember_command(
+                session_id=task.session_id or task.task_id,
+                agent_id=agent_id,
+                command=f"task:{task.type.value}",
+                result={"summary": command_summary, "status": result.status.value},
+                success=result.status == TaskStatus.DONE,
+            )
             if task.cache_policy in {"write_only", "read_write"}:
                 scope_name = (task.memory_scope or "task").lower()
                 scope = MemoryScope.TASK
@@ -294,6 +317,11 @@ class Orchestrator:
                     "SECONDARY_REVIEW",
                     f"task_id={task.task_id} enabled=true reason={choice.reason}",
                 )
+
+            self.memory_consolidator.consolidate(session_id=task.session_id or task.task_id, agent_id=agent_id)
+            if hasattr(self.message_bus, "publish_session_insights"):
+                self.message_bus.publish_session_insights(task.session_id or task.task_id, {"task_id": task.task_id, "agent_id": agent_id, "summary": command_summary, "status": result.status.value})
+            self.session_memory.hybrid.clear_session_thoughts(session_id=task.session_id or task.task_id)
 
             if not quality.passed:
                 self.console.emit("REVIEW", f"Качество ниже порога: {', '.join(quality.issues)}")

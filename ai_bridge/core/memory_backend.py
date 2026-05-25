@@ -34,6 +34,10 @@ class MemoryBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def keys_by_prefix(self, prefix: str) -> Iterable[str]:
+        raise NotImplementedError
+
+    @abstractmethod
     def clear(self) -> None:
         raise NotImplementedError
 
@@ -60,6 +64,9 @@ class InMemoryBackend(MemoryBackend):
 
     def keys(self) -> Iterable[str]:
         return list(self._store.keys())
+
+    def keys_by_prefix(self, prefix: str) -> Iterable[str]:
+        return [key for key in self._store.keys() if key.startswith(prefix)]
 
     def clear(self) -> None:
         self._store.clear()

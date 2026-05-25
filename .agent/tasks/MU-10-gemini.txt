@@ -1,0 +1,30 @@
+Ты внешний сабагент Gemini CLI.
+
+Задача:
+IMPLEMENT: prepare architecture for million scale memory entries
+
+Файл:
+docs/AI_BRIDGE_MEMORY_UPGRADE_PLAN.md
+
+Правила:
+- не изменяй код напрямую;
+- верни только отчет;
+- не пиши общие фразы;
+- укажи конкретные строки;
+- укажи риск;
+- предложи исправление;
+- форматируй ответ строго по шаблону.
+
+Шаблон ответа:
+
+task_id: MU-10
+agent: gemini
+file: docs/AI_BRIDGE_MEMORY_UPGRADE_PLAN.md
+status:
+
+FOUND:
+FIXED_SUGGESTION:
+CHANGED_FILES:
+COMMANDS_TO_VERIFY:
+RISKS:
+NEXT:

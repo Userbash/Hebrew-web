@@ -1,0 +1,30 @@
+Ты внешний сабагент Gemini CLI.
+
+Задача:
+IMPLEMENT: validate memory against current repo state
+
+Файл:
+ai_bridge/core/hybrid_memory.py
+
+Правила:
+- не изменяй код напрямую;
+- верни только отчет;
+- не пиши общие фразы;
+- укажи конкретные строки;
+- укажи риск;
+- предложи исправление;
+- форматируй ответ строго по шаблону.
+
+Шаблон ответа:
+
+task_id: MU-24
+agent: gemini
+file: ai_bridge/core/hybrid_memory.py
+status:
+
+FOUND:
+FIXED_SUGGESTION:
+CHANGED_FILES:
+COMMANDS_TO_VERIFY:
+RISKS:
+NEXT:

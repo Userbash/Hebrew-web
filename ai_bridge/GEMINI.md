@@ -34,3 +34,13 @@ The following are considered production-ready and should not be modified without
 *   Feedback Loop & Retry Management.
 *   Quality Gate analysis.
 *   In-memory Metrics & Audit Logging.
+
+## Hybrid Memory Phase 1
+
+- Added `HybridMemory` with hot in-memory cache and persistent layer via `PersistentMemoryManager`.
+- Added soft eviction policy using weighted score: `0.4*recency + 0.3*access_freq + 0.3*importance`.
+- `SessionMemory` now acts as a thin facade over `HybridMemory` and preserves compatibility API.
+- Added command context persistence and retrieval (`command_history`) for quick context window restore.
+- Added `MemoryConsolidator` for episodic memory summarization and long-term retention.
+- Added SQL schema and Alembic migration for PostgreSQL + pgvector.
+- `Orchestrator` now initializes dependencies via `AgentFactory` and stores execution traces in hybrid memory.

@@ -5,7 +5,8 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from .memory_backend import BackendEntry, InMemoryBackend, MemoryBackend
+from .hybrid_memory import HybridMemory
+from .memory_backend import InMemoryBackend, MemoryBackend
 from .memory_policy import MemoryPolicy
 
 
@@ -28,9 +29,10 @@ class MemoryEntry:
 
 
 class SessionMemory:
-    def __init__(self, backend: MemoryBackend | None = None, policy: MemoryPolicy | None = None) -> None:
+    def __init__(self, backend: MemoryBackend | None = None, policy: MemoryPolicy | None = None, hybrid: HybridMemory | None = None) -> None:
         self.backend = backend or InMemoryBackend()
         self.policy = policy or MemoryPolicy()
+        self.hybrid = hybrid or HybridMemory(backend=self.backend)
 
     @staticmethod
     def make_key(scope: MemoryScope, identifier: str, key: str) -> str:
@@ -45,8 +47,6 @@ class SessionMemory:
         if isinstance(a0, MemoryScope):
             return a0, str(a1), str(a2)
 
-        # Backward-compatible short form: (session_id, key)
-        # Used as SESSION scope implicitly.
         return MemoryScope.SESSION, str(a0), str(a1)
 
     def get(self, *args: Any) -> Any | None:
@@ -57,8 +57,7 @@ class SessionMemory:
         else:
             raise TypeError("get expects (scope, identifier, key) or (session_id, key)")
 
-        entry = self.backend.get(self.make_key(scope, identifier, key))
-        return None if entry is None else entry.value
+        return self.hybrid.get(scope.value, identifier, key)
 
     def set(self, *args: Any, ttl_sec: int | None = None, ttl_seconds: int | None = None) -> None:
         if len(args) == 4 and isinstance(args[0], MemoryScope):
@@ -79,9 +78,13 @@ class SessionMemory:
         self.policy.validate_size(redacted)
         now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=ttl) if ttl and ttl > 0 else None
-        self.backend.set(
-            self.make_key(scope, identifier, key),
-            BackendEntry(value=redacted, created_at=now, expires_at=expires_at, last_accessed_at=now),
+        self.hybrid.set(
+            scope.value,
+            identifier,
+            key,
+            redacted,
+            expires_at=expires_at,
+            memory_type="episodic",
         )
 
     def delete(self, *args: Any) -> None:
@@ -92,10 +95,10 @@ class SessionMemory:
         else:
             raise TypeError("delete expects (scope, identifier, key) or (session_id, key)")
 
-        self.backend.delete(self.make_key(scope, identifier, key))
+        self.hybrid.delete(scope.value, identifier, key)
 
     def list_keys(self, scope: MemoryScope | None = None, identifier: str | None = None) -> list[str]:
-        keys = list(self.backend.keys())
+        keys = self.hybrid.list_keys()
         if scope is not None:
             keys = [key for key in keys if key.startswith(f"{scope.value}:")]
         if identifier is not None:
@@ -103,16 +106,8 @@ class SessionMemory:
         return keys
 
     def invalidate(self, reason: str, prefix: str | None = None) -> int:
-        removed = 0
-        for key in list(self.backend.keys()):
-            if prefix and not key.startswith(prefix):
-                continue
-            entry = self.backend.get(key)
-            if entry is not None:
-                entry.invalidated_by = reason
-            self.backend.delete(key)
-            removed += 1
-        return removed
+        _ = reason
+        return self.hybrid.invalidate(prefix=prefix)
 
     def clear_session(self, session_id: str) -> int:
         return self.invalidate("session_end", prefix=f"{MemoryScope.SESSION.value}:{session_id}:")

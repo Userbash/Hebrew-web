@@ -1,0 +1,30 @@
+Ты внешний сабагент Gemini CLI.
+
+Задача:
+IMPLEMENT: build hierarchical memory structure
+
+Файл:
+docs/AI_BRIDGE_SESSION_MEMORY.md
+
+Правила:
+- не изменяй код напрямую;
+- верни только отчет;
+- не пиши общие фразы;
+- укажи конкретные строки;
+- укажи риск;
+- предложи исправление;
+- форматируй ответ строго по шаблону.
+
+Шаблон ответа:
+
+task_id: MU-20
+agent: gemini
+file: docs/AI_BRIDGE_SESSION_MEMORY.md
+status:
+
+FOUND:
+FIXED_SUGGESTION:
+CHANGED_FILES:
+COMMANDS_TO_VERIFY:
+RISKS:
+NEXT:
