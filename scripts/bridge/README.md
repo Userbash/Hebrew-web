@@ -1,28 +1,20 @@
-# AI Host Bridge System
+# AI Host Bridge
 
-Система для безопасного доступа изолированной IDE к программам и утилитам хоста.
+Bridge logic is implemented in the orchestrator core module:
+- `ai_bridge/core/host_bridge.py`
+- `ai_bridge/scripts/host_bridge_cli.py`
 
-## Структура
-- `bridge.sh`: Низкоуровневая оболочка (flatpak-spawn).
-- `exec.sh`: Безопасный запуск с проверкой белого списка.
-- `auto_bridge.sh`: Автоматическая диагностика и настройка.
-- `setup_host.sh`: Скрипт конфигурации хоста.
-- `whitelist.txt`: Список разрешенных команд.
+Shell entrypoint for compatibility:
+- `scripts/bridge/exec.sh`
 
-## Как использовать
-1. Инициализируйте систему:
-   ```bash
-   bash scripts/bridge/auto_bridge.sh
-   ```
-2. Для запуска команд используйте `exec.sh`:
-   ```bash
-   bash scripts/bridge/exec.sh git status
-   ```
-
-## Безопасность
-По умолчанию разрешены только основные инструменты разработки. Если ИИ (или вы) попытается запустить команду не из списка, доступ будет заблокирован с инструкцией по добавлению.
-
-Чтобы добавить новую команду в белый список:
+Usage:
 ```bash
-echo "название_команды" >> scripts/bridge/whitelist.txt
+bash scripts/bridge/exec.sh --init
+bash scripts/bridge/exec.sh podman ps
+bash scripts/bridge/exec.sh podman compose -f docker-compose.yml up -d
 ```
+
+Notes:
+- The bridge validates commands against `scripts/bridge/whitelist.txt`.
+- For `podman compose`, the bridge auto-translates to available host provider:
+  `docker compose` -> `docker-compose` -> `podman-compose`.

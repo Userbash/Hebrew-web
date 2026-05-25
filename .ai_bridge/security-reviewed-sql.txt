@@ -1,0 +1,4 @@
+backend/api/routes/auditEvents.ts
+backend/api/routes/logs.ts
+backend/api/routes/publications.ts
+backend/api/routes/users.ts

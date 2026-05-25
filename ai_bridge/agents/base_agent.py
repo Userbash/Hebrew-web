@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from ai_bridge.core.host_bridge import HostBridge
 from ai_bridge.core.models import AgentHealth, AgentResult, AgentStatus, Task, TaskStatus
 
 
@@ -14,6 +15,7 @@ class BaseAgent(ABC):
         self.avg_latency_ms = 0.0
         self.success_rate = 1.0
         self.last_error: str | None = None
+        self.host_bridge: HostBridge | None = None
 
     def health(self) -> AgentHealth:
         return AgentHealth(
@@ -26,6 +28,10 @@ class BaseAgent(ABC):
             success_rate=self.success_rate,
             last_error=self.last_error,
         )
+
+
+    def set_host_bridge(self, bridge: HostBridge) -> None:
+        self.host_bridge = bridge
 
     @abstractmethod
     def run(self, task: Task) -> AgentResult:

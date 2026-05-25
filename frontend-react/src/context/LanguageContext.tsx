@@ -396,21 +396,27 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const remoteLanguage = user?.ui_preferences?.language;
 
     if (remoteMode === 'ru' || remoteMode === 'en' || remoteMode === 'he' || remoteMode === 'system') {
-      setLanguageMode(remoteMode);
-      setLanguageState(resolveLanguage(remoteMode));
+      queueMicrotask(() => {
+        setLanguageMode(remoteMode);
+        setLanguageState(resolveLanguage(remoteMode));
+      });
       return;
     }
 
     if (remoteLanguage === 'ru' || remoteLanguage === 'en' || remoteLanguage === 'he') {
-      setLanguageMode(remoteLanguage);
-      setLanguageState(remoteLanguage);
+      queueMicrotask(() => {
+        setLanguageMode(remoteLanguage);
+        setLanguageState(remoteLanguage);
+      });
       return;
     }
 
     const localMode = readStoredLanguageMode(user?.id ?? null);
-    setLanguageMode(localMode);
     const localLanguage = localMode === 'system' ? (readStoredLanguage(user?.id ?? null) || detectSystemLanguage()) : localMode;
-    setLanguageState(localLanguage);
+    queueMicrotask(() => {
+      setLanguageMode(localMode);
+      setLanguageState(localLanguage);
+    });
   }, [user?.id, user?.ui_preferences?.language, user?.ui_preferences?.languageMode]);
 
   useEffect(() => {

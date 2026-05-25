@@ -13,7 +13,6 @@ class GeminiCLIAgent(BaseAgent):
         self.timeout_sec = self._resolve_timeout()
 
     def run(self, task: Task):
-        # Force non-interactive mode to avoid CLI hanging on prompts.
         prompt = str(task.input.description)
         cmd = ["npx", "@google/gemini-cli", "--prompt", prompt, "--output-format", "text"]
 
@@ -22,7 +21,11 @@ class GeminiCLIAgent(BaseAgent):
 
         self.active_tasks += 1
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout_sec)
+            if self.host_bridge is not None:
+                result = self.host_bridge.execute(cmd, timeout=self.timeout_sec, capture_output=True, text=True, check=False)
+            else:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout_sec)
+
             if result.returncode == 0:
                 return self.result(task, result.stdout.strip(), TaskStatus.DONE)
 

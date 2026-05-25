@@ -7,6 +7,7 @@ from .agent_lifecycle import AgentLifecycleManager
 from .agent_registry import AgentRegistry
 from .feedback_loop import FeedbackLoop
 from .healthcheck import HealthChecker
+from .host_bridge import HostBridge
 from .kpi import KPIEvaluator
 from .load_balancer import LoadBalancer
 from .metrics import MetricsCollector
@@ -15,6 +16,7 @@ from .model_selector import ModelSelector
 from .models import AgentResult, ExecutionPlan, Task, TaskStatus
 from .orchestration_config import OrchestrationConfig
 from .quality_analyzer import QualityAnalyzer
+from .security_gate import SecurityGate
 from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
 from .task_decomposer import TaskDecomposer
@@ -41,12 +43,15 @@ class Orchestrator:
         self.quality = QualityAnalyzer()
         self.merger = ResultMerger()
         self.console = UserConsole()
+        self.security_gate = SecurityGate()
+        self.host_bridge = HostBridge()
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}
         self.live_trace_rows: list[dict[str, object]] = []
 
     def attach_local_agent(self, agent_id: str, agent: BaseAgent, agent_type: str = "custom", critical: bool = False, model_name: str = "local-small", provider: str = "local") -> None:
         self.local_agents[agent_id] = agent
+        agent.set_host_bridge(self.host_bridge)
         if not self.registry.get(agent_id):
             self.registry.register(agent_id, agent_type, f"local://{agent_id}", agent.capabilities, critical=critical, model_name=model_name, provider=provider)
             self.metrics.register_agent(self.registry.get(agent_id))  # type: ignore[arg-type]

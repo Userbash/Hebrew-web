@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-24T08:05:04.362Z",
+  "timestamp": "2026-05-25T09:47:54.458Z",
   "total_suites": 2,
   "passed_suites": 2,
   "failed_suites": 0,
@@ -43,8 +43,7 @@
           "backend",
           "frontend",
           "loki",
-          "promtail",
-          "grafana"
+          "promtail"
         ]
       }
     }

@@ -1163,11 +1163,14 @@ button {
 }
 
 .school-search-wrap input {
-  border: 0;
   outline: 0;
   width: 100%;
-  background: transparent;
   color: inherit;
+}
+
+.school-search-wrap .search-input {
+  border: 1px solid #334155;
+  background: #0f172a;
 }
 
 .school-stat-icon {
@@ -1421,4 +1424,97 @@ button {
 .school-page .school-search-wrap:focus-within {
   border-color: rgba(59, 130, 246, 0.7);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+
+/* Student cabinet design tokens */
+.school-page {
+  --cab-bg: #0b1220;
+  --cab-surface: #111827;
+  --cab-surface-subtle: #0f172a;
+  --cab-border: #334155;
+  --cab-primary: #2563eb;
+  --cab-success: #16a34a;
+  --cab-text: #e5e7eb;
+  --cab-muted: #94a3b8;
+  --cab-disabled: #64748b;
+  --cab-danger: #ef4444;
+}
+
+.school-page,
+.school-page-dark {
+  background: var(--cab-bg);
+  color: var(--cab-text);
+}
+
+.school-page .school-panel {
+  background: var(--cab-surface);
+  border-color: var(--cab-border);
+  color: var(--cab-text);
+}
+
+.school-page .school-panel-inner {
+  background: var(--cab-surface-subtle);
+  border-color: var(--cab-border);
+}
+
+.school-page .text-secondary {
+  color: var(--cab-muted) !important;
+}
+
+.user-badge {
+  background: #111827;
+  border: 1px solid #334155;
+  color: #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.empty-state {
+  background: #0f172a;
+  border: 1px dashed #334155;
+  color: #94a3b8;
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  background: #1e293b;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.search-input {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.search-input::placeholder {
+  color: #64748b;
+}
+
+.school-page .school-search-wrap {
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+
+.school-page .school-search-wrap svg {
+  color: #94a3b8;
+}
+
+.school-page .badge.bg-success {
+  background: var(--cab-success) !important;
+  color: #f8fafc;
 }

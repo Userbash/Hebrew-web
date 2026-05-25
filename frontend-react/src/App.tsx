@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
-import { Alert, Badge, Button, Card, Col, Container, Form, Nav, ProgressBar, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Container, Form, Nav, Row, Spinner } from 'react-bootstrap';
 import {
   BarChart3,
   BookOpen,
@@ -65,7 +65,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('profile');
   const [selectedRange, setSelectedRange] = useState<ProgressRange>('week');
-  const [avatarVersion, setAvatarVersion] = useState(Date.now());
+  const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
 
@@ -114,7 +114,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    queueMicrotask(() => {
+      void loadDashboard();
+    });
   }, []);
 
   const handleLogout = async () => {
@@ -151,8 +153,9 @@ export default function App() {
       const { data } = await api.post('/auth/change-password', passwordDraft);
       setPasswordMessage(data?.message || 'Пароль успешно обновлен.');
       setPasswordDraft({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (error: any) {
-      setPasswordError(error?.response?.data?.message || 'Не удалось изменить пароль.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Не удалось изменить пароль.';
+      setPasswordError(message);
     } finally {
       setPasswordSaving(false);
     }
@@ -171,8 +174,9 @@ export default function App() {
       await api.post('/profile-avatar/me', { imageBase64: base64, mimeType: file.type });
       setAvatarVersion(Date.now());
       setAvatarMessage('Аватар обновлен.');
-    } catch (error: any) {
-      setAvatarError(error?.response?.data?.message || 'Не удалось загрузить аватар.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Не удалось загрузить аватар.';
+      setAvatarError(message);
     } finally {
       setAvatarBusy(false);
       event.target.value = '';
@@ -244,7 +248,7 @@ export default function App() {
                       <CheckCircle2 size={14} />
                       {t.systemOnline}
                     </Badge>
-                    <Badge className="school-user-badge d-inline-flex align-items-center gap-1 px-3 py-2">
+                    <Badge className="school-user-badge user-badge d-inline-flex align-items-center gap-1">
                       <UserRound size={14} />
                       {user?.email || 'student@example.com'}
                     </Badge>
@@ -286,12 +290,12 @@ export default function App() {
                               <Button variant="link" className="p-0 text-decoration-none" onClick={() => void loadDashboard()}>{t.updatedNow}</Button>
                             </div>
                             <div className="activity-list">
-                              {(dashboard?.recentActivities?.length ? dashboard.recentActivities : fallbackTasks).map((task: any, index: number) => (
+                              {(dashboard?.recentActivities?.length ? dashboard.recentActivities : fallbackTasks).map((task, index: number) => (
                                 <ActivityItem
                                   key={task.title + index}
                                   title={task.title}
-                                  time={task.happenedAt ? new Date(task.happenedAt).toLocaleString() : (index === 0 ? t.twoHoursAgo : index === 1 ? t.yesterday : t.threeDaysAgo)}
-                                  result={task.xp ? `+${task.xp} XP` : `${task.duration} • ${task.level}`}
+                                  time={'happenedAt' in task ? new Date(task.happenedAt).toLocaleString() : (index === 0 ? t.twoHoursAgo : index === 1 ? t.yesterday : t.threeDaysAgo)}
+                                  result={'xp' in task ? `+${task.xp} XP` : `${task.duration} • ${task.level}`}
                                 />
                               ))}
                             </div>
@@ -307,11 +311,11 @@ export default function App() {
                             </div>
                             <h4 className="h6 mb-2">{t.stable}</h4>
                             <p className="text-secondary mb-3">{t.stableDesc}</p>
-                            <ProgressBar now={dashboard?.ranges.week.progressPercent ?? 0} label={`${dashboard?.ranges.week.progressPercent ?? 0}%`} />
+                            <InlineProgress value={dashboard?.ranges.week.progressPercent ?? 0} />
                             <label className="form-label small mt-3 mb-1">{t.searchPlaceholder}</label>
                             <div className="school-search-wrap">
                               <Search size={16} />
-                              <input placeholder={t.searchPlaceholder} />
+                              <input className="search-input" placeholder={t.searchPlaceholder} />
                             </div>
                           </Card.Body>
                         </Card>
@@ -333,7 +337,7 @@ export default function App() {
                                   <strong>{lesson.title}</strong>
                                   <small className="text-secondary">{lesson.duration ? `${lesson.duration} мин` : 'урок'}</small>
                                 </div>
-                                <ProgressBar now={lesson.progressPercent} label={`${lesson.progressPercent}%`} className="mb-2" />
+                                <InlineProgress value={lesson.progressPercent} className="mb-2" />
                                 <div className="d-flex justify-content-between align-items-center">
                                   <small className="text-secondary">{new Date(lesson.updatedAt).toLocaleString()}</small>
                                   <Button size="sm" onClick={() => void markLessonCompleted(lesson.lessonId)}>Завершить</Button>
@@ -344,7 +348,7 @@ export default function App() {
                         ))}
                         {(!dashboard?.activeLessonItems || dashboard.activeLessonItems.length === 0) && (
                           <Col>
-                            <Alert variant="secondary" className="mb-0 school-inline-alert">Нет активных уроков. Начните урок из каталога, и он появится здесь.</Alert>
+                            <div className="empty-state">Активных уроков пока нет. Выберите урок из каталога, чтобы начать обучение.</div>
                           </Col>
                         )}
                       </Row>
@@ -369,7 +373,7 @@ export default function App() {
                         <Col md={4}><StatCard label="Уроки завершено" value={String(dashboard?.totals.completedLessons ?? 0)} note={`из ${dashboard?.totals.totalLessons ?? 0}`} icon={<BookOpen size={19} />} /></Col>
                         <Col md={4}><StatCard label="XP" value={String(dashboard?.user?.xpTotal ?? user?.xp_total ?? 0)} note={`уровень ${dashboard?.user?.level ?? user?.level ?? 1}`} icon={<ShieldCheck size={19} />} /></Col>
                       </Row>
-                      <ProgressBar now={selectedRangeData?.progressPercent ?? 0} label={`${selectedRangeData?.progressPercent ?? 0}%`} className="mb-3" />
+                      <InlineProgress value={selectedRangeData?.progressPercent ?? 0} className="mb-3" />
                     </Card.Body>
                   </Card>
                 )}
@@ -542,4 +546,19 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(new Error('File read failed'));
     reader.readAsDataURL(file);
   });
+}
+
+
+interface InlineProgressProps {
+  value: number;
+  className?: string;
+}
+
+function InlineProgress({ value, className = '' }: InlineProgressProps) {
+  const normalized = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  return (
+    <div className={`progress-track ${className}`.trim()}>
+      <div className="progress-fill" style={{ width: `${normalized}%` }} />
+    </div>
+  );
 }

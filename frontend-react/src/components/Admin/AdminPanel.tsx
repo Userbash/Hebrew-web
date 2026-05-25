@@ -665,6 +665,7 @@ export default function AdminPanel() {
         void reloadSystemMetrics();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
 
   useEffect(() => {
