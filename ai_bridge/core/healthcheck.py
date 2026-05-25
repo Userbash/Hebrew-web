@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .agent_registry import AgentRegistry
 from .models import AgentHealth, AgentStatus
+from .availability import ModelAvailability
 from ..protocols.rest_protocol import RestProtocol
 
 
@@ -9,6 +10,10 @@ class HealthChecker:
     def __init__(self, registry: AgentRegistry, rest_protocol: RestProtocol | None = None) -> None:
         self.registry = registry
         self.rest_protocol = rest_protocol or RestProtocol()
+        self.availability = ModelAvailability()
+
+    def check_providers(self) -> dict:
+        return self.availability.check_all()
 
     def local_health(self, agent_id: str) -> AgentHealth:
         return self.registry.health_snapshot(agent_id)

@@ -20,6 +20,7 @@ from .security_gate import SecurityGate
 from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
 from .session_memory import MemoryScope, SessionMemory
+from .availability import ModelAvailability
 from .task_decomposer import TaskDecomposer
 from .task_router import CAPABILITY_BY_TASK_TYPE, TaskRouter
 from .user_console import UserConsole
@@ -38,6 +39,7 @@ class Orchestrator:
         self.scheduler = SmartScheduler(self.registry)
         self.message_bus = MessageBus()
         self.healthcheck = HealthChecker(self.registry)
+        self.availability = ModelAvailability()
         self.feedback = FeedbackLoop(retry_limit=retry_limit)
         self.metrics = MetricsCollector()
         self.kpi = KPIEvaluator()
@@ -143,6 +145,12 @@ class Orchestrator:
             f"task_id={task.task_id} router_agent={agent_id} router_provider={agent_record.provider if agent_record else '-'} "
             f"fallback={fallback} secondary_review={choice.requires_secondary_review}",
         )
+
+        # Pre-flight availability check
+        provider = agent_record.provider if agent_record else choice.provider
+        if not self.availability.is_provider_ready(provider):
+            self.console.emit("EXECUTION", f"Provider {provider} is not ready. Skipping execution.")
+            return AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unreachable or auth failed", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
 
         self.live_trace_rows.append(
             {

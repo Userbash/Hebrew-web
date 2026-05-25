@@ -12,6 +12,14 @@ def main() -> None:
     registry.register("codex-main", "codex", "local://codex", ["code", "fix", "refactor"])
     
     checker = HealthChecker(registry)
+    
+    print("\n--- Provider Availability ---")
+    for provider, health in checker.check_providers().items():
+        print(f"{provider}: {health.status.value} (latency: {health.latency_ms:.1f}ms)")
+        if health.error:
+            print(f"  Error: {health.error}")
+
+    print("\n--- Agent Health ---")
     for health in checker.check_all():
         print(health.as_dict())
 
