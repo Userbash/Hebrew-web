@@ -25,3 +25,24 @@ def test_validate_rejects_unknown_command(tmp_path: Path):
         assert "not in host bridge whitelist" in str(exc)
     else:
         raise AssertionError("Expected HostBridgeError")
+
+
+def test_translate_gh_via_distrobox_fallback(monkeypatch):
+    bridge = HostBridge()
+
+    monkeypatch.setattr(HostBridge, "detect_mode", lambda self: "flatpak-spawn")
+    monkeypatch.setattr(HostBridge, "_host_has_binary", lambda self, name: False)
+    monkeypatch.setattr(type(bridge.distrobox_bridge), "ensure_gh_ready", lambda self, mode: "gh-dev")
+
+    translated = bridge.translate(["gh", "repo", "view"])
+    assert translated == [
+        "flatpak-spawn",
+        "--host",
+        "distrobox",
+        "enter",
+        "gh-dev",
+        "--",
+        "gh",
+        "repo",
+        "view",
+    ]

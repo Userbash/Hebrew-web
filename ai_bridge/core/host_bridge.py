@@ -7,6 +7,9 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ai_bridge.core.distrobox_bridge import DistroboxBridge, DistroboxBridgeError
+from ai_bridge.core.gh_auth_bridge import GhAuthBridge, GhAuthBridgeError
+
 
 class HostBridgeError(RuntimeError):
     pass
@@ -15,8 +18,13 @@ class HostBridgeError(RuntimeError):
 @dataclass(slots=True)
 class HostBridge:
     whitelist_file: Path = Path("scripts/bridge/whitelist.txt")
+    distrobox_bridge: DistroboxBridge = field(default_factory=DistroboxBridge)
+    gh_auth_bridge: GhAuthBridge = field(default_factory=GhAuthBridge)
     default_allowlist: list[str] = field(default_factory=lambda: [
         "git",
+        "gh",
+        "distrobox",
+        "distrobox-host-exec",
         "podman",
         "docker",
         "docker-compose",
@@ -64,7 +72,6 @@ class HostBridge:
         return result.returncode == 0
 
     def _translate_podman_compose(self, command: list[str]) -> list[str]:
-        # command = ["podman", "compose", ...]
         compose_args = command[2:]
 
         if self._host_has_binary("docker"):
@@ -76,8 +83,32 @@ class HostBridge:
 
         raise HostBridgeError("No compose provider found on host (docker compose / docker-compose / podman-compose)")
 
+    def _translate_gh(self, command: list[str], mode: str) -> list[str]:
+        gh_args = command[1:]
+
+        if mode == "flatpak-spawn":
+            if self._host_has_binary("gh"):
+                return ["flatpak-spawn", "--host", "gh", *gh_args]
+            try:
+                box_name = self.distrobox_bridge.ensure_gh_ready(mode)
+                return self.distrobox_bridge.translate_exec(mode, box_name, ["gh", *gh_args])
+            except DistroboxBridgeError as exc:
+                raise HostBridgeError(str(exc)) from exc
+
+        if shutil.which("gh"):
+            return ["gh", *gh_args]
+
+        try:
+            box_name = self.distrobox_bridge.ensure_gh_ready(mode)
+            return self.distrobox_bridge.translate_exec(mode, box_name, ["gh", *gh_args])
+        except DistroboxBridgeError as exc:
+            raise HostBridgeError(str(exc)) from exc
+
     def translate(self, command: list[str]) -> list[str]:
         mode = self.detect_mode()
+
+        if command[0] == "gh":
+            return self._translate_gh(command, mode)
 
         if mode == "flatpak-spawn":
             if len(command) >= 2 and command[0] == "podman" and command[1] == "compose":
@@ -107,5 +138,12 @@ class HostBridge:
         check: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         self.validate(command)
-        translated = self.translate(command)
+        mode = self.detect_mode()
+        if command[0] == "gh":
+            try:
+                self.gh_auth_bridge.ensure_authenticated(mode, self.distrobox_bridge, self._host_has_binary)
+            except GhAuthBridgeError as exc:
+                raise HostBridgeError(str(exc)) from exc
+
+        translated = self._translate_gh(command, mode) if command[0] == "gh" else self.translate(command)
         return subprocess.run(translated, timeout=timeout, capture_output=capture_output, text=text, check=check)

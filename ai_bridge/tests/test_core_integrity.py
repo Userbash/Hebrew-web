@@ -21,6 +21,11 @@ def test_core_modules_importable():
     import ai_bridge.core.memory_policy  # noqa: F401
     import ai_bridge.core.models  # noqa: F401
     import ai_bridge.core.orchestrator  # noqa: F401
+    import ai_bridge.core.host_bridge  # noqa: F401
+    import ai_bridge.core.distrobox_bridge  # noqa: F401
+    import ai_bridge.core.gh_auth_bridge  # noqa: F401
+    import ai_bridge.core.kernel_module_manager  # noqa: F401
+    import ai_bridge.core.ai_activity_module  # noqa: F401
     import ai_bridge.core.session_memory  # noqa: F401
 
 

@@ -21,6 +21,8 @@ from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
 from .session_memory import MemoryScope, SessionMemory
 from .availability import ModelAvailability
+from .ai_activity_module import AIActivityModule
+from .kernel_module_manager import KernelModuleManager
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -52,6 +54,9 @@ class Orchestrator:
         self.security_gate = SecurityGate()
         self.host_bridge = HostBridge()
         self.session_memory = SessionMemory()
+        self.module_manager = KernelModuleManager()
+        self.module_manager.register(AIActivityModule())
+        self.module_manager.load("ai_activity")
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}
         self.live_trace_rows: list[dict[str, object]] = []
@@ -62,6 +67,15 @@ class Orchestrator:
         if not self.registry.get(agent_id):
             self.registry.register(agent_id, agent_type, f"local://{agent_id}", agent.capabilities, critical=critical, model_name=model_name, provider=provider)
             self.metrics.register_agent(self.registry.get(agent_id))  # type: ignore[arg-type]
+
+    def load_kernel_module(self, name: str) -> None:
+        self.module_manager.load(name)
+
+    def unload_kernel_module(self, name: str) -> None:
+        self.module_manager.unload(name)
+
+    def loaded_kernel_modules(self) -> list[str]:
+        return self.module_manager.loaded_modules()
 
     def create_execution_plan(self, task: Task) -> ExecutionPlan:
         self.console.emit("PLAN", "Задача проанализирована")
@@ -125,6 +139,13 @@ class Orchestrator:
             f"secondary_review={choice.requires_secondary_review} reason={choice.reason}",
         )
 
+        module_context: dict[str, object] = {
+            "selected_provider": choice.provider,
+            "selected_model": choice.model_name,
+            "reason": choice.reason,
+        }
+        self.module_manager.before_task(task, module_context)
+
         self.autoscaler.ensure_capacity(capability)
         decision = self.scheduler.schedule(task)
         if decision.requires_orchestrator:
@@ -152,11 +173,18 @@ class Orchestrator:
                     "reason": acceptance.message,
                 }
             )
-            return AgentResult(task.task_id, "orchestrator", TaskStatus.FAILED, {"summary": acceptance.message, "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [acceptance.message], [])
+            failed_result = AgentResult(task.task_id, "orchestrator", TaskStatus.FAILED, {"summary": acceptance.message, "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [acceptance.message], [])
+            self.module_manager.after_task(task, failed_result, module_context)
+            return failed_result
 
         agent_id = acceptance.assigned_agent
         agent_record = self.registry.get(agent_id)
         fallback = bool(choice.provider != "openai" and agent_record and agent_record.provider == "openai")
+
+        module_context["agent_id"] = agent_id
+        module_context["provider"] = agent_record.provider if agent_record else choice.provider
+        module_context["model"] = agent_record.model_name if agent_record else choice.model_name
+        module_context["fallback"] = fallback
 
         self.console.emit(
             "ROUTING",
@@ -168,7 +196,9 @@ class Orchestrator:
         provider = agent_record.provider if agent_record else choice.provider
         if not self.availability.is_provider_ready(provider):
             self.console.emit("EXECUTION", f"Provider {provider} is not ready. Skipping execution.")
-            return AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unreachable or auth failed", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
+            failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unreachable or auth failed", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
+            self.module_manager.after_task(task, failed_result, module_context)
+            return failed_result
 
         self.live_trace_rows.append(
             {
@@ -199,7 +229,9 @@ class Orchestrator:
         try:
             agent = self.local_agents.get(agent_id)
             if not agent:
-                return AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": "No local executor for routed agent", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, ["No local executor"], [])
+                failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": "No local executor for routed agent", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, ["No local executor"], [])
+                self.module_manager.after_task(task, failed_result, module_context)
+                return failed_result
             memory_context = self._load_memory_context(task, agent_id)
             result = agent.run(task, memory_context=memory_context)
 
@@ -250,6 +282,13 @@ class Orchestrator:
                 self.session_memory.set(scope, identifier, "last_summary", result.output.get("summary", ""), ttl_sec=task.memory_ttl_sec)
             self.console.emit("EXECUTION", f"task_id={task.task_id} agent={agent_id} status={result.status.value}")
 
+            resolved_record = self.registry.get(result.agent_id)
+            if resolved_record:
+                module_context["agent_id"] = result.agent_id
+                module_context["provider"] = resolved_record.provider
+                module_context["model"] = resolved_record.model_name
+            self.module_manager.after_task(task, result, module_context)
+
             if choice.requires_secondary_review:
                 self.console.emit(
                     "SECONDARY_REVIEW",
@@ -288,9 +327,11 @@ class Orchestrator:
                 final_results.append(result)
                 if result.status != TaskStatus.DONE:
                     merged = self.merger.merge(final_results)
-                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
+                    module_state = self.module_manager.finalize()
+                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {})}
                 completed.add(task.task_id)
                 pending.pop(task.task_id)
         merged = self.merger.merge(final_results)
         self.console.emit("DONE", "Все критерии выполнены")
-        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions]}
+        module_state = self.module_manager.finalize()
+        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {})}

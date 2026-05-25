@@ -1,4 +1,7 @@
 git
+gh
+distrobox
+distrobox-host-exec
 podman
 docker
 systemctl
