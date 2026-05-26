@@ -249,6 +249,30 @@ class HybridMemory:
         self._hot.clear()
         self.backend.clear()
 
+    async def soft_flush(self) -> int:
+        """Persist all hot entries and buffered records to the database synchronously."""
+        flushed = 0
+        for skey, entry in list(self._hot.items()):
+            memory_id = await self.persistent.store_memory(
+                session_id=entry.identifier,
+                agent_id=self._persistence_agent_id(entry.scope, entry.identifier),
+                memory_type=entry.memory_type,
+                content=self.persistent.serialize_payload(entry.value),
+                importance_score=entry.importance_score,
+                metadata={"key": entry.key, "scope": entry.scope, "tags": entry.tags},
+                expires_at=entry.expires_at,
+            )
+            if memory_id:
+                entry.stub = MemoryStub(memory_id=memory_id, summary=str(entry.value)[:200], persisted=True)
+                flushed += 1
+        
+        if hasattr(self.persistent, "flush_all"):
+            # Теперь это ожидаемый await
+            flushed += await self.persistent.flush_all()
+            
+        logger.info(f"[MEMORY] Soft flush complete: {flushed} total records persisted.")
+        return flushed
+
     def run_maintenance_once(self) -> int:
         if not self._hot:
             return 0
@@ -308,11 +332,17 @@ class HybridMemory:
             default=[],
         )
 
+    def _persistence_agent_id(self, scope: str, identifier: str) -> str:
+        if scope == "agent":
+            return identifier
+        return f"{scope}-memory"
+
     def _persist_entry(self, entry: HotEntry) -> int | None:
+        persistence_agent_id = self._persistence_agent_id(entry.scope, entry.identifier)
         return self._run_async_result(
             self.persistent.store_memory(
                 session_id=entry.identifier,
-                agent_id=entry.identifier,
+                agent_id=persistence_agent_id,
                 memory_type=entry.memory_type,
                 content=self.persistent.serialize_payload(entry.value),
                 importance_score=entry.importance_score,
@@ -323,10 +353,11 @@ class HybridMemory:
         )
 
     def _restore_from_persistent(self, scope: str, identifier: str, key: str) -> Any | None:
+        persistence_agent_id = self._persistence_agent_id(scope, identifier)
         rows = self._run_async_result(
             self.persistent.retrieve_memories(
                 session_id=identifier,
-                agent_id=identifier,
+                agent_id=persistence_agent_id,
                 memory_type="episodic",
                 top_k=self.settings.retrieval_top_k,
             ),
@@ -358,7 +389,10 @@ class HybridMemory:
             loop = asyncio.get_running_loop()
             loop.create_task(coro)
         except RuntimeError:
-            asyncio.run(coro)
+            try:
+                asyncio.run(coro)
+            except Exception as e:
+                logger.error(f"Failed to run async task synchronously: {e}")
 
     @staticmethod
     def _run_async_result(coro: Any, *, default: Any) -> Any:

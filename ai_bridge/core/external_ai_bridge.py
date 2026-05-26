@@ -5,6 +5,15 @@ import subprocess
 import time
 from dataclasses import dataclass
 
+try:
+    from tenacity import RetryError, Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
+except Exception:  # pragma: no cover
+    RetryError = None  # type: ignore
+    Retrying = None  # type: ignore
+    retry_if_exception_type = None  # type: ignore
+    stop_after_attempt = None  # type: ignore
+    wait_exponential_jitter = None  # type: ignore
+
 from ai_bridge.core.gemini_runtime_router import GeminiRuntimeRouter
 from ai_bridge.core.host_bridge import HostBridge
 from ai_bridge.core.models import Task
@@ -75,29 +84,61 @@ class ExternalAIBridge:
         last_error = ""
 
         for model in plan.models:
+            cmd = [
+                "npx",
+                "@google/gemini-cli",
+                "--prompt",
+                prompt,
+                "--model",
+                model,
+                "--output-format",
+                "text",
+            ]
+
+            def _run_once() -> subprocess.CompletedProcess[str]:
+                if self.host_bridge is not None:
+                    return self.host_bridge.execute(cmd, timeout=timeout_sec, capture_output=True, text=True, check=False)
+                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+
+            if Retrying is not None:
+                try:
+                    retry_loop = Retrying(
+                        stop=stop_after_attempt(retries),
+                        wait=wait_exponential_jitter(initial=1, max=8),
+                        retry=retry_if_exception_type((subprocess.TimeoutExpired, RuntimeError)),
+                        reraise=True,
+                    )
+                    for attempt in retry_loop:
+                        with attempt:
+                            attempts += 1
+                            proc = _run_once()
+                            if proc.returncode != 0:
+                                stderr = (proc.stderr or "").strip()
+                                err = stderr or f"non-zero exit code: {proc.returncode}"
+                                if self._is_capacity_error(err) or self._is_token_error(err):
+                                    raise RuntimeError(err)
+                                return BridgeExecResult(False, "", err, "gemini-cli", model, attempts, error_type=self.classify_error(err))
+                            output = proc.stdout.strip()
+                            self.router.register_usage(task, self._estimate_consumed_tokens(prompt, output))
+                            return BridgeExecResult(True, output, "", "gemini-cli", model, attempts, error_type="none")
+                except RetryError as exc:
+                    last_error = str(exc)
+                except subprocess.TimeoutExpired as exc:
+                    return BridgeExecResult(False, "", f"timeout: {exc}", "gemini-cli", model, attempts, error_type="sdk_hang")
+                except RuntimeError as exc:
+                    last_error = str(exc)
+                except Exception as exc:
+                    return BridgeExecResult(False, "", f"execution_error: {exc}", "gemini-cli", model, attempts, error_type=self.classify_error(str(exc)))
+                continue
+
             for attempt in range(1, retries + 1):
                 attempts += 1
-                cmd = [
-                    "npx",
-                    "@google/gemini-cli",
-                    "--prompt",
-                    prompt,
-                    "--model",
-                    model,
-                    "--output-format",
-                    "text",
-                ]
                 try:
-                    if self.host_bridge is not None:
-                        proc = self.host_bridge.execute(cmd, timeout=timeout_sec, capture_output=True, text=True, check=False)
-                    else:
-                        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+                    proc = _run_once()
                 except subprocess.TimeoutExpired as exc:
-                    last_error = str(exc)
-                    return BridgeExecResult(False, "", f"timeout: {last_error}", "gemini-cli", model, attempts, error_type="sdk_hang")
+                    return BridgeExecResult(False, "", f"timeout: {exc}", "gemini-cli", model, attempts, error_type="sdk_hang")
                 except Exception as exc:
-                    last_error = str(exc)
-                    return BridgeExecResult(False, "", f"execution_error: {last_error}", "gemini-cli", model, attempts, error_type=self.classify_error(last_error))
+                    return BridgeExecResult(False, "", f"execution_error: {exc}", "gemini-cli", model, attempts, error_type=self.classify_error(str(exc)))
 
                 if proc.returncode == 0:
                     output = proc.stdout.strip()
@@ -106,15 +147,11 @@ class ExternalAIBridge:
 
                 stderr = (proc.stderr or "").strip()
                 last_error = stderr or f"non-zero exit code: {proc.returncode}"
-                error_type = self.classify_error(last_error)
-
                 if (self._is_capacity_error(last_error) or self._is_token_error(last_error)) and attempt < retries:
                     time.sleep(self._backoff_sec(attempt))
                     continue
-
-                if self._is_capacity_error(last_error) or self._is_token_error(last_error):
-                    break
-
-                return BridgeExecResult(False, "", last_error, "gemini-cli", model, attempts, error_type=error_type)
+                if not (self._is_capacity_error(last_error) or self._is_token_error(last_error)):
+                    return BridgeExecResult(False, "", last_error, "gemini-cli", model, attempts, error_type=self.classify_error(last_error))
+                break
 
         return BridgeExecResult(False, "", f"routing_exhausted: {last_error}", "gemini-cli", plan.models[-1], attempts, error_type=self.classify_error(last_error))

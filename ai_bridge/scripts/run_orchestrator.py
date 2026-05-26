@@ -1,61 +1,79 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+if Path("/app").exists():
+    sys.path.insert(0, "/app")
 
 from ai_bridge.agents.codex_agent import CodexAgent
-from ai_bridge.agents.gemini_agent import GeminiAgent
 from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
 from ai_bridge.agents.mistral_agent import MistralAgent
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.reviewer_agent import ReviewerAgent
 from ai_bridge.agents.tester_agent import TesterAgent
-from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskType
 from ai_bridge.core.orchestration_config import OrchestrationConfig
+from ai_bridge.core.dependency_manager import DependencyManager
 from ai_bridge.core.orchestrator import Orchestrator
 from ai_bridge.core.security import SecurityManager, SecurityPolicy
 
 
+def _ensure_memory_dirs() -> None:
+    configured_dir = os.getenv("AI_BRIDGE_MEMORY_STORE_DIR", "").strip()
+    if configured_dir:
+        base = Path(configured_dir)
+    else:
+        app_dir = Path("/app")
+        base = app_dir / "memory_store" if app_dir.exists() and os.access(app_dir, os.W_OK) else Path.cwd() / "memory_store"
+    (base / "memories").mkdir(parents=True, exist_ok=True)
+    (base / "commands").mkdir(parents=True, exist_ok=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run AI Bridge orchestration demo")
-    parser.add_argument("--yes", action="store_true", help="Auto-approve safe standard tasks")
-    parser.add_argument("--auto", action="store_true", help="Enable automatic route/retry/review/test behavior")
-    parser.add_argument("--use-bridge", action="store_true", help="Use AI Bridge as the default orchestration engine")
-    parser.add_argument("--non-interactive", action="store_true", help="Disable y/n prompts for safe standard tasks")
+    parser = argparse.ArgumentParser(description="Run AI Bridge orchestration")
+    parser.add_argument("--use-bridge", action="store_true")
+    parser.add_argument("--auto", action="store_true")
+    parser.add_argument("--yes", action="store_true")
+    parser.add_argument("--non-interactive", action="store_true")
     return parser
 
 
-def main(argv: list[str] | None = None) -> None:
+async def main(argv: list[str] | None = None) -> None:
+    _ensure_memory_dirs()
+    DependencyManager.ensure_required()
     args = build_parser().parse_args(argv)
     config = OrchestrationConfig.from_env()
-    config.apply_cli_flags(yes=args.yes, auto=args.auto, use_bridge=args.use_bridge, non_interactive=args.non_interactive)
+    config.apply_cli_flags(
+        use_bridge=args.use_bridge,
+        auto=args.auto,
+        yes=args.yes,
+        non_interactive=args.non_interactive,
+    )
+
+    missing_optional = DependencyManager.find_missing()["optional"]
+    if missing_optional:
+        print("Optional AI libs not installed:", ", ".join(missing_optional))
 
     orchestrator = Orchestrator()
     orchestrator.orchestration_config = config
-    
+
     security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["npx @google/gemini-cli --prompt"]))
-    
+
     orchestrator.attach_local_agent("planner-1", PlannerAgent("planner-1"), agent_type="planner", critical=True, model_name="gpt-planner", provider="openai")
     orchestrator.attach_local_agent("codex-main", CodexAgent("codex-main"), agent_type="codex", critical=True, model_name="gpt-coding-large", provider="openai")
     orchestrator.attach_local_agent("gemini-cli-1", GeminiCLIAgent("gemini-cli-1", security_manager), agent_type="external_ai", critical=False, model_name="gemini-cli", provider="google")
     orchestrator.attach_local_agent("mistral-1", MistralAgent("mistral-1", security_manager), agent_type="external_ai", critical=False, model_name="mistral-large-latest", provider="mistral")
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", model_name="gpt-test-standard", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", model_name="gpt-review-large", provider="openai")
-    
-    # Check if user wants a specific agent via a flag or environment
-    target_agent = os.getenv("TARGET_AGENT")
-    task_description = "Perform a system health check: respond with 'OK' and your current model name."
-    
-    if target_agent == "gemini":
-        task_description = "Use Gemini for this: " + task_description
-    elif target_agent == "mistral":
-        task_description = "Use Mistral for this: " + task_description
-    elif target_agent == "openai":
-        task_description = "Use OpenAI for this: " + task_description
-    
-    task = Task(TaskType.PLAN, TaskInput(task_description, acceptance_criteria=["tests pass"]), TaskContext("demo", ".", "main"))
-    print(orchestrator.run(task))
+
+    print(f"System Ready. Agents bound: {len(orchestrator.registry.list_agents())}")
+    await orchestrator.listen_for_tasks()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

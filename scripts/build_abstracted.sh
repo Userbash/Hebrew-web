@@ -33,7 +33,7 @@ if [[ ! -f "$FRONTEND_DIR/Dockerfile" ]]; then
 fi
 
 echo "Building Backend image: $BACKEND_IMAGE"
-"$BRIDGE_CMD" podman build --no-cache --format docker -t "$BACKEND_IMAGE" -f "$BACKEND_DIR/Dockerfile" "$BACKEND_DIR"
+"$BRIDGE_CMD" podman build --no-cache --format docker -t "$BACKEND_IMAGE" -f "$BACKEND_DIR/Dockerfile" "$PROJECT_ROOT"
 
 echo "Building Frontend image: $FRONTEND_IMAGE"
 "$BRIDGE_CMD" podman build --no-cache --format docker -t "$FRONTEND_IMAGE" -f "$FRONTEND_DIR/Dockerfile" "$FRONTEND_DIR"

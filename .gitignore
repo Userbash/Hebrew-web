@@ -79,3 +79,12 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# AI Bridge & Orchestrator
+.env.bridge
+.agent/bridge_results/
+.agent/bridge_queue.json
+.agent/tasks/
+.agent/reports/
+memory_store/
+system_test_report.py

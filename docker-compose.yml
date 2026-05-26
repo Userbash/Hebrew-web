@@ -92,11 +92,15 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres123}
       DB_NAME: ${DB_NAME:-hebrew_ai_db}
+      # Required for AI Bridge persistent memory
+      AI_BRIDGE_MEMORY_ENABLED: ${AI_BRIDGE_MEMORY_ENABLED:-true}
+      AI_BRIDGE_MEMORY_DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-hebrew_ai_db}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - avatar_uploads:/app/public/uploads/avatars
+      - ./ai_bridge:/app/ai_bridge
     depends_on:
       postgres:
         condition: service_healthy

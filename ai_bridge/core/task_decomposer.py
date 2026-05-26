@@ -30,10 +30,14 @@ class TaskDecomposer:
 
         context = task.context
         description = task.input.description
-        plan = Task(TaskType.PLAN, TaskInput(f"Plan: {description}", acceptance_criteria=["execution plan created"]), context, task.priority, parent_task_id=task.task_id)
-        code = Task(TaskType.CODE, TaskInput(f"Implement: {description}", files=task.input.files, constraints=task.input.constraints, acceptance_criteria=task.input.acceptance_criteria), context, task.priority, parent_task_id=task.task_id, dependencies=[plan.task_id])
-        test = Task(TaskType.TEST, TaskInput(f"Test: {description}", files=task.input.files, acceptance_criteria=["tests pass"]), context, task.priority, parent_task_id=task.task_id, dependencies=[code.task_id])
-        review = Task(TaskType.REVIEW, TaskInput(f"Review: {description}", files=task.input.files, acceptance_criteria=["review pass"]), context, task.priority, parent_task_id=task.task_id, dependencies=[test.task_id])
+        plan_priority = task.priority
+        review_priority = task.priority if task.priority in {Priority.HIGH, Priority.CRITICAL} else Priority.HIGH
+        execution_priority = Priority.NORMAL
+
+        plan = Task(TaskType.PLAN, TaskInput(f"Plan: {description}", acceptance_criteria=["execution plan created"]), context, plan_priority, parent_task_id=task.task_id)
+        code = Task(TaskType.CODE, TaskInput(f"Implement: {description}", files=task.input.files, constraints=task.input.constraints, acceptance_criteria=task.input.acceptance_criteria), context, execution_priority, parent_task_id=task.task_id, dependencies=[plan.task_id])
+        test = Task(TaskType.TEST, TaskInput(f"Test: {description}", files=task.input.files, acceptance_criteria=["tests pass"]), context, execution_priority, parent_task_id=task.task_id, dependencies=[code.task_id])
+        review = Task(TaskType.REVIEW, TaskInput(f"Review: {description}", files=task.input.files, acceptance_criteria=["review pass"]), context, review_priority, parent_task_id=task.task_id, dependencies=[test.task_id])
         tasks = [plan, code, test, review]
         for atomic in tasks:
             self._decorate(atomic)

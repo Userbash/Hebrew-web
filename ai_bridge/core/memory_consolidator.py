@@ -13,13 +13,10 @@ class MemoryConsolidator:
 
     def consolidate(self, *, session_id: str, agent_id: str) -> str | None:
         try:
-            return self.hybrid_memory._run_async_result(
-                self.hybrid_memory.persistent.consolidate_episodic(
-                    session_id=session_id,
-                    agent_id=agent_id,
-                    chunk_size=5,
-                ),
-                default=None,
+            return self.hybrid_memory.persistent.consolidate_episodic(
+                session_id=session_id,
+                agent_id=agent_id,
+                chunk_size=5,
             )
         except Exception:
             logger.exception("Memory consolidation failed")

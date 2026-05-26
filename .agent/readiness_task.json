@@ -1,0 +1,7 @@
+{
+  "type": "code",
+  "description": "Generate a Python function that calculates the Fibonacci sequence up to N terms.",
+  "files": ["fibonacci.py"],
+  "acceptance_criteria": ["code is valid Python", "handles N=0 and N=1", "includes docstring"],
+  "priority": "normal"
+}

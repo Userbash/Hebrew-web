@@ -17,7 +17,7 @@ class MistralAgent(ExternalAIAgent):
         super().__init__(
             agent_id,
             "https://api.mistral.ai/v1",
-            ["analysis", "research", "docs", "summarization", "simple_code"],
+            ["code", "fix", "test", "review", "docs", "research", "analysis", "summarization"],
             security=security_manager,
         )
         load_env_file()

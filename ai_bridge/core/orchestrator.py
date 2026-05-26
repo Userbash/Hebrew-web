@@ -1,4 +1,6 @@
 from __future__ import annotations
+import asyncio
+from typing import Any
 
 from ai_bridge.agents.base_agent import BaseAgent
 
@@ -12,7 +14,7 @@ from .load_balancer import LoadBalancer
 from .metrics import MetricsCollector
 from .message_bus import MessageBus
 from .model_selector import ModelSelector
-from .models import AgentResult, ExecutionPlan, Task, TaskStatus
+from .models import AgentResult, ExecutionPlan, Task, TaskAcceptance, TaskStatus
 from .orchestration_config import OrchestrationConfig
 from .quality_analyzer import QualityAnalyzer
 from .security_gate import SecurityGate
@@ -21,7 +23,11 @@ from .smart_scheduler import SmartScheduler
 from .session_memory import MemoryScope, SessionMemory
 from .availability import ModelAvailability
 from .ai_activity_module import AIActivityModule
+from .api_bridge_module import APIBridgeModule
 from .kernel_module_manager import KernelModuleManager
+from .orchestrator_control_module import OrchestratorControlModule
+from .model_usage_module import ModelUsageModule
+from .provider_budget_router import ProviderBudgetRouter
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -31,8 +37,28 @@ from .user_console import UserConsole
 
 
 class Orchestrator:
+    def get_context(self, key: str) -> Any:
+        return getattr(self, key, None)
+
+    def emit_event(self, event_name: str, payload: dict[str, Any]) -> None:
+        self.console.emit(event_name, str(payload))
+
+    def query_state(self, module_name: str, key: str) -> Any:
+        return self.module_manager.finalize().get(module_name, {}).get(key)
+
+    def query_module_state(self, module_name: str, key: str) -> Any:
+        return self.query_state(module_name, key)
+
+    def log(self, level: str, message: str) -> None:
+        getattr(self.console, level, self.console.emit)(f"KERNEL:{level.upper()}", message)
+
     def __init__(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
+        self.local_agents: dict[str, BaseAgent] = {}
+        self.results: dict[str, AgentResult] = {}
+        self.live_trace_rows: list[dict[str, object]] = []
+        
         components = AgentFactory.build(registry=registry, retry_limit=retry_limit, idle_shutdown_sec=idle_shutdown_sec)
+        
         self.registry = components.registry
         self.lifecycle = components.lifecycle
         self.autoscaler = components.autoscaler
@@ -55,14 +81,57 @@ class Orchestrator:
         self.host_bridge = components.host_bridge
         self.session_memory = components.session_memory
         self.memory_consolidator = components.memory_consolidator
+        self.provider_budget_router = ProviderBudgetRouter()
+        
         self.module_manager = KernelModuleManager()
+        self.module_manager.set_api(self)
         self.module_manager.register(AIActivityModule())
+        self.module_manager.register(OrchestratorControlModule())
+        self.module_manager.register(ModelUsageModule())
+        self.module_manager.register(APIBridgeModule())
         self.module_manager.load("ai_activity")
-        self.session_memory.hybrid.start_background_tasks()
-        self.local_agents: dict[str, BaseAgent] = {}
-        self.results: dict[str, AgentResult] = {}
-        self.live_trace_rows: list[dict[str, object]] = []
+        self.module_manager.load("orchestrator_control")
+        self.module_manager.load("model_usage")
+        self.module_manager.load("api_bridge")
 
+    def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
+        self.local_agents = {}
+        self.results = {}
+        self.live_trace_rows = []
+
+        components = AgentFactory.build(registry=registry, retry_limit=retry_limit, idle_shutdown_sec=idle_shutdown_sec)
+
+        self.registry = components.registry
+        self.lifecycle = components.lifecycle
+        self.autoscaler = components.autoscaler
+        self.load_balancer = components.load_balancer
+        self.model_selector = components.model_selector
+        self.decomposer = components.decomposer
+        self.router = components.router
+        self.orchestration_config = components.orchestration_config
+        self.scheduler = components.scheduler
+        self.message_bus = components.message_bus
+        self.healthcheck = components.healthcheck
+        self.availability = ModelAvailability()
+        self.feedback = components.feedback
+        self.metrics = components.metrics
+        self.kpi = components.kpi
+        self.quality = components.quality
+        self.merger = components.merger
+        self.console = components.console
+        self.security_gate = components.security_gate
+        self.host_bridge = components.host_bridge
+        self.session_memory = components.session_memory
+        self.provider_budget_router = ProviderBudgetRouter()
+
+        self.module_manager = KernelModuleManager()
+        self.module_manager.set_api(self)
+        self.module_manager.register(AIActivityModule())
+        self.module_manager.register(OrchestratorControlModule())
+        self.module_manager.register(ModelUsageModule())
+        self.module_manager.load("ai_activity")
+        self.module_manager.load("orchestrator_control")
+        self.module_manager.load("model_usage")
     def attach_local_agent(self, agent_id: str, agent: BaseAgent, agent_type: str = "custom", critical: bool = False, model_name: str = "local-small", provider: str = "local") -> None:
         self.local_agents[agent_id] = agent
         agent.set_host_bridge(self.host_bridge)
@@ -78,6 +147,53 @@ class Orchestrator:
 
     def loaded_kernel_modules(self) -> list[str]:
         return self.module_manager.loaded_modules()
+
+    def _control_module(self) -> OrchestratorControlModule | None:
+        module = self.module_manager.get_module("orchestrator_control")
+        if isinstance(module, OrchestratorControlModule):
+            return module
+        return None
+
+    def submit_user_task(self, payload: object, source: str = "user_input") -> dict[str, object]:
+        from .task_submission_api import create_standard_task, normalize_user_payload
+
+        normalized = normalize_user_payload(payload)
+        task = create_standard_task(normalized)
+        control = self._control_module()
+        if control is not None:
+            control.register_submission(task, source=source)
+        return self.run(task)
+
+    def monitoring_snapshot(self) -> dict[str, object]:
+        control = self._control_module()
+        if control is None:
+            return {"source_of_truth": "orchestrator", "status": "control_module_not_loaded"}
+        return control.finalize()
+
+    @staticmethod
+    def _normalize_provider(provider: str) -> str:
+        p = provider.strip().lower()
+        if p in {"google", "gemini", "gemini-cli"}:
+            return "google"
+        return p
+
+    def _select_agent_by_provider_preference(self, capability: str, providers: list[str], exclude: set[str] | None = None) -> str | None:
+        skip = exclude or set()
+        normalized = [self._normalize_provider(p) for p in providers]
+        for provider in normalized:
+            for record in self.registry.list_agents():
+                if record.id in skip:
+                    continue
+                if capability not in record.capabilities:
+                    continue
+                if self._normalize_provider(record.provider) != provider:
+                    continue
+                if record.status.value in {"offline", "disabled", "failed"}:
+                    continue
+                if record.id in self.local_agents:
+                    return record.id
+        return None
+
 
     def create_execution_plan(self, task: Task) -> ExecutionPlan:
         self.console.emit("PLAN", "Задача проанализирована")
@@ -132,9 +248,10 @@ class Orchestrator:
         return None
 
     def run_task(self, task: Task) -> AgentResult:
+        self.log("info", f"[PRE-FLIGHT] Verifying readiness for task {task.task_id}")
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
-
         choice = self.model_selector.select(task)
+
         self.console.emit(
             "MODEL_SELECTION",
             f"task_id={task.task_id} task_type={task.type.value} detected_keywords={choice.detected_keywords or []} "
@@ -158,7 +275,12 @@ class Orchestrator:
         else:
             self.console.emit("SCHEDULER", f"P2P route allowed: {decision.reason}")
 
-        acceptance = self.router.route(task)
+        preferred_providers = self.provider_budget_router.preferred_providers(task, choice)
+        preferred_agent_id = self._select_agent_by_provider_preference(capability, preferred_providers)
+        if preferred_agent_id:
+            acceptance = TaskAcceptance(task.task_id, TaskStatus.ACCEPTED, preferred_agent_id, self.router.estimate_complexity(task), "Task accepted (provider budget routing)")
+        else:
+            acceptance = self.router.route(task)
         if acceptance.status == TaskStatus.REJECTED or not acceptance.assigned_agent:
             self.console.emit("ROUTING", acceptance.message)
             self.live_trace_rows.append(
@@ -184,7 +306,9 @@ class Orchestrator:
 
         agent_id = acceptance.assigned_agent
         agent_record = self.registry.get(agent_id)
-        fallback = bool(choice.provider != "openai" and agent_record and agent_record.provider == "openai")
+        selected_provider_norm = self._normalize_provider(choice.provider)
+        routed_provider_norm = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
+        fallback = bool(selected_provider_norm != routed_provider_norm)
 
         module_context["agent_id"] = agent_id
         module_context["provider"] = agent_record.provider if agent_record else choice.provider
@@ -198,7 +322,7 @@ class Orchestrator:
         )
 
         # Pre-flight availability check
-        provider = agent_record.provider if agent_record else choice.provider
+        provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
         if not self.availability.is_provider_ready(provider):
             self.console.emit("EXECUTION", f"Provider {provider} is not ready. Skipping execution.")
             failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unreachable or auth failed", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
@@ -250,14 +374,22 @@ class Orchestrator:
                 except Exception:
                     classified = ""
 
-            if result.status == TaskStatus.FAILED and is_gemini and classified in TIMEOUT_ERROR_TYPES:
-                fallback_chain = ["mistral", "local"]
-                fallback_agent_id = self._find_fallback_agent(capability, fallback_chain, exclude={agent_id})
-                if fallback_agent_id:
-                    self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={fallback_agent_id} reason={classified}")
-                    fallback_agent = self.local_agents.get(fallback_agent_id)
-                    if fallback_agent:
-                        result = fallback_agent.run(task, memory_context=memory_context)
+            if result.status == TaskStatus.FAILED:
+                source_provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
+                if classified:
+                    self.provider_budget_router.mark_failure(task, source_provider, classified)
+
+                if (is_gemini and classified in TIMEOUT_ERROR_TYPES) or classified in {"quota_exhaustion", "auth_fail"}:
+                    fallback_chain = self.provider_budget_router.preferred_providers(task, choice)
+                    fallback_agent_id = self._select_agent_by_provider_preference(capability, fallback_chain, exclude={agent_id})
+                    if fallback_agent_id:
+                        self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={fallback_agent_id} reason={classified or 'failure'}")
+                        fallback_agent = self.local_agents.get(fallback_agent_id)
+                        if fallback_agent:
+                            result = fallback_agent.run(task, memory_context=memory_context)
+            else:
+                success_provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
+                self.provider_budget_router.register_success(task, success_provider)
             quality = self.quality.analyze(task, result)
             if agent_record:
                 agent_record.metrics.quality_score = quality.score
@@ -336,6 +468,7 @@ class Orchestrator:
             if agent_record:
                 self.lifecycle.mark_idle(agent_record)
                 self.autoscaler.scale_down_idle()
+            self.log("info", f"[POST-FLIGHT] Task {task.task_id} lifecycle complete")
 
     def run(self, root_task: Task) -> dict:
         self.live_trace_rows = []
@@ -356,10 +489,15 @@ class Orchestrator:
                 if result.status != TaskStatus.DONE:
                     merged = self.merger.merge(final_results)
                     module_state = self.module_manager.finalize()
-                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {})}
+                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {}), "model_usage": module_state.get("model_usage", {})}
                 completed.add(task.task_id)
                 pending.pop(task.task_id)
         merged = self.merger.merge(final_results)
         self.console.emit("DONE", "Все критерии выполнены")
         module_state = self.module_manager.finalize()
-        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {})}
+        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {}), "model_usage": module_state.get("model_usage", {})}
+
+    async def listen_for_tasks(self):
+        from .task_listener import TaskListener
+        listener = TaskListener(self)
+        await listener.start()

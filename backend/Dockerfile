@@ -1,22 +1,16 @@
-FROM node:20-alpine AS builder
+FROM python:3.12-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . ./
-RUN npm run build
+RUN apk add --no-cache curl bash tini
 
-FROM node:20-alpine
-WORKDIR /app
-RUN apk add --no-cache curl tini
 RUN mkdir -p /app/public/uploads/avatars
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/database ./database
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
-COPY package.json ./
-ENV NODE_ENV=production
-# Нативный healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -f http://localhost:3001/api/health || exit 1
+COPY backend/init-ai-bridge.sh ./init-ai-bridge.sh
+RUN chmod +x ./init-ai-bridge.sh
+
+# Настройка путей для AI Bridge
+COPY ai_bridge ./ai_bridge
+ENV PYTHONPATH=/app:/app/ai_bridge
+RUN mkdir -p /app/memory_store/memories /app/memory_store/commands && \
+    chmod -R 777 /app/memory_store
+
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/server.js"]
+CMD ["./init-ai-bridge.sh"]

@@ -37,6 +37,13 @@ class ProviderHealth:
 
 
 class ModelAvailability:
+    @staticmethod
+    def _normalize_provider(provider: str) -> str:
+        p = provider.strip().lower()
+        if p in {"google", "gemini-cli", "gemini"}:
+            return "gemini"
+        return p
+
     def __init__(self) -> None:
         load_env_file()
         self._health_cache: dict[str, ProviderHealth] = {}
@@ -79,6 +86,7 @@ class ModelAvailability:
         }
 
     def is_provider_ready(self, provider: str) -> bool:
+        provider = self._normalize_provider(provider)
         health = self._health_cache.get(provider)
         if not health:
             if provider == "gemini":
