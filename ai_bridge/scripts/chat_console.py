@@ -14,6 +14,15 @@ SESSION_ID = str(uuid.uuid4())[:8]
 
 def send_to_orchestrator(message: str) -> Optional[dict]:
     """Send a message to the Orchestrator via the Bridge API."""
+    if message.strip().lower() == "/stats":
+        try:
+            response = requests.get(f"{BRIDGE_URL}/stats", timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"\n[!] Error fetching stats: {e}")
+            return None
+
     payload = {
         "user_id": USER_ID,
         "message": message,
@@ -56,6 +65,26 @@ def main():
             data = send_to_orchestrator(user_input)
             
             if data:
+                if user_input.strip().lower() == "/stats" and data.get("status") == "success":
+                    stats = data.get("data", {})
+                    print("\n" + "="*50)
+                    print(f"📊 AI MODEL USAGE STATISTICS (Total: {stats.get('total_tokens_used', 0)} tokens)")
+                    print("="*50)
+                    models = stats.get("models", {})
+                    if not models:
+                        print("No model usage recorded yet.")
+                    for m_name, m_data in models.items():
+                        bar_len = 20
+                        filled = int(m_data['usage_percentage'] / 100 * bar_len)
+                        bar = "█" * filled + "░" * (bar_len - filled)
+                        status_icon = "🟢" if m_data['status'] == "ok" else ("🟡" if m_data['status'] == "low" else "🔴")
+                        print(f"\n{status_icon} Model: {m_name}")
+                        print(f"   Usage: [{bar}] {m_data['usage_percentage']}%")
+                        print(f"   Tokens: {m_data['used_tokens']} used / {m_data['remaining_tokens']} left")
+                        print(f"   Requests: {m_data['requests_count']}")
+                    print("="*50)
+                    continue
+
                 task_id = data.get("task_id")
                 status = data.get("status")
                 

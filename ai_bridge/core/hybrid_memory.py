@@ -260,11 +260,11 @@ class HybridMemory:
         self._project_index.clear()
         self.backend.clear()
 
-    async def soft_flush(self) -> int:
+    def soft_flush(self) -> int:
         """Persist all hot entries and buffered records to the database synchronously."""
         flushed = 0
         for _, entry in list(self._hot.items()):
-            memory_id = await self.persistent.store_memory(
+            memory_id = self.persistent.store_memory(
                 session_id=entry.identifier,
                 agent_id=self._persistence_agent_id(entry.scope, entry.identifier),
                 memory_type=entry.memory_type,
@@ -278,7 +278,7 @@ class HybridMemory:
                 flushed += 1
 
         if hasattr(self.persistent, "flush_all"):
-            flushed += await self.persistent.flush_all()
+            flushed += self.persistent.flush_all()
 
         logger.info(f"[MEMORY] Soft flush complete: {flushed} total records persisted.")
         return flushed
@@ -320,34 +320,26 @@ class HybridMemory:
             self.run_maintenance_once()
 
     def remember_command(self, *, session_id: str, agent_id: str, command: str, result: dict[str, Any], success: bool, tokens_used: int | None = None) -> None:
-        self._run_async(
-            self.persistent.store_command(
-                session_id=session_id,
-                agent_id=agent_id,
-                command=command,
-                result=result,
-                success=success,
-                tokens_used=tokens_used,
-            )
+        self.persistent.store_command(
+            session_id=session_id,
+            agent_id=agent_id,
+            command=command,
+            result=result,
+            success=success,
+            tokens_used=tokens_used,
         )
 
     def load_command_window(self, *, session_id: str, agent_id: str, limit: int | None = None) -> list[dict[str, Any]]:
-        return self._run_async_result(
-            self.persistent.list_recent_commands(
-                session_id=session_id,
-                agent_id=agent_id,
-                limit=limit or self.settings.command_window_size,
-            ),
-            default=[],
+        return self.persistent.list_recent_commands(
+            session_id=session_id,
+            agent_id=agent_id,
+            limit=limit or self.settings.command_window_size,
         )
 
     def get_command_history(self, *, session_id: str, limit: int | None = None) -> list[dict[str, Any]]:
-        return self._run_async_result(
-            self.persistent.list_recent_commands_by_session(
-                session_id=session_id,
-                limit=limit or self.settings.command_window_size,
-            ),
-            default=[],
+        return self.persistent.list_recent_commands_by_session(
+            session_id=session_id,
+            limit=limit or self.settings.command_window_size,
         )
 
     def _persistence_agent_id(self, scope: str, identifier: str) -> str:
@@ -357,33 +349,27 @@ class HybridMemory:
 
     def _persist_entry(self, entry: HotEntry) -> int | None:
         persistence_agent_id = self._persistence_agent_id(entry.scope, entry.identifier)
-        return self._run_async_result(
-            self.persistent.store_memory(
-                session_id=entry.identifier,
-                agent_id=persistence_agent_id,
-                memory_type=entry.memory_type,
-                content=self.persistent.serialize_payload(entry.value),
-                importance_score=entry.importance_score,
-                metadata={"key": entry.key, "scope": entry.scope, "tags": entry.tags},
-                expires_at=entry.expires_at,
-            ),
-            default=None,
+        return self.persistent.store_memory(
+            session_id=entry.identifier,
+            agent_id=persistence_agent_id,
+            memory_type=entry.memory_type,
+            content=self.persistent.serialize_payload(entry.value),
+            importance_score=entry.importance_score,
+            metadata={"key": entry.key, "scope": entry.scope, "tags": entry.tags},
+            expires_at=entry.expires_at,
         )
 
     def _restore_from_persistent(self, scope: str, identifier: str, key: str) -> Any | None:
         persistence_agent_id = self._persistence_agent_id(scope, identifier)
-        row = self._run_async_result(
-            self.persistent.retrieve_memory_by_key(
-                session_id=identifier,
-                agent_id=persistence_agent_id,
-                memory_type="episodic",
-                key=key,
-            ),
-            default=None,
+        row = self.persistent.retrieve_memory_by_key(
+            session_id=identifier,
+            agent_id=persistence_agent_id,
+            memory_type="episodic",
+            key=key,
         )
         if row is None:
             return None
-        self._run_async(self.persistent.touch_memory(row.memory_id, importance_delta=0.01))
+        self.persistent.touch_memory(row.memory_id, importance_delta=0.01)
         return row.content
 
     def _candidate_keys(self, query_terms: set[str], *, session_id: str | None, project_name: str | None) -> set[str]:
@@ -468,23 +454,3 @@ class HybridMemory:
         intersection = len(query_terms.intersection(cset))
         union = max(1, len(query_terms.union(cset)))
         return intersection / union
-
-    @staticmethod
-    def _run_async(coro: Any) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(coro)
-        except RuntimeError:
-            try:
-                asyncio.run(coro)
-            except Exception as e:
-                logger.error(f"Failed to run async task synchronously: {e}")
-
-    @staticmethod
-    def _run_async_result(coro: Any, *, default: Any) -> Any:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coro)
-        logger.debug("Async loop already running; returning default for sync call")
-        return default

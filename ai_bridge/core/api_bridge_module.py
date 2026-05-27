@@ -139,6 +139,45 @@ class APIBridgeModule:
             
             return {"status": "success", "data": dump}
 
+        @app.get("/stats")
+        async def stats_endpoint():
+            if not self._api:
+                return {"status": "error", "message": "Kernel API not available"}
+            
+            # The API allows us to fetch a module directly if we have access to the orchestrator.
+            # But the KernelAPI abstraction might not expose `module_manager`.
+            # Let's assume we can get the orchestrator state or the module directly.
+            if hasattr(self._api, "get_module"):
+                usage_module = self._api.get_module("model_usage")
+                if usage_module:
+                    return {"status": "success", "data": usage_module.get_statistics()}
+                else:
+                    return {"status": "error", "message": "Module 'model_usage' is not currently loaded."}
+            return {"status": "error", "message": "Cannot access module manager via API."}
+
+        @app.post("/modules/{action}")
+        async def manage_module(action: str, request: dict):
+            if not self._api:
+                return {"status": "error", "message": "Kernel API not available"}
+            
+            module_name = request.get("module_name")
+            if not module_name:
+                return {"status": "error", "message": "module_name is required"}
+                
+            if hasattr(self._api, "load_module") and hasattr(self._api, "unload_module"):
+                try:
+                    if action == "load":
+                        self._api.load_module(module_name)
+                        return {"status": "success", "message": f"Module {module_name} loaded successfully."}
+                    elif action == "unload":
+                        self._api.unload_module(module_name)
+                        return {"status": "success", "message": f"Module {module_name} unloaded successfully."}
+                    else:
+                        return {"status": "error", "message": "Invalid action. Use 'load' or 'unload'."}
+                except Exception as e:
+                    return {"status": "error", "message": f"Operation failed: {str(e)}"}
+            return {"status": "error", "message": "Kernel API does not support dynamic module loading."}
+
         config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info")
         server = uvicorn.Server(config)
         server.run()

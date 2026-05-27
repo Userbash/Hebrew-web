@@ -61,7 +61,7 @@ class PersistentMemoryManager:
 
         logger.info("[MEMORY] Operating in high-speed File-based mode (No DB).")
 
-    async def upsert_session(self, session_id: str, *, agent_id: str) -> str:
+    def upsert_session(self, session_id: str, *, agent_id: str) -> str:
         _ = agent_id
         mapping = self._read_json(self.session_map_file, default={})
         if session_id in mapping:
@@ -71,8 +71,8 @@ class PersistentMemoryManager:
         self._write_json(self.session_map_file, mapping)
         return normalized
 
-    async def store_memory(self, *, session_id: str, agent_id: str, memory_type: str, content: Any, **kwargs: Any) -> int:
-        normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
+    def store_memory(self, *, session_id: str, agent_id: str, memory_type: str, content: Any, **kwargs: Any) -> int:
+        normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         now_iso = datetime.now(UTC).isoformat()
         memory_id = self._max_memory_id + 1
         record = {
@@ -106,8 +106,8 @@ class PersistentMemoryManager:
         )
         return memory_id
 
-    async def retrieve_memories(self, *, session_id: str, agent_id: str, memory_type: str, top_k: int = 8) -> list[MemoryRecord]:
-        normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
+    def retrieve_memories(self, *, session_id: str, agent_id: str, memory_type: str, top_k: int = 8) -> list[MemoryRecord]:
+        normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         sat = (normalized_session_id, agent_id, memory_type)
         indexes = self._by_sat.get(sat, [])
         filtered = [self._records[idx] for idx in reversed(indexes)]
@@ -126,8 +126,8 @@ class PersistentMemoryManager:
             for row in filtered[: max(1, int(top_k))]
         ]
 
-    async def retrieve_memory_by_key(self, *, session_id: str, agent_id: str, memory_type: str, key: str) -> MemoryRecord | None:
-        normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
+    def retrieve_memory_by_key(self, *, session_id: str, agent_id: str, memory_type: str, key: str) -> MemoryRecord | None:
+        normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         satk = (normalized_session_id, agent_id, memory_type, key)
         indexes = self._by_satk.get(satk, [])
         if not indexes:
@@ -145,7 +145,7 @@ class PersistentMemoryManager:
             updated_at=str(row.get("updated_at", "")),
         )
 
-    async def touch_memory(self, memory_id: int, *, importance_delta: float = 0.0) -> None:
+    def touch_memory(self, memory_id: int, *, importance_delta: float = 0.0) -> None:
         now_iso = datetime.now(UTC).isoformat()
         for row in self._records:
             if int(row.get("memory_id", 0)) != memory_id:
@@ -155,8 +155,8 @@ class PersistentMemoryManager:
             break
         self._write_json(self.index_file, self._records)
 
-    async def store_command(self, *, session_id: str, agent_id: str, command: str, result: dict[str, Any], success: bool, **kwargs: Any) -> None:
-        normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
+    def store_command(self, *, session_id: str, agent_id: str, command: str, result: dict[str, Any], success: bool, **kwargs: Any) -> None:
+        normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         self._write_json(
             self.storage_dir / "commands" / f"{normalized_session_id}_{agent_id}_{datetime.now().timestamp()}.json",
             {
@@ -171,8 +171,8 @@ class PersistentMemoryManager:
             },
         )
 
-    async def list_recent_commands(self, *, session_id: str, agent_id: str, limit: int = 12) -> list[dict[str, Any]]:
-        normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
+    def list_recent_commands(self, *, session_id: str, agent_id: str, limit: int = 12) -> list[dict[str, Any]]:
+        normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         rows: list[dict[str, Any]] = []
         for path in self.storage_dir.joinpath("commands").glob("*.json"):
             row = self._read_json(path, default={})
@@ -184,8 +184,8 @@ class PersistentMemoryManager:
         rows.sort(key=lambda row: str(row.get("executed_at", "")), reverse=True)
         return rows[: max(1, int(limit))]
 
-    async def list_recent_commands_by_session(self, *, session_id: str, limit: int = 12) -> list[dict[str, Any]]:
-        normalized_session_id = await self.upsert_session(session_id, agent_id="any")
+    def list_recent_commands_by_session(self, *, session_id: str, limit: int = 12) -> list[dict[str, Any]]:
+        normalized_session_id = self.upsert_session(session_id, agent_id="any")
         rows: list[dict[str, Any]] = []
         for path in self.storage_dir.joinpath("commands").glob("*.json"):
             row = self._read_json(path, default={})
@@ -195,7 +195,7 @@ class PersistentMemoryManager:
         rows.sort(key=lambda row: str(row.get("executed_at", "")), reverse=True)
         return rows[: max(1, int(limit))]
 
-    async def flush_all(self) -> int:
+    def flush_all(self) -> int:
         return 0
 
     def consolidate_episodic(self, *, session_id: str, agent_id: str, chunk_size: int = 5) -> str | None:

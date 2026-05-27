@@ -49,12 +49,12 @@ class GeminiRuntimeRouter:
     @staticmethod
     def _complexity_ordered_models(complexity: Complexity) -> list[str]:
         if complexity == Complexity.LOW:
-            return ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3-flash-preview"]
+            return ["gemini-3-flash-preview", "gemini-1.5-flash", "gemini-2.0-flash-exp"]
         if complexity == Complexity.MEDIUM:
-            return ["gemini-2.5-flash", "gemini-3-flash-preview", "gemini-2.5-pro"]
+            return ["gemini-3-flash-preview", "gemini-2.0-flash-exp", "gemini-1.5-pro"]
         if complexity == Complexity.HIGH:
-            return ["gemini-2.5-pro", "gemini-3-flash-preview", "gemini-2.5-flash"]
-        return ["gemini-2.5-pro", "gemini-3-flash-preview", "gemini-2.5-flash"]
+            return ["gemini-3-flash-preview", "gemini-1.5-pro", "gemini-2.0-pro-exp"]
+        return ["gemini-3-flash-preview", "gemini-1.5-pro", "gemini-2.0-pro-exp"]
 
     @staticmethod
     def _parse_extra_fallbacks() -> list[str]:
@@ -72,7 +72,7 @@ class GeminiRuntimeRouter:
 
         if remaining <= 0 or estimated > remaining * 2:
             # If budget is almost depleted, use only lightweight model.
-            models = ["gemini-2.5-flash-lite"]
+            models = ["gemini-3-flash-preview"]
         else:
             models = self._complexity_ordered_models(complexity)
 

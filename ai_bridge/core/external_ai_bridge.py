@@ -99,9 +99,13 @@ class ExternalAIBridge:
                 if self.host_bridge is not None:
                     try:
                         res = self.host_bridge.execute(cmd, timeout=timeout_sec, capture_output=True, text=True, check=False)
-                        # If command not found on host, fallback to local
-                        if res.returncode == 127 or "not found" in (res.stderr or "").lower():
-                            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+                        # If command not found on host (exit code 1 from flatpak-spawn or 127 from shell), fallback to local
+                        # We also check for 'npx' or command name in stderr if it failed
+                        if res.returncode in (1, 127):
+                            stderr = (res.stderr or "").lower()
+                            # Common error markers for missing binary
+                            if any(marker in stderr for marker in ["нет такого файла", "no such file", "not found", "failed to start command"]):
+                                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
                         return res
                     except Exception:
                         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)

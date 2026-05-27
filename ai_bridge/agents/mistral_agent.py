@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
@@ -8,6 +9,8 @@ import httpx
 from .external_ai_agent import ExternalAIAgent
 from ai_bridge.core.env_loader import load_env_file
 from ai_bridge.core.models import AgentHealth, AgentResult, AgentStatus, Task, TaskStatus
+
+logger = logging.getLogger("mistral_agent")
 
 
 class MistralAgent(ExternalAIAgent):

@@ -62,6 +62,15 @@ class Orchestrator:
     def log(self, level: str, message: str) -> None:
         getattr(self.console, level, self.console.emit)(f"KERNEL:{level.upper()}", message)
 
+    def get_module(self, name: str) -> Any:
+        return self.module_manager.get_module(name)
+
+    def load_module(self, name: str) -> None:
+        self.module_manager.load(name)
+
+    def unload_module(self, name: str) -> None:
+        self.module_manager.unload(name)
+
     def __init__(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}

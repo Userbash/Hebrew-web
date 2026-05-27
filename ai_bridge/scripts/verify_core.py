@@ -217,7 +217,7 @@ def check_filesystem() -> bool:
     paths = [
         ".env",
         "ai_bridge/core/security_gate/authz.py",
-        "scripts/bridge/exec.sh",
+        "ai_bridge/scripts/bridge/exec.sh",
     ]
     all_ok = True
     for p in paths:

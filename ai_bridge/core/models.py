@@ -272,6 +272,10 @@ class Task:
     memory_ttl_sec: int | None = None
     cache_policy: str = "read_write"
     repo_fingerprint: str | None = None
+    retry_count: int = 0
+    hop_count: int = 0
+    max_hops: int = 5
+    review_depth: int = 0
 
 
 @dataclass(slots=True)
@@ -346,6 +350,26 @@ class QualityReport:
             "issues": self.issues,
             "requires_review": self.requires_review,
         }
+
+
+@dataclass(slots=True)
+class ScoreBreakdown:
+    capability: float
+    reliability: float
+    latency: float
+    cost: float
+    context: float
+    safety: float
+
+    def total(self, weights: dict[str, float]) -> float:
+        return sum(getattr(self, k) * w for k, w in weights.items())
+
+@dataclass(slots=True)
+class RoutingTrace:
+    rule: str
+    category: str
+    delta: float
+    reason: str
 
 
 @dataclass(slots=True)
@@ -560,15 +584,15 @@ class TaskEnvelope:
     priority: Priority
     qos_class: str
     ttl: int
-    deadline: datetime | None
-    hop_count: int
-    max_hops: int
-    retry_count: int
-    max_retries: int
-    security_policy: SecurityPolicy
-    context_scope: str
-    dependencies: list[str]
-    payload: TaskPayload
+    deadline: datetime | None = None
+    hop_count: int = 0
+    max_hops: int = 5
+    retry_count: int = 0
+    max_retries: int = 3
+    security_policy: SecurityPolicy = field(default_factory=SecurityPolicy)
+    context_scope: str = "global"
+    dependencies: list[str] = field(default_factory=list)
+    payload: TaskPayload = field(default_factory=lambda: TaskPayload("init", {}, {}, [], "text"))
     session_id: str | None = None
     idempotency_key: str | None = None
     is_dead_letter: bool = False
@@ -578,6 +602,7 @@ class TaskEnvelope:
     memory_ttl_sec: int | None = None
     cache_policy: str = "read_write"
     repo_fingerprint: str | None = None
+    review_depth: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
