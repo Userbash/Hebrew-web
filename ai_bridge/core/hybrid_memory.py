@@ -33,6 +33,7 @@ class HotEntry:
     access_count: int = 0
     memory_type: str = "episodic"
     tags: list[str] = field(default_factory=list)
+    indexed_terms: set[str] = field(default_factory=set)
     stub: MemoryStub | None = None
 
 
@@ -52,6 +53,9 @@ class HybridMemory:
         self.backend = backend or InMemoryBackend()
         self.persistent = persistent or PersistentMemoryManager(self.settings)
         self._hot: dict[str, HotEntry] = {}
+        self._term_index: dict[str, set[str]] = {}
+        self._session_index: dict[str, set[str]] = {}
+        self._project_index: dict[str, set[str]] = {}
         self._maintenance_task: asyncio.Task[None] | None = None
 
     @staticmethod
@@ -95,8 +99,7 @@ class HybridMemory:
         entry = self._hot.get(skey)
         if entry:
             if entry.expires_at and datetime.now(UTC) >= entry.expires_at:
-                self._hot.pop(skey, None)
-                self.backend.delete(skey)
+                self._drop_key(skey)
                 return None
             entry.access_count += 1
             entry.last_accessed = datetime.now(UTC)
@@ -107,6 +110,10 @@ class HybridMemory:
     def set(self, scope: str, identifier: str, key: str, value: Any, *, expires_at: datetime | None = None, importance_score: float = 0.5, memory_type: str = "episodic", tags: list[str] | None = None) -> None:
         now = datetime.now(UTC)
         skey = self.make_key(scope, identifier, key)
+        if skey in self._hot:
+            self._remove_indexes(skey, self._hot[skey])
+
+        terms = self._entry_terms(skey, value)
         self._hot[skey] = HotEntry(
             key=key,
             value=value,
@@ -118,8 +125,10 @@ class HybridMemory:
             importance_score=max(0.0, min(1.0, importance_score)),
             memory_type=memory_type,
             tags=tags or [],
+            indexed_terms=terms,
         )
         self.backend.set(skey, BackendEntry(value=value, created_at=now, expires_at=expires_at, last_accessed_at=now))
+        self._add_indexes(skey, self._hot[skey])
         if len(self._hot) > self.settings.hot_cache_max_entries:
             self.run_maintenance_once()
 
@@ -136,6 +145,10 @@ class HybridMemory:
         scope = chunks[0] if chunks else "global"
         identifier = chunks[1] if len(chunks) > 1 else "default"
         key = ":".join(chunks[2:]) if len(chunks) > 2 else full_key
+        if full_key in self._hot:
+            self._remove_indexes(full_key, self._hot[full_key])
+
+        terms = self._entry_terms(full_key, value)
         self._hot[full_key] = HotEntry(
             key=key,
             value=value,
@@ -147,8 +160,10 @@ class HybridMemory:
             importance_score=max(0.0, min(1.0, importance_score)),
             memory_type=memory_type,
             tags=tags or [],
+            indexed_terms=terms,
         )
         self.backend.set(full_key, BackendEntry(value=value, created_at=now, expires_at=expires_at, last_accessed_at=now))
+        self._add_indexes(full_key, self._hot[full_key])
 
     def append_agent_thought(self, *, session_id: str, agent_id: str, thought: str) -> None:
         key = self.session_agent_thoughts_key(session_id, agent_id)
@@ -171,8 +186,7 @@ class HybridMemory:
         removed = 0
         for key in list(self._hot.keys()):
             if key.startswith(prefix) and (key.endswith(":thoughts") or key.endswith(":errors")):
-                self._hot.pop(key, None)
-                self.backend.delete(key)
+                self._drop_key(key)
                 removed += 1
         return removed
 
@@ -188,15 +202,12 @@ class HybridMemory:
         norm_query_terms = set(self._tokenize(query_text))
         hits: list[RetrievalHit] = []
 
-        for full_key in self.list_keys():
-            if session_id and f"session:{session_id}:" not in full_key:
-                continue
-            if project_name and f"memory:domain:{project_name}:" not in full_key:
-                continue
+        candidate_keys = self._candidate_keys(norm_query_terms, session_id=session_id, project_name=project_name)
+        for full_key in candidate_keys:
             entry = self._hot.get(full_key)
             if not entry:
                 continue
-            semantic_similarity = self._semantic_similarity(norm_query_terms, self._tokenize(str(entry.value)))
+            semantic_similarity = self._semantic_similarity(norm_query_terms, list(entry.indexed_terms))
             age_sec = max(1.0, (now - entry.last_accessed).total_seconds())
             time_decay = 1.0 / (1.0 + age_sec / 3600.0)
             score = 0.5 * semantic_similarity + 0.3 * entry.importance_score + 0.2 * time_decay
@@ -215,7 +226,6 @@ class HybridMemory:
         return hits[: max(1, top_k)]
 
     def build_context_brief(self, *, hits: list[RetrievalHit], token_limit: int = 2000) -> str:
-        # Lightweight token budget: ~4 chars/token heuristic.
         budget_chars = max(200, token_limit * 4)
         lines: list[str] = []
         used = 0
@@ -229,8 +239,7 @@ class HybridMemory:
 
     def delete(self, scope: str, identifier: str, key: str) -> None:
         skey = self.make_key(scope, identifier, key)
-        self._hot.pop(skey, None)
-        self.backend.delete(skey)
+        self._drop_key(skey)
 
     def list_keys(self) -> list[str]:
         return list(self._hot.keys())
@@ -240,19 +249,21 @@ class HybridMemory:
         for skey in list(self._hot.keys()):
             if prefix and not skey.startswith(prefix):
                 continue
-            self._hot.pop(skey, None)
-            self.backend.delete(skey)
+            self._drop_key(skey)
             removed += 1
         return removed
 
     def clear(self) -> None:
         self._hot.clear()
+        self._term_index.clear()
+        self._session_index.clear()
+        self._project_index.clear()
         self.backend.clear()
 
     async def soft_flush(self) -> int:
         """Persist all hot entries and buffered records to the database synchronously."""
         flushed = 0
-        for skey, entry in list(self._hot.items()):
+        for _, entry in list(self._hot.items()):
             memory_id = await self.persistent.store_memory(
                 session_id=entry.identifier,
                 agent_id=self._persistence_agent_id(entry.scope, entry.identifier),
@@ -265,11 +276,10 @@ class HybridMemory:
             if memory_id:
                 entry.stub = MemoryStub(memory_id=memory_id, summary=str(entry.value)[:200], persisted=True)
                 flushed += 1
-        
+
         if hasattr(self.persistent, "flush_all"):
-            # Теперь это ожидаемый await
             flushed += await self.persistent.flush_all()
-            
+
         logger.info(f"[MEMORY] Soft flush complete: {flushed} total records persisted.")
         return flushed
 
@@ -291,8 +301,7 @@ class HybridMemory:
         for _, skey, entry in ranked[:limit]:
             memory_id = self._persist_entry(entry)
             entry.stub = MemoryStub(memory_id=memory_id, summary=str(entry.value)[:200], persisted=memory_id is not None)
-            self._hot.pop(skey, None)
-            self.backend.delete(skey)
+            self._drop_key(skey)
             evicted += 1
         return evicted
 
@@ -354,25 +363,93 @@ class HybridMemory:
 
     def _restore_from_persistent(self, scope: str, identifier: str, key: str) -> Any | None:
         persistence_agent_id = self._persistence_agent_id(scope, identifier)
-        rows = self._run_async_result(
-            self.persistent.retrieve_memories(
+        row = self._run_async_result(
+            self.persistent.retrieve_memory_by_key(
                 session_id=identifier,
                 agent_id=persistence_agent_id,
                 memory_type="episodic",
-                top_k=self.settings.retrieval_top_k,
+                key=key,
             ),
-            default=[],
+            default=None,
         )
-        for row in rows:
-            if str(row.metadata.get("key", "")) != key:
+        if row is None:
+            return None
+        self._run_async(self.persistent.touch_memory(row.memory_id, importance_delta=0.01))
+        return row.content
+
+    def _candidate_keys(self, query_terms: set[str], *, session_id: str | None, project_name: str | None) -> set[str]:
+        candidates: set[str] = set()
+        for term in query_terms:
+            candidates.update(self._term_index.get(term, set()))
+
+        if not candidates:
+            candidates = set(self._hot.keys())
+
+        if session_id:
+            candidates &= self._session_index.get(session_id, set())
+
+        if project_name:
+            candidates &= self._project_index.get(project_name, set())
+
+        return candidates
+
+    def _add_indexes(self, full_key: str, entry: HotEntry) -> None:
+        for term in entry.indexed_terms:
+            self._term_index.setdefault(term, set()).add(full_key)
+
+        if entry.scope == "session":
+            self._session_index.setdefault(entry.identifier, set()).add(full_key)
+
+        project = self._project_from_key(full_key)
+        if project:
+            self._project_index.setdefault(project, set()).add(full_key)
+
+    def _remove_indexes(self, full_key: str, entry: HotEntry) -> None:
+        for term in entry.indexed_terms:
+            bucket = self._term_index.get(term)
+            if not bucket:
                 continue
-            self._run_async(self.persistent.touch_memory(row.memory_id, importance_delta=0.01))
-            return row.content
+            bucket.discard(full_key)
+            if not bucket:
+                self._term_index.pop(term, None)
+
+        if entry.scope == "session":
+            sess_bucket = self._session_index.get(entry.identifier)
+            if sess_bucket:
+                sess_bucket.discard(full_key)
+                if not sess_bucket:
+                    self._session_index.pop(entry.identifier, None)
+
+        project = self._project_from_key(full_key)
+        if project:
+            prj_bucket = self._project_index.get(project)
+            if prj_bucket:
+                prj_bucket.discard(full_key)
+                if not prj_bucket:
+                    self._project_index.pop(project, None)
+
+    def _drop_key(self, full_key: str) -> None:
+        entry = self._hot.pop(full_key, None)
+        if entry:
+            self._remove_indexes(full_key, entry)
+        self.backend.delete(full_key)
+
+    @staticmethod
+    def _project_from_key(full_key: str) -> str | None:
+        parts = full_key.split(":")
+        if len(parts) >= 4 and parts[0] == "memory" and parts[1] == "domain":
+            return parts[2]
         return None
+
+    def _entry_terms(self, full_key: str, value: Any) -> set[str]:
+        tokens = self._tokenize(full_key)
+        tokens.extend(self._tokenize(str(value)[:1024]))
+        return set(tokens)
 
     @staticmethod
     def _tokenize(text: str) -> list[str]:
-        return [part for part in text.lower().replace("\n", " ").split(" ") if part]
+        normalized = text.lower().replace("\n", " ").replace(":", " ").replace("_", " ").replace("-", " ")
+        return [part for part in normalized.split(" ") if part]
 
     @staticmethod
     def _semantic_similarity(query_terms: set[str], candidate_terms: list[str]) -> float:

@@ -65,3 +65,19 @@ def test_hybrid_memory_fast_retrieve_weighted_scoring():
 
     brief = memory.build_context_brief(hits=hits, token_limit=50)
     assert "memory:domain:hebrew-web:patterns" in brief
+
+
+def test_hybrid_memory_restore_by_key_ignores_top_k_window():
+    settings = MemorySettings(hot_cache_max_entries=2, retrieval_top_k=1)
+    memory = HybridMemory(settings=settings)
+
+    memory.set("session", "s-index", "target", {"v": "old"}, importance_score=0.1)
+    memory.set("session", "s-index", "newer-1", {"v": 1}, importance_score=0.9)
+    memory.set("session", "s-index", "newer-2", {"v": 2}, importance_score=0.9)
+
+    memory.run_maintenance_once()
+    memory.delete("session", "s-index", "target")
+
+    restored = memory.get("session", "s-index", "target")
+    assert restored is not None
+    assert "old" in str(restored)

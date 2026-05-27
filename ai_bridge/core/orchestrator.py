@@ -24,10 +24,15 @@ from .session_memory import MemoryScope, SessionMemory
 from .availability import ModelAvailability
 from .ai_activity_module import AIActivityModule
 from .api_bridge_module import APIBridgeModule
+from .smart_decomposer_module import SmartDecomposerModule
+from .prompt_optimizer_module import PromptOptimizerModule
+from .chat_bus import ChatBusModule
+from .trigger_dispatcher import TriggerDispatcherModule
 from .kernel_module_manager import KernelModuleManager
 from .orchestrator_control_module import OrchestratorControlModule
 from .model_usage_module import ModelUsageModule
 from .provider_budget_router import ProviderBudgetRouter
+from .cold_boot_module import ColdBootModule
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -48,6 +53,9 @@ class Orchestrator:
 
     def query_module_state(self, module_name: str, key: str) -> Any:
         return self.query_state(module_name, key)
+
+    def get_memory(self) -> SessionMemory:
+        return self.session_memory
 
     def log(self, level: str, message: str) -> None:
         getattr(self.console, level, self.console.emit)(f"KERNEL:{level.upper()}", message)
@@ -89,10 +97,12 @@ class Orchestrator:
         self.module_manager.register(OrchestratorControlModule())
         self.module_manager.register(ModelUsageModule())
         self.module_manager.register(APIBridgeModule())
+        self.module_manager.register(ColdBootModule())
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
         self.module_manager.load("api_bridge")
+        self.module_manager.load("cold_boot")
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents = {}
@@ -129,9 +139,21 @@ class Orchestrator:
         self.module_manager.register(AIActivityModule())
         self.module_manager.register(OrchestratorControlModule())
         self.module_manager.register(ModelUsageModule())
+        self.module_manager.register(APIBridgeModule())
+        self.module_manager.register(SmartDecomposerModule())
+        self.module_manager.register(PromptOptimizerModule())
+        self.module_manager.register(ChatBusModule())
+        self.module_manager.register(TriggerDispatcherModule())
+        self.module_manager.register(ColdBootModule())
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
+        self.module_manager.load("api_bridge")
+        self.module_manager.load("smart_decomposer")
+        self.module_manager.load("prompt_optimizer")
+        self.module_manager.load("chat_bus")
+        self.module_manager.load("trigger_dispatcher")
+        self.module_manager.load("cold_boot")
     def attach_local_agent(self, agent_id: str, agent: BaseAgent, agent_type: str = "custom", critical: bool = False, model_name: str = "local-small", provider: str = "local") -> None:
         self.local_agents[agent_id] = agent
         agent.set_host_bridge(self.host_bridge)
@@ -197,6 +219,15 @@ class Orchestrator:
 
     def create_execution_plan(self, task: Task) -> ExecutionPlan:
         self.console.emit("PLAN", "Задача проанализирована")
+
+        # Try smart decomposition first
+        smart_decomp = self.module_manager.get_module("smart_decomposer")
+        if isinstance(smart_decomp, SmartDecomposerModule):
+            plan = smart_decomp.decompose_task(task)
+            if plan:
+                self.console.emit("PLAN", f"Умная декомпозиция: создано {len(plan.atomic_tasks)} задач")
+                return plan
+
         plan = self.decomposer.decompose(task)
         self.console.emit("PLAN", f"Создано атомарных задач: {len(plan.atomic_tasks)}")
         return plan
@@ -324,10 +355,35 @@ class Orchestrator:
         # Pre-flight availability check
         provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
         if not self.availability.is_provider_ready(provider):
-            self.console.emit("EXECUTION", f"Provider {provider} is not ready. Skipping execution.")
-            failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unreachable or auth failed", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
-            self.module_manager.after_task(task, failed_result, module_context)
-            return failed_result
+            self.console.emit("EXECUTION", f"Provider {provider} is not ready. Trying fallback providers.")
+            fallback_chain = self.provider_budget_router.preferred_providers(task, choice)
+            selected_fallback_id = None
+            selected_fallback_record = None
+
+            for candidate_provider in fallback_chain:
+                fallback_agent_id = self._select_agent_by_provider_preference(capability, [candidate_provider], exclude={agent_id})
+                if not fallback_agent_id:
+                    continue
+                fallback_record = self.registry.get(fallback_agent_id)
+                fallback_provider = self._normalize_provider(fallback_record.provider if fallback_record else "")
+                if not fallback_provider or not self.availability.is_provider_ready(fallback_provider):
+                    self.console.emit("EXECUTION", f"Fallback provider {fallback_provider or '-'} is not ready. Skipping.")
+                    continue
+                selected_fallback_id = fallback_agent_id
+                selected_fallback_record = fallback_record
+                break
+
+            if selected_fallback_id and selected_fallback_record:
+                self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={selected_fallback_id} reason=provider_not_ready")
+                agent_id = selected_fallback_id
+                agent_record = selected_fallback_record
+                module_context["agent_id"] = agent_id
+                module_context["provider"] = agent_record.provider
+                module_context["model"] = agent_record.model_name
+            else:
+                failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unavailable and no ready fallback", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
+                self.module_manager.after_task(task, failed_result, module_context)
+                return failed_result
 
         self.live_trace_rows.append(
             {

@@ -51,6 +51,14 @@ class PersistentMemoryManager:
         if not self.session_map_file.exists():
             self.session_map_file.write_text("{}", encoding="utf-8")
 
+        self._records: list[dict[str, Any]] = self._read_json(self.index_file, default=[])
+        self._by_sat: dict[tuple[str, str, str], list[int]] = {}
+        self._by_satk: dict[tuple[str, str, str, str], list[int]] = {}
+        self._max_memory_id = 0
+        for idx, row in enumerate(self._records):
+            self._index_record(row, idx)
+            self._max_memory_id = max(self._max_memory_id, int(row.get("memory_id", 0)))
+
         logger.info("[MEMORY] Operating in high-speed File-based mode (No DB).")
 
     async def upsert_session(self, session_id: str, *, agent_id: str) -> str:
@@ -66,8 +74,7 @@ class PersistentMemoryManager:
     async def store_memory(self, *, session_id: str, agent_id: str, memory_type: str, content: Any, **kwargs: Any) -> int:
         normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
         now_iso = datetime.now(UTC).isoformat()
-        records = self._read_json(self.index_file, default=[])
-        memory_id = (max((int(row.get("memory_id", 0)) for row in records), default=0) + 1) if records else 1
+        memory_id = self._max_memory_id + 1
         record = {
             "memory_id": memory_id,
             "session_id": normalized_session_id,
@@ -80,8 +87,10 @@ class PersistentMemoryManager:
             "created_at": now_iso,
             "updated_at": now_iso,
         }
-        records.append(record)
-        self._write_json(self.index_file, records)
+        self._records.append(record)
+        self._index_record(record, len(self._records) - 1)
+        self._max_memory_id = memory_id
+        self._write_json(self.index_file, self._records)
 
         self._write_json(
             self.storage_dir / "memories" / f"{memory_id}.json",
@@ -99,15 +108,9 @@ class PersistentMemoryManager:
 
     async def retrieve_memories(self, *, session_id: str, agent_id: str, memory_type: str, top_k: int = 8) -> list[MemoryRecord]:
         normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
-        records = self._read_json(self.index_file, default=[])
-        filtered = [
-            row
-            for row in records
-            if row.get("session_id") == normalized_session_id
-            and row.get("agent_id") == agent_id
-            and row.get("memory_type") == memory_type
-        ]
-        filtered.sort(key=lambda row: int(row.get("memory_id", 0)), reverse=True)
+        sat = (normalized_session_id, agent_id, memory_type)
+        indexes = self._by_sat.get(sat, [])
+        filtered = [self._records[idx] for idx in reversed(indexes)]
         return [
             MemoryRecord(
                 memory_id=int(row.get("memory_id", 0)),
@@ -123,16 +126,34 @@ class PersistentMemoryManager:
             for row in filtered[: max(1, int(top_k))]
         ]
 
+    async def retrieve_memory_by_key(self, *, session_id: str, agent_id: str, memory_type: str, key: str) -> MemoryRecord | None:
+        normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
+        satk = (normalized_session_id, agent_id, memory_type, key)
+        indexes = self._by_satk.get(satk, [])
+        if not indexes:
+            return None
+        row = self._records[indexes[-1]]
+        return MemoryRecord(
+            memory_id=int(row.get("memory_id", 0)),
+            session_id=str(row.get("session_id", "")),
+            agent_id=str(row.get("agent_id", "")),
+            memory_type=str(row.get("memory_type", "")),
+            content=row.get("content"),
+            metadata=dict(row.get("metadata") or {}),
+            importance_score=float(row.get("importance_score", 0.5)),
+            created_at=str(row.get("created_at", "")),
+            updated_at=str(row.get("updated_at", "")),
+        )
+
     async def touch_memory(self, memory_id: int, *, importance_delta: float = 0.0) -> None:
-        records = self._read_json(self.index_file, default=[])
         now_iso = datetime.now(UTC).isoformat()
-        for row in records:
+        for row in self._records:
             if int(row.get("memory_id", 0)) != memory_id:
                 continue
             row["updated_at"] = now_iso
             row["importance_score"] = float(row.get("importance_score", 0.5)) + float(importance_delta)
             break
-        self._write_json(self.index_file, records)
+        self._write_json(self.index_file, self._records)
 
     async def store_command(self, *, session_id: str, agent_id: str, command: str, result: dict[str, Any], success: bool, **kwargs: Any) -> None:
         normalized_session_id = await self.upsert_session(session_id, agent_id=agent_id)
@@ -185,3 +206,16 @@ class PersistentMemoryManager:
     @staticmethod
     def _write_json(path: Path, payload: Any) -> None:
         path.write_text(json.dumps(payload, ensure_ascii=True, default=str), encoding="utf-8")
+
+    def _index_record(self, row: dict[str, Any], idx: int) -> None:
+        session_id = str(row.get("session_id", ""))
+        agent_id = str(row.get("agent_id", ""))
+        memory_type = str(row.get("memory_type", ""))
+        sat = (session_id, agent_id, memory_type)
+        self._by_sat.setdefault(sat, []).append(idx)
+
+        meta = row.get("metadata") or {}
+        key = str(meta.get("key", "")).strip()
+        if key:
+            satk = (session_id, agent_id, memory_type, key)
+            self._by_satk.setdefault(satk, []).append(idx)

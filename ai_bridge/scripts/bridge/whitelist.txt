@@ -17,3 +17,6 @@ bash
 curl
 psql
 postgres
+netstat
+ss
+ip

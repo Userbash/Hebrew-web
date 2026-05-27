@@ -2,6 +2,13 @@ import asyncio
 import logging
 import sys
 import os
+
+# Fix for mistralai import issue in instructor library
+try:
+    import ai_bridge.core.fix_imports
+except ImportError:
+    pass
+
 sys.path.insert(0, '/app')
 
 from ai_bridge.core.orchestrator import Orchestrator

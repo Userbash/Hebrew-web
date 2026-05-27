@@ -25,6 +25,10 @@ class KernelAPI(Protocol):
         """System-wide logging for module activities."""
         ...
 
+    def get_memory(self) -> Any:
+        """Retrieve the primary memory module (SessionMemory)."""
+        ...
+
 class KernelModule(Protocol):
     """
     Standardized Protocol for Kernel Modules with mandatory lifecycle hooks.

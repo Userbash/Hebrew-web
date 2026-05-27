@@ -88,3 +88,4 @@ htmlcov/
 .agent/reports/
 memory_store/
 system_test_report.py
+.agent/orchestrator.pid

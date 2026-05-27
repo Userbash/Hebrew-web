@@ -1,16 +1,27 @@
-FROM python:3.12-alpine
+FROM node:20-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache curl bash tini
 
-RUN mkdir -p /app/public/uploads/avatars
-COPY backend/init-ai-bridge.sh ./init-ai-bridge.sh
-RUN chmod +x ./init-ai-bridge.sh
+COPY backend/package*.json ./
+RUN npm ci
 
-# Настройка путей для AI Bridge
-COPY ai_bridge ./ai_bridge
-ENV PYTHONPATH=/app:/app/ai_bridge
-RUN mkdir -p /app/memory_store/memories /app/memory_store/commands && \
-    chmod -R 777 /app/memory_store
+COPY backend/ ./
+RUN npm run build
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["./init-ai-bridge.sh"]
+FROM node:20-alpine
+WORKDIR /app
+
+RUN apk add --no-cache curl
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/database ./database
+
+ENV NODE_ENV=production
+EXPOSE 3001
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=8 \
+  CMD curl -fsS http://127.0.0.1:3001/api/health || exit 1
+
+CMD ["node", "dist/server.js"]

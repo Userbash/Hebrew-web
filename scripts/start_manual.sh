@@ -116,6 +116,9 @@ $BRIDGE_CMD podman run -d --pull=never \
   -e REDIS_HOST=hebrew_ai_redis \
   -e REDIS_PORT=6379 \
   -v "$AVATAR_VOLUME_NAME":/app/public/uploads/avatars:Z \
+  -v "$PROJECT_ROOT/ai_bridge":/app/ai_bridge:Z \
+  -v "$PROJECT_ROOT/.agent":/app/.agent:Z \
+  -v "$PROJECT_ROOT/memory_store":/app/memory_store:Z \
   "$BACKEND_IMAGE"
 
 echo "Starting Frontend..."

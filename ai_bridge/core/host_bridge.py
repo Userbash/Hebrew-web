@@ -17,7 +17,7 @@ class HostBridgeError(RuntimeError):
 
 @dataclass(slots=True)
 class HostBridge:
-    whitelist_file: Path = Path("scripts/bridge/whitelist.txt")
+    whitelist_file: Path = Path("ai_bridge/scripts/bridge/whitelist.txt")
     distrobox_bridge: DistroboxBridge = field(default_factory=DistroboxBridge)
     gh_auth_bridge: GhAuthBridge = field(default_factory=GhAuthBridge)
     default_allowlist: list[str] = field(default_factory=lambda: [
@@ -38,6 +38,9 @@ class HostBridge:
         "cat",
         "bash",
         "curl",
+        "netstat",
+        "ss",
+        "ip",
     ])
 
     def ensure_whitelist(self) -> None:

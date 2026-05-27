@@ -4,7 +4,7 @@ import asyncio
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI
@@ -14,10 +14,18 @@ from .kernel_protocol import KernelAPI, KernelModule
 
 logger = logging.getLogger("api_bridge_module")
 
+
 class ChatRequest(BaseModel):
     user_id: str
     message: str
     session_id: str
+
+
+class RegistrationRequest(BaseModel):
+    provider_id: str
+    callback_url: Optional[str] = None
+    session_id: Optional[str] = None
+
 
 @dataclass
 class APIBridgeModule:
@@ -31,7 +39,7 @@ class APIBridgeModule:
     def on_load(self, api: KernelAPI) -> None:
         self._api = api
         self._api.log("info", f"[API] {self.name} module loading...")
-        
+
         # We run the FastAPI server in a separate thread to not block the Orchestrator
         self._server_thread = threading.Thread(target=self._run_server, daemon=True)
         self._server_thread.start()
@@ -40,39 +48,74 @@ class APIBridgeModule:
     def _run_server(self) -> None:
         app = FastAPI(title="AI Orchestrator Kernel API")
 
+        @app.get("/health")
+        async def health_endpoint():
+            return {"status": "ok"}
+
+        @app.get("/api/health")
+        async def api_health_endpoint():
+            return {"status": "ok"}
+
+        @app.post("/register_chat")
+        async def register_endpoint(request: RegistrationRequest):
+            if not self._api:
+                return {"status": "error", "message": "Kernel API not available"}
+
+            # Access the Chat Bus module via the Orchestrator
+            bus = self._api.get_context("module_manager").get_module("chat_bus")
+            if not bus:
+                return {"status": "error", "message": "Chat Bus module not loaded"}
+
+            msg = bus.register_interface(  # type: ignore
+                provider_id=request.provider_id,
+                callback_url=request.callback_url,
+                session_id=request.session_id,
+            )
+            return {"status": "success", "message": msg}
+
         @app.post("/chat")
         async def chat_endpoint(request: ChatRequest):
             if not self._api:
                 return {"status": "error", "message": "Kernel API not available"}
-            
-            # Use the Orchestrator's internal method directly!
-            # Since we have access to the full Orchestrator instance via KernelAPI (if we cast it)
-            # or we can use TaskListener if we want to stick to the queue.
-            # However, for true integration, we call orchestrator.submit_user_task
-            
-            # NOTE: self._api is the Orchestrator instance (see ai_bridge/core/orchestrator.py:101)
-            # but we should treat it as KernelAPI. 
-            # In ai_bridge/core/orchestrator.py, submit_user_task exists.
-            
+
             payload = {
                 "user_id": request.user_id,
                 "message": request.message,
-                "session_id": request.session_id
+                "session_id": request.session_id,
             }
-            
+
             try:
-                # We need to run this in the orchestrator's event loop or just call it if it's sync.
-                # orchestrator.submit_user_task is synchronous (it calls self.run(task) which is sync).
-                result = self._api.submit_user_task(payload, source="http_api") # type: ignore
-                
+                result = self._api.submit_user_task(payload, source="http_api")  # type: ignore
+
                 return {
                     "task_id": result.get("task_id", "unknown"),
                     "status": "completed",
-                    "result": result.get("merged", result.get("results", []))
+                    "result": result.get("merged", result.get("results", [])),
                 }
             except Exception as e:
                 logger.exception("Error in API Bridge endpoint: %s", e)
                 return {"status": "error", "message": str(e)}
+
+        @app.get("/dump_memory")
+        async def dump_memory_endpoint():
+            if not self._api:
+                return {"status": "error", "message": "Kernel API not available"}
+            
+            memory = self._api.get_memory()
+            if not memory:
+                return {"status": "error", "message": "Memory module not found"}
+            
+            all_keys = memory.list_keys()
+            dump = {}
+            for key in all_keys:
+                # Key format is scope:identifier:actual_key
+                parts = key.split(":")
+                if len(parts) >= 3:
+                    scope, identifier, k = parts[0], parts[1], ":".join(parts[2:])
+                    val = memory.get(scope, identifier, k)
+                    dump[key] = val
+            
+            return {"status": "success", "data": dump}
 
         config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info")
         server = uvicorn.Server(config)
@@ -95,5 +138,5 @@ class APIBridgeModule:
             "name": self.name,
             "host": self.host,
             "port": self.port,
-            "status": "active" if self._server_thread and self._server_thread.is_alive() else "inactive"
+            "status": "active" if self._server_thread and self._server_thread.is_alive() else "inactive",
         }
