@@ -526,6 +526,8 @@ class Orchestrator:
 
             resolved_record = self.registry.get(result.agent_id)
             if resolved_record:
+                result.provider = resolved_record.provider
+                result.model_name = resolved_record.model_name
                 module_context["agent_id"] = result.agent_id
                 module_context["provider"] = resolved_record.provider
                 module_context["model"] = resolved_record.model_name
@@ -549,7 +551,7 @@ class Orchestrator:
                 self.console.emit("FIX", "Найдены ошибки, создана задача исправления")
                 fix_result = self.run_task(fix_task)
                 if fix_result.status == TaskStatus.DONE:
-                    return AgentResult(task.task_id, fix_result.agent_id, TaskStatus.DONE, fix_result.output, min(0.8, fix_result.confidence), fix_result.errors, fix_result.next_recommendations)
+                    return AgentResult(task.task_id, fix_result.agent_id, TaskStatus.DONE, fix_result.output, min(0.8, fix_result.confidence), fix_result.errors, fix_result.next_recommendations, fix_result.provider, fix_result.model_name)
             return result
         finally:
             if agent_record:

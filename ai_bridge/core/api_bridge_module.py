@@ -86,11 +86,33 @@ class APIBridgeModule:
 
             try:
                 result = self._api.submit_user_task(payload, source="http_api")  # type: ignore
+                
+                agents_used = []
+                for r in result.get("results", []):
+                    agent_id = r.get("agent_id", "unknown")
+                    provider = r.get("provider") or "unknown"
+                    model = r.get("model") or "unknown"
+                    agents_used.append(f"{agent_id} [{provider} :: {model}]")
+
+                meta_header = "\n".join([
+                    "╔══════════════════════════════════════════════════════════════════════╗",
+                    "║ 🤖 AI ORCHESTRATOR EXECUTION REPORT                                  ║",
+                    "╠══════════════════════════════════════════════════════════════════════╣",
+                    f"║ ► Tasks routed to: {', '.join(agents_used)}",
+                    "╚══════════════════════════════════════════════════════════════════════╝",
+                    ""
+                ])
+
+                merged = result.get("merged", {})
+                if isinstance(merged, dict) and "summary" in merged:
+                    merged["summary"] = meta_header + "\n" + str(merged["summary"])
+                elif isinstance(merged, str):
+                    merged = meta_header + "\n" + merged
 
                 return {
                     "task_id": result.get("task_id", "unknown"),
                     "status": "completed",
-                    "result": result.get("merged", result.get("results", [])),
+                    "result": merged if merged else result.get("results", []),
                 }
             except Exception as e:
                 logger.exception("Error in API Bridge endpoint: %s", e)

@@ -315,11 +315,15 @@ class AgentResult:
     confidence: float
     errors: list[str] = field(default_factory=list)
     next_recommendations: list[str] = field(default_factory=list)
+    provider: str | None = None
+    model_name: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "agent_id": self.agent_id,
+            "provider": self.provider,
+            "model": self.model_name,
             "status": self.status.value,
             "output": self.output,
             "confidence": self.confidence,
@@ -466,6 +470,8 @@ class P2PMessage:
     requires_ack: bool = True
     message_id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    correlation_id: str | None = None
+    idempotency_key: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -477,12 +483,13 @@ class P2PMessage:
             "priority": self.priority,
             "requires_orchestrator": self.requires_orchestrator,
             "payload": self.payload,
-            "timestamp": self.timestamp,
             "route": self.route,
             "delivery_mode": self.delivery_mode,
             "requires_ack": self.requires_ack,
+            "timestamp": self.timestamp,
+            "correlation_id": self.correlation_id,
+            "idempotency_key": self.idempotency_key,
         }
-
 
 @dataclass(slots=True)
 class MessageAck:
@@ -563,6 +570,9 @@ class TaskEnvelope:
     dependencies: list[str]
     payload: TaskPayload
     session_id: str | None = None
+    idempotency_key: str | None = None
+    is_dead_letter: bool = False
+    retry_delay_ms: int = 1000
     memory_scope: str = "task"
     memory_keys: list[str] = field(default_factory=list)
     memory_ttl_sec: int | None = None

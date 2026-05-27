@@ -14,6 +14,7 @@ class MessageBus:
         self._queues: dict[str, deque[Any]] = defaultdict(deque)
         self._subscribers: dict[str, list[Callable[[Any], None]]] = defaultdict(list)
         self._acks: dict[str, list[MessageAck]] = defaultdict(list)
+        self._unacked: dict[str, Any] = {}
         self.dead_letters: list[Any] = []
 
     def publish(self, topic: str, message: Any) -> None:
@@ -24,7 +25,22 @@ class MessageBus:
     def consume(self, topic: str) -> Any | None:
         if not self._queues[topic]:
             return None
-        return self._queues[topic].popleft()
+        msg = self._queues[topic].popleft()
+        
+        # Track unacked message
+        msg_id = getattr(msg, "message_id", getattr(msg, "task_id", None))
+        if msg_id:
+            self._unacked[msg_id] = msg
+            
+        return msg
+
+    def replay_unacked(self) -> int:
+        count = 0
+        for msg_id, msg in list(self._unacked.items()):
+            topic = self.agent_topic(getattr(msg, "target_agent", getattr(msg, "to_agent", "orchestrator")))
+            self.publish(topic, msg)
+            count += 1
+        return count
 
     def subscribe(self, topic: str, callback: Callable[[Any], None]) -> None:
         self._subscribers[topic].append(callback)
@@ -59,6 +75,11 @@ class MessageBus:
     def ack(self, message_id: str, status: AckStatus, received_by: str, reason: str | None = None) -> MessageAck:
         ack = MessageAck(message_id=message_id, ack_status=status, received_by=received_by, reason=reason)
         self._acks[message_id].append(ack)
+        
+        if status in {AckStatus.RECEIVED, AckStatus.SENT, AckStatus.FAILED}:
+            # VFS checkpoint is assumed to have been synced and renamed prior to this call
+            self._unacked.pop(message_id, None)
+            
         return ack
 
     def ack_history(self, message_id: str) -> list[MessageAck]:
@@ -70,6 +91,7 @@ class MessageBus:
 
     def mark_dead_letter(self, message: P2PMessage, reason: str) -> MessageAck:
         self.dead_letters.append(message)
+        message.is_dead_letter = True
         return self.ack(message.message_id, AckStatus.FAILED, message.to_agent, reason)
 
     def send_envelope(self, envelope: TaskEnvelope) -> MessageAck:
@@ -90,6 +112,7 @@ class MessageBus:
     def mark_dead_letter_envelope(self, envelope: TaskEnvelope, reason: str) -> MessageAck:
         logger.warning(f"Dead-lettering TaskEnvelope {envelope.task_id} (trace: {envelope.trace_id}): {reason}")
         self.dead_letters.append(envelope)
+        envelope.is_dead_letter = True
         return self.ack(envelope.task_id, AckStatus.FAILED, "dead_letter_queue", reason)
 
     @staticmethod
