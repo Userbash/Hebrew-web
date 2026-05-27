@@ -7,6 +7,6 @@ REPORT_FILE=".agent/reports/${TASK_ID}-gemini.md"
 
 mkdir -p .agent/reports
 
-scripts/gemini-agent.sh "$TASK_FILE" > "$REPORT_FILE"
+ai_bridge/scripts/gemini-agent.sh "$TASK_FILE" > "$REPORT_FILE"
 
 echo "[DONE] Gemini report saved to $REPORT_FILE"

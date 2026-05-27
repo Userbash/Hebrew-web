@@ -64,7 +64,7 @@ for item in "${TASKS[@]}"; do
     FILE=$(echo "$item" | cut -d':' -f3)
     
     # We call the existing script to queue the task for agents
-    bash scripts/create-gemini-task.sh "$ID" "$FILE" "IMPLEMENT: $DESC" > /dev/null
+    bash ai_bridge/scripts/create-gemini-task.sh "$ID" "$FILE" "IMPLEMENT: $DESC" > /dev/null
 done
 
 echo "Orchestrator: All tasks have been decomposed and stored in .agent/tasks/"

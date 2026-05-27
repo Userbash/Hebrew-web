@@ -109,7 +109,7 @@ npm run build
 AI Orchestrator (Integrated API):
 ```bash
 # Start the core and API bridge
-bash scripts/start_orchestrator.sh
+bash ai_bridge/scripts/start_orchestrator.sh
 
 # Run the interactive console (in another terminal)
 python3 ai_bridge/scripts/chat_console.py

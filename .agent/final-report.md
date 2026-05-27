@@ -13,10 +13,10 @@ Implemented the requested agent workspace and automation protocol, created proje
 
 ## Gemini Delegated Tasks
 - Gemini CLI scripts were created:
-  - `scripts/gemini-agent.sh`
-  - `scripts/create-gemini-task.sh`
-  - `scripts/run-gemini-task.sh`
-- Gemini CLI was not executed in this turn because `scripts/check-bridges.sh` did not find host `npx` in PATH.
+  - `ai_bridge/scripts/gemini-agent.sh`
+  - `ai_bridge/scripts/create-gemini-task.sh`
+  - `ai_bridge/scripts/run-gemini-task.sh`
+- Gemini CLI was not executed in this turn because `ai_bridge/scripts/check-bridges.sh` did not find host `npx` in PATH.
 
 ## GPT Critical Tasks
 - Verified subagent findings before applying fixes.
@@ -35,10 +35,10 @@ Implemented the requested agent workspace and automation protocol, created proje
 - `.agent/task-board.md`
 - `.agent/final-report.md`
 - `.agent/reports/*.md`
-- `scripts/check-bridges.sh`
-- `scripts/gemini-agent.sh`
-- `scripts/create-gemini-task.sh`
-- `scripts/run-gemini-task.sh`
+- `ai_bridge/scripts/check-bridges.sh`
+- `ai_bridge/scripts/gemini-agent.sh`
+- `ai_bridge/scripts/create-gemini-task.sh`
+- `ai_bridge/scripts/run-gemini-task.sh`
 - `backend/server.ts`
 - `backend/api/data/db.ts`
 - `backend/api/middleware/auth.ts`
@@ -62,7 +62,7 @@ Implemented the requested agent workspace and automation protocol, created proje
 - `frontend-react/src/pages/WelcomePage.tsx`
 
 ## Commands Run
-- `scripts/check-bridges.sh`
+- `ai_bridge/scripts/check-bridges.sh`
 - `cd frontend-react && npm run build`
 - `cd frontend-react && npm run lint`
 - `cd backend && npm run build`

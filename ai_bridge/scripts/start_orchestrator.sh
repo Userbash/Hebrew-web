@@ -3,8 +3,8 @@
 
 set -e
 
-# Navigate to project root if script is run from scripts/
-cd "$(dirname "$0")/.."
+# Navigate to project root if script is run from ai_bridge/scripts/
+cd "$(dirname "$0")/../.."
 
 echo "=== AI Orchestrator Unified Launcher ==="
 

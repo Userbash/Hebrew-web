@@ -21,7 +21,7 @@
   - type: AUTOMATION
   - priority: high
   - assigned_to: agent-1
-  - files: scripts/check-bridges.sh, scripts/gemini-agent.sh, scripts/create-gemini-task.sh, scripts/run-gemini-task.sh
+  - files: ai_bridge/scripts/check-bridges.sh, ai_bridge/scripts/gemini-agent.sh, ai_bridge/scripts/create-gemini-task.sh, ai_bridge/scripts/run-gemini-task.sh
   - status: DONE
 - [x] T004: Validate project after agent infrastructure changes
   - type: BUILD

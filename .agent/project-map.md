@@ -30,7 +30,7 @@
 │   │   ├── middleware/           # auth, security, error handling
 │   │   └── routes/               # REST routes under /api
 │   └── Dockerfile
-├── scripts/
+├── ai_bridge/scripts/
 │   ├── bridge/                   # existing host bridge helpers
 │   ├── check-bridges.sh          # agent bridge diagnostic
 │   ├── gemini-agent.sh           # Gemini CLI wrapper
@@ -61,9 +61,9 @@
 - Full API test: `cd backend && npm run test:full`
 
 ### Agent Automation
-- Bridge check: `scripts/check-bridges.sh`
-- Create Gemini task: `scripts/create-gemini-task.sh TID path/to/file "task text"`
-- Run Gemini task: `scripts/run-gemini-task.sh TID`
+- Bridge check: `ai_bridge/scripts/check-bridges.sh`
+- Create Gemini task: `ai_bridge/scripts/create-gemini-task.sh TID path/to/file "task text"`
+- Run Gemini task: `ai_bridge/scripts/run-gemini-task.sh TID`
 
 ## Source Directories
 - `frontend-react/src`
@@ -84,7 +84,7 @@
 - `backend/api/middleware/security.ts`: rate limiting and security middleware.
 - `backend/server.ts`: CORS, Helmet CSP, global middleware and route mounting.
 - `backend/api/data/db.ts`: SQL access and database credentials from environment.
-- `scripts/bridge/*`: host bridge and command execution helpers.
+- `ai_bridge/scripts/bridge/*`: host bridge and command execution helpers.
 - Docker socket mount in `docker-compose.yml`: `/var/run/docker.sock:/var/run/docker.sock:ro` for Traefik provider.
 - Any future `podman`, `docker`, `flatpak-spawn`, `systemctl`, or shell bridge automation.
 
