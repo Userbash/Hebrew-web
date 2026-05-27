@@ -15,7 +15,17 @@ class GeminiCLIAgent(BaseAgent):
         self.timeout_sec = self._resolve_timeout()
 
     def run(self, task: Task, memory_context: dict | None = None):
-        prompt = str(task.input.description)
+        # Enriched prompt with context
+        prompt_parts = [f"OBJECTIVE: {task.input.description}"]
+        if task.input.files:
+            prompt_parts.append(f"FILES: {', '.join(task.input.files)}")
+        if task.input.constraints:
+            prompt_parts.append(f"CONSTRAINTS: {'; '.join(task.input.constraints)}")
+        if task.input.acceptance_criteria:
+            prompt_parts.append(f"ACCEPTANCE CRITERIA: {'; '.join(task.input.acceptance_criteria)}")
+        
+        prompt = "\n".join(prompt_parts)
+        
         # Validate command intent before executing external CLI.
         intent_cmd = "npx @google/gemini-cli --prompt"
         if not self.security.validate_shell_command(intent_cmd):

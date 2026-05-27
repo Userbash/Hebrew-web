@@ -14,7 +14,7 @@ from .load_balancer import LoadBalancer
 from .metrics import MetricsCollector
 from .message_bus import MessageBus
 from .model_selector import ModelSelector
-from .models import AgentResult, ExecutionPlan, Task, TaskAcceptance, TaskStatus
+from .models import AgentResult, ExecutionPlan, Priority, Task, TaskAcceptance, TaskStatus
 from .orchestration_config import OrchestrationConfig
 from .quality_analyzer import QualityAnalyzer
 from .security_gate import SecurityGate
@@ -28,6 +28,8 @@ from .smart_decomposer_module import SmartDecomposerModule
 from .prompt_optimizer_module import PromptOptimizerModule
 from .chat_bus import ChatBusModule
 from .trigger_dispatcher import TriggerDispatcherModule
+from .json_themes_module import JSONThemesModule
+from .unified_vfs import UnifiedVFSModule
 from .kernel_module_manager import KernelModuleManager
 from .orchestrator_control_module import OrchestratorControlModule
 from .model_usage_module import ModelUsageModule
@@ -97,11 +99,24 @@ class Orchestrator:
         self.module_manager.register(OrchestratorControlModule())
         self.module_manager.register(ModelUsageModule())
         self.module_manager.register(APIBridgeModule())
+        self.module_manager.register(SmartDecomposerModule())
+        self.module_manager.register(PromptOptimizerModule())
+        self.module_manager.register(ChatBusModule())
+        self.module_manager.register(TriggerDispatcherModule())
+        self.module_manager.register(JSONThemesModule())
+        self.module_manager.register(UnifiedVFSModule())
         self.module_manager.register(ColdBootModule())
+        
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
         self.module_manager.load("api_bridge")
+        self.module_manager.load("smart_decomposer")
+        self.module_manager.load("prompt_optimizer")
+        self.module_manager.load("chat_bus")
+        self.module_manager.load("trigger_dispatcher")
+        self.module_manager.load("json_themes")
+        self.module_manager.load("unified_vfs")
         self.module_manager.load("cold_boot")
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
@@ -435,14 +450,30 @@ class Orchestrator:
                 if classified:
                     self.provider_budget_router.mark_failure(task, source_provider, classified)
 
-                if (is_gemini and classified in TIMEOUT_ERROR_TYPES) or classified in {"quota_exhaustion", "auth_fail"}:
+                # Proactive Soft Fallback for all critical/high failures or quota issues
+                should_fallback = (
+                    classified in {"quota_exhaustion", "auth_fail", "api_timeout", "tcp_timeout"}
+                    or (is_gemini and classified in TIMEOUT_ERROR_TYPES)
+                    or (task.priority in {Priority.HIGH, Priority.CRITICAL} and result.status == TaskStatus.FAILED)
+                )
+
+                if should_fallback:
                     fallback_chain = self.provider_budget_router.preferred_providers(task, choice)
+                    # Exclude the failed agent
                     fallback_agent_id = self._select_agent_by_provider_preference(capability, fallback_chain, exclude={agent_id})
                     if fallback_agent_id:
                         self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={fallback_agent_id} reason={classified or 'failure'}")
                         fallback_agent = self.local_agents.get(fallback_agent_id)
                         if fallback_agent:
                             result = fallback_agent.run(task, memory_context=memory_context)
+                            # Classify again for metrics
+                            result_errors = " ".join(result.errors or [])
+                            if result_errors:
+                                try:
+                                    from .external_ai_bridge import ExternalAIBridge
+                                    classified = ExternalAIBridge.classify_error(result_errors)
+                                except Exception:
+                                    pass
             else:
                 success_provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
                 self.provider_budget_router.register_success(task, success_provider)

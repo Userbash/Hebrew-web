@@ -8,10 +8,18 @@ from .model_selector import ModelChoice
 from .models import Priority, Task, TaskType
 
 
+from datetime import UTC, datetime, timedelta
+
 @dataclass(slots=True)
 class ProviderState:
-    exhausted: bool = False
+    exhausted_until: datetime | None = None
     failures: int = 0
+
+    @property
+    def exhausted(self) -> bool:
+        if self.exhausted_until is None:
+            return False
+        return datetime.now(UTC) < self.exhausted_until
 
 
 class ProviderBudgetRouter:
@@ -20,6 +28,7 @@ class ProviderBudgetRouter:
     def __init__(self) -> None:
         self._session_provider_state: dict[str, dict[str, ProviderState]] = defaultdict(dict)
         self.force_gemini = os.getenv("AI_BRIDGE_FORCE_GEMINI", "false").strip().lower() in {"1", "true", "yes", "on"}
+        self.recovery_timeout_min = int(os.getenv("AI_BRIDGE_RECOVERY_TIMEOUT_MIN", "5"))
 
     @staticmethod
     def _session_id(task: Task) -> str:
@@ -45,11 +54,12 @@ class ProviderBudgetRouter:
         state = self._state(task, provider)
         state.failures += 1
         if error_type in {"quota_exhaustion", "auth_fail"}:
-            state.exhausted = True
+            state.exhausted_until = datetime.now(UTC) + timedelta(minutes=self.recovery_timeout_min)
 
     def register_success(self, task: Task, provider: str) -> None:
         state = self._state(task, provider)
         state.failures = 0
+        state.exhausted_until = None
 
     def preferred_providers(self, task: Task, choice: ModelChoice) -> list[str]:
         preferred = self._normalize_provider(choice.provider)

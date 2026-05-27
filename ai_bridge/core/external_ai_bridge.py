@@ -97,7 +97,14 @@ class ExternalAIBridge:
 
             def _run_once() -> subprocess.CompletedProcess[str]:
                 if self.host_bridge is not None:
-                    return self.host_bridge.execute(cmd, timeout=timeout_sec, capture_output=True, text=True, check=False)
+                    try:
+                        res = self.host_bridge.execute(cmd, timeout=timeout_sec, capture_output=True, text=True, check=False)
+                        # If command not found on host, fallback to local
+                        if res.returncode == 127 or "not found" in (res.stderr or "").lower():
+                            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+                        return res
+                    except Exception:
+                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
                 return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
 
             if Retrying is not None:

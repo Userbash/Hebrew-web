@@ -184,6 +184,17 @@ class PersistentMemoryManager:
         rows.sort(key=lambda row: str(row.get("executed_at", "")), reverse=True)
         return rows[: max(1, int(limit))]
 
+    async def list_recent_commands_by_session(self, *, session_id: str, limit: int = 12) -> list[dict[str, Any]]:
+        normalized_session_id = await self.upsert_session(session_id, agent_id="any")
+        rows: list[dict[str, Any]] = []
+        for path in self.storage_dir.joinpath("commands").glob("*.json"):
+            row = self._read_json(path, default={})
+            if row.get("session_id") != normalized_session_id:
+                continue
+            rows.append(row)
+        rows.sort(key=lambda row: str(row.get("executed_at", "")), reverse=True)
+        return rows[: max(1, int(limit))]
+
     async def flush_all(self) -> int:
         return 0
 

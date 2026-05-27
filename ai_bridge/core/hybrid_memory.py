@@ -341,6 +341,15 @@ class HybridMemory:
             default=[],
         )
 
+    def get_command_history(self, *, session_id: str, limit: int | None = None) -> list[dict[str, Any]]:
+        return self._run_async_result(
+            self.persistent.list_recent_commands_by_session(
+                session_id=session_id,
+                limit=limit or self.settings.command_window_size,
+            ),
+            default=[],
+        )
+
     def _persistence_agent_id(self, scope: str, identifier: str) -> str:
         if scope == "agent":
             return identifier
