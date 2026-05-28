@@ -27,6 +27,106 @@ const parseBoolParam = (value: unknown): boolean | undefined => {
   return undefined;
 };
 
+const buildLogFilters = (req: Request) => {
+  const method = typeof req.query.method === 'string' ? req.query.method.trim().toUpperCase() : '';
+  const path = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+  const userId = typeof req.query.userId === 'string' ? req.query.userId.trim() : '';
+  const targetUserId = typeof req.query.targetUserId === 'string' ? req.query.targetUserId.trim() : '';
+  const statusCode = parseIntParam(req.query.statusCode, 0, 0, 999);
+  const area = typeof req.query.area === 'string' ? req.query.area.trim() : '';
+  const action = typeof req.query.action === 'string' ? req.query.action.trim() : '';
+  const outcome = typeof req.query.outcome === 'string' ? req.query.outcome.trim() : '';
+  const userRole = typeof req.query.userRole === 'string' ? req.query.userRole.trim() : '';
+  const loginIdentifier = typeof req.query.loginIdentifier === 'string' ? req.query.loginIdentifier.trim() : '';
+
+  const isAuthenticated = parseBoolParam(req.query.isAuthenticated);
+  const isSystemBlocked = parseBoolParam(req.query.isSystemBlocked);
+  const accountLocked = parseBoolParam(req.query.accountLocked);
+  const hadPreviousLogin = parseBoolParam(req.query.hadPreviousLogin);
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (method) {
+    params.push(method);
+    where.push(`t.method = $${params.length}`);
+  }
+
+  if (path) {
+    params.push(`%${path}%`);
+    where.push(`t.path ILIKE $${params.length}`);
+  } else {
+    // Exclude admin auto-refresh polling from telemetry stats to prevent
+    // skewed success rates and self-observability feedback loops.
+    where.push(`(t.path NOT ILIKE '/api/admin/%' OR t.method != 'GET')`);
+  }
+
+  if (userId) {
+    params.push(userId);
+    where.push(`t.user_id::text = $${params.length}`);
+  }
+
+  if (targetUserId) {
+    params.push(targetUserId);
+    where.push(`t.target_user_id::text = $${params.length}`);
+  }
+
+  if (statusCode > 0) {
+    params.push(statusCode);
+    where.push(`t.status_code = $${params.length}`);
+  }
+
+  if (area) {
+    params.push(area);
+    where.push(`t.area = $${params.length}`);
+  }
+
+  if (action) {
+    params.push(`%${action}%`);
+    where.push(`t.action ILIKE $${params.length}`);
+  }
+
+  if (outcome) {
+    params.push(outcome);
+    where.push(`t.outcome = $${params.length}`);
+  }
+
+  if (userRole) {
+    params.push(userRole);
+    where.push(`COALESCE(t.highest_role, t.user_role, '') = $${params.length}`);
+  }
+
+  if (loginIdentifier) {
+    params.push(`%${loginIdentifier.toLowerCase()}%`);
+    where.push(`lower(COALESCE(t.login_identifier, '')) LIKE $${params.length}`);
+  }
+
+  if (isAuthenticated !== undefined) {
+    params.push(isAuthenticated);
+    where.push(`t.is_authenticated = $${params.length}`);
+  }
+
+  if (isSystemBlocked !== undefined) {
+    params.push(isSystemBlocked);
+    where.push(`COALESCE(t.is_system_blocked, false) = $${params.length}`);
+  }
+
+  if (accountLocked !== undefined) {
+    params.push(accountLocked);
+    where.push(`COALESCE(t.account_locked, false) = $${params.length}`);
+  }
+
+  if (hadPreviousLogin !== undefined) {
+    params.push(hadPreviousLogin);
+    where.push(`COALESCE(t.had_previous_login, false) = $${params.length}`);
+  }
+
+  return {
+    whereSql: where.length > 0 ? `WHERE ${where.join(' AND ')}` : '',
+    params,
+  };
+};
+
 /**
  * GET /api/admin/logs
  * Query recent API telemetry (read-only).
@@ -40,107 +140,14 @@ router.get(
     const limit = parseIntParam(req.query.limit, 50, 1, 200);
     const offset = (page - 1) * limit;
 
-    const method = typeof req.query.method === 'string' ? req.query.method.trim().toUpperCase() : '';
-    const path = typeof req.query.path === 'string' ? req.query.path.trim() : '';
-    const userId = typeof req.query.userId === 'string' ? req.query.userId.trim() : '';
-    const targetUserId = typeof req.query.targetUserId === 'string' ? req.query.targetUserId.trim() : '';
-    const statusCode = parseIntParam(req.query.statusCode, 0, 0, 999);
-    const area = typeof req.query.area === 'string' ? req.query.area.trim() : '';
-    const action = typeof req.query.action === 'string' ? req.query.action.trim() : '';
-    const outcome = typeof req.query.outcome === 'string' ? req.query.outcome.trim() : '';
-    const userRole = typeof req.query.userRole === 'string' ? req.query.userRole.trim() : '';
-    const loginIdentifier = typeof req.query.loginIdentifier === 'string' ? req.query.loginIdentifier.trim() : '';
-
-    const isAuthenticated = parseBoolParam(req.query.isAuthenticated);
-    const isSystemBlocked = parseBoolParam(req.query.isSystemBlocked);
-    const accountLocked = parseBoolParam(req.query.accountLocked);
-    const hadPreviousLogin = parseBoolParam(req.query.hadPreviousLogin);
-
-    const where: string[] = [];
-    const params: unknown[] = [];
-
-    if (method) {
-      params.push(method);
-      where.push(`t.method = $${params.length}`);
-    }
-
-    if (path) {
-      params.push(`%${path}%`);
-      where.push(`t.path ILIKE $${params.length}`);
-    } else {
-      // Exclude admin auto-refresh polling from telemetry stats to prevent 
-      // skewed success rates and self-observability feedback loops.
-      where.push(`(t.path NOT ILIKE '/api/admin/%' OR t.method != 'GET')`);
-    }
-
-    if (userId) {
-      params.push(userId);
-      where.push(`t.user_id::text = $${params.length}`);
-    }
-
-    if (targetUserId) {
-      params.push(targetUserId);
-      where.push(`t.target_user_id::text = $${params.length}`);
-    }
-
-    if (statusCode > 0) {
-      params.push(statusCode);
-      where.push(`t.status_code = $${params.length}`);
-    }
-
-    if (area) {
-      params.push(area);
-      where.push(`t.area = $${params.length}`);
-    }
-
-    if (action) {
-      params.push(`%${action}%`);
-      where.push(`t.action ILIKE $${params.length}`);
-    }
-
-    if (outcome) {
-      params.push(outcome);
-      where.push(`t.outcome = $${params.length}`);
-    }
-
-    if (userRole) {
-      params.push(userRole);
-      where.push(`COALESCE(t.highest_role, t.user_role, '') = $${params.length}`);
-    }
-
-    if (loginIdentifier) {
-      params.push(`%${loginIdentifier.toLowerCase()}%`);
-      where.push(`lower(COALESCE(t.login_identifier, '')) LIKE $${params.length}`);
-    }
-
-    if (isAuthenticated !== undefined) {
-      params.push(isAuthenticated);
-      where.push(`t.is_authenticated = $${params.length}`);
-    }
-
-    if (isSystemBlocked !== undefined) {
-      params.push(isSystemBlocked);
-      where.push(`COALESCE(t.is_system_blocked, false) = $${params.length}`);
-    }
-
-    if (accountLocked !== undefined) {
-      params.push(accountLocked);
-      where.push(`COALESCE(t.account_locked, false) = $${params.length}`);
-    }
-
-    if (hadPreviousLogin !== undefined) {
-      params.push(hadPreviousLogin);
-      where.push(`COALESCE(t.had_previous_login, false) = $${params.length}`);
-    }
-
-    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const { whereSql, params } = buildLogFilters(req);
 
     const countRes = await db.query(
       `SELECT COUNT(*)::int AS total FROM user_telemetry t ${whereSql}`,
       params
     );
 
-    params.push(limit, offset);
+    const listParams = [...params, limit, offset];
 
     const listRes = await db.query(
       `SELECT
@@ -175,9 +182,9 @@ router.get(
        LEFT JOIN users u ON u.id = t.user_id
        ${whereSql}
        ORDER BY t.created_at DESC
-       LIMIT $${params.length - 1}
-       OFFSET $${params.length}`,
-      params
+       LIMIT $${listParams.length - 1}
+       OFFSET $${listParams.length}`,
+      listParams
     );
 
     const summaryRes = await db.query(
@@ -188,12 +195,16 @@ router.get(
           COUNT(*) FILTER (WHERE outcome = 'success')::int AS success,
           COUNT(*) FILTER (WHERE outcome = 'blocked')::int AS blocked,
           COUNT(*) FILTER (WHERE outcome = 'error')::int AS errors,
+          COUNT(*) FILTER (WHERE status_code = 400)::int AS code_400,
+          COUNT(*) FILTER (WHERE status_code = 401)::int AS code_401,
+          COUNT(*) FILTER (WHERE status_code = 403)::int AS code_403,
+          COUNT(*) FILTER (WHERE status_code = 429)::int AS code_429,
           COUNT(*) FILTER (WHERE is_authenticated = TRUE)::int AS authenticated,
           COUNT(*) FILTER (WHERE COALESCE(account_locked, FALSE) = TRUE)::int AS locked_accounts,
           COALESCE(ROUND(AVG(response_time_ms))::int, 0) AS avg_response_ms
        FROM user_telemetry t
        ${whereSql}`,
-      params.slice(0, params.length - 2)
+      params
     );
 
     res.status(200).json({
@@ -206,6 +217,10 @@ router.get(
         success: 0,
         blocked: 0,
         errors: 0,
+        code_400: 0,
+        code_401: 0,
+        code_403: 0,
+        code_429: 0,
         authenticated: 0,
         locked_accounts: 0,
         avg_response_ms: 0,
@@ -215,6 +230,57 @@ router.get(
         limit,
         total: (countRes.rows[0] as { total: number } | undefined)?.total ?? 0,
         totalPages: Math.max(1, Math.ceil((((countRes.rows[0] as { total: number } | undefined)?.total) ?? 0) / limit)),
+      },
+    });
+  })
+);
+
+/**
+ * GET /api/admin/logs/codes
+ * Histogram of status codes and top failing API paths.
+ */
+router.get(
+  '/codes',
+  verifyToken,
+  requirePermission('telemetry', 'read', 'any'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const top = parseIntParam(req.query.top, 10, 1, 100);
+    const { whereSql, params } = buildLogFilters(req);
+
+    const statusCodesRes = await db.query(
+      `SELECT t.status_code, COUNT(*)::int AS count
+       FROM user_telemetry t
+       ${whereSql}
+       GROUP BY t.status_code
+       ORDER BY count DESC, t.status_code DESC`,
+      params
+    );
+
+    const failingWhereSql = whereSql
+      ? `${whereSql} AND t.status_code >= 400`
+      : `WHERE t.status_code >= 400`;
+    const failingParams = [...params, top];
+
+    const failingPathsRes = await db.query(
+      `SELECT
+          t.method,
+          t.path,
+          t.status_code,
+          t.outcome,
+          COUNT(*)::int AS count
+       FROM user_telemetry t
+       ${failingWhereSql}
+       GROUP BY t.method, t.path, t.status_code, t.outcome
+       ORDER BY count DESC, t.status_code DESC
+       LIMIT $${failingParams.length}`,
+      failingParams
+    );
+
+    res.status(200).json({
+      success: true,
+      histogram: {
+        status_codes: statusCodesRes.rows,
+        failing_paths: failingPathsRes.rows,
       },
     });
   })

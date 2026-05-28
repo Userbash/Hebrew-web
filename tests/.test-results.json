@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-26T13:54:06.867Z",
+  "timestamp": "2026-05-28T13:35:55.586Z",
   "total_suites": 2,
   "passed_suites": 2,
   "failed_suites": 0,
@@ -41,6 +41,7 @@
           "postgres",
           "redis",
           "backend",
+          "orchestrator",
           "frontend",
           "loki",
           "promtail"
