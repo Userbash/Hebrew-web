@@ -95,6 +95,7 @@ services:
       # Required for AI Bridge persistent memory
       AI_BRIDGE_MEMORY_ENABLED: ${AI_BRIDGE_MEMORY_ENABLED:-true}
       AI_BRIDGE_MEMORY_DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-hebrew_ai_db}
+      ORCHESTRATOR_BRIDGE_URL: http://orchestrator:8000
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -106,6 +107,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      orchestrator:
+        condition: service_started
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api`)"
@@ -121,6 +124,40 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - web
+
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: ./ai_bridge/Dockerfile
+    container_name: hebrew_ai_orchestrator
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app
+      AI_BRIDGE_MEMORY_ENABLED: ${AI_BRIDGE_MEMORY_ENABLED:-true}
+      AI_BRIDGE_MEMORY_DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-hebrew_ai_db}
+      AI_BRIDGE_LIVE_MODEL_PROBE: ${AI_BRIDGE_LIVE_MODEL_PROBE:-false}
+      AI_BRIDGE_REQUIRE_EXTERNAL_SCANNERS: ${AI_BRIDGE_REQUIRE_EXTERNAL_SCANNERS:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    labels:
+      com.hebrew.service: "orchestrator"
+      com.hebrew.component: "ai-bridge"
+      com.hebrew.log_pipeline: "loki"
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"]
+      interval: 15s
+      timeout: 8s
+      retries: 10
     networks:
       - web
 

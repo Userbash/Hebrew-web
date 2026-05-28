@@ -11,10 +11,14 @@ class FeedbackLoop:
     def evaluate(self, task: Task, result: AgentResult) -> tuple[bool, Task | None]:
         if result.status == TaskStatus.DONE and result.confidence >= 0.7 and not result.errors:
             return True, None
-        count = self._retries.get(task.task_id, 0)
+        if task.type == TaskType.FIX or task.retry_count >= self.retry_limit:
+            return False, None
+
+        retry_key = task.parent_task_id or task.task_id
+        count = self._retries.get(retry_key, 0)
         if count >= self.retry_limit:
             return False, None
-        self._retries[task.task_id] = count + 1
+        self._retries[retry_key] = count + 1
         fix_task = Task(
             type=TaskType.FIX,
             input=TaskInput(
@@ -25,7 +29,8 @@ class FeedbackLoop:
             ),
             context=task.context,
             priority=task.priority,
-            parent_task_id=task.task_id,
+            parent_task_id=task.parent_task_id or task.task_id,
             required_capability="fix",
+            retry_count=count + 1,
         )
         return False, fix_task

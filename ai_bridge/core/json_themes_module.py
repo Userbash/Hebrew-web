@@ -14,6 +14,7 @@ from threading import Lock
 
 from .kernel_api import KernelAPI
 from .models import AgentResult, Task
+from .persistent_memory import AI_BRIDGE_SCHEMA, ensure_storage_schema, normalize_database_url
 
 logger = logging.getLogger("json_themes_module")
 
@@ -50,12 +51,19 @@ class JSONThemesModule:
     _events: deque = field(default_factory=lambda: deque(maxlen=1000))
     _lock: Lock = field(default_factory=Lock)
     _flush_pending: bool = False
+    _database_url: str = ""
+    _pg_enabled: bool = False
+    _flushed_count: int = 0
 
     def on_load(self, api: KernelAPI) -> None:
         self._api = api
+        self._database_url = os.getenv("AI_BRIDGE_MEMORY_DATABASE_URL", "").strip()
+        self._pg_enabled = bool(self._database_url and ensure_storage_schema(self._database_url))
+        target = f"postgresql:{AI_BRIDGE_SCHEMA}.json_themes" if self._pg_enabled else self.storage_path
         if self._api:
-            self._api.log("info", f"[THEMES] {self.name} module active. Target: {self.storage_path}")
-        self._load_existing()
+            self._api.log("info", f"[THEMES] {self.name} module active. Target: {target}")
+        if not self._pg_enabled:
+            self._load_existing()
 
     def on_unload(self) -> None:
         self.finalize()
@@ -121,16 +129,51 @@ class JSONThemesModule:
             self._flush_pending = False
             
         try:
+            if self._pg_enabled:
+                pending_events = events_snapshot[self._flushed_count:]
+                if pending_events:
+                    self._flush_postgres(pending_events)
+                    self._flushed_count = len(events_snapshot)
+                return
+
             payload_bytes = json.dumps(events_snapshot, indent=2, ensure_ascii=False).encode("utf-8")
             atomic_write_themes(p, payload_bytes)
         except Exception as e:
             if self._api:
                 self._api.log("error", f"[THEMES] Failed to flush themes: {e}")
 
+    def _flush_postgres(self, events: list[dict[str, Any]]) -> None:
+        import psycopg2  # type: ignore
+        from psycopg2.extras import Json  # type: ignore
+
+        dsn = normalize_database_url(self._database_url)
+        with psycopg2.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                for event in events:
+                    cur.execute(
+                        f"""
+                        INSERT INTO {AI_BRIDGE_SCHEMA}.json_themes (
+                            task_id, session_id, agent_id, provider, color, status, event_payload, created_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (
+                            str(event.get("task_id") or "unknown"),
+                            str(event.get("session_id") or "default"),
+                            event.get("agent_id"),
+                            event.get("provider"),
+                            event.get("color"),
+                            event.get("status"),
+                            Json(event),
+                            event.get("timestamp"),
+                        ),
+                    )
+
     def finalize(self) -> dict[str, Any]:
         self._flush()
         return {
             "event_count": len(self._events),
-            "storage": self.storage_path,
+            "storage": f"postgresql:{AI_BRIDGE_SCHEMA}.json_themes" if self._pg_enabled else self.storage_path,
             "status": "flushed"
         }
