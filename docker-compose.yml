@@ -166,6 +166,8 @@ services:
       context: ./frontend-react
       dockerfile: Dockerfile
     container_name: hebrew_ai_frontend
+    ports:
+      - "8081:80"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`${DOMAIN_NAME}`)"

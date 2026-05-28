@@ -24,11 +24,11 @@ const DB_RETRY_DELAY_MS = Math.max(200, Number(process.env.DB_CONNECT_RETRY_DELA
 const MIGRATION_LOCK_RETRY_ATTEMPTS = Math.max(1, Number(process.env.DB_MIGRATION_LOCK_RETRY_ATTEMPTS || '60'));
 const MIGRATION_LOCK_RETRY_DELAY_MS = Math.max(250, Number(process.env.DB_MIGRATION_LOCK_RETRY_DELAY_MS || '1000'));
 
-const DEFAULT_USER_EMAIL = (process.env.DB_DEFAULT_USER_EMAIL || 'user@local.test').trim().toLowerCase();
-const DEFAULT_USER_USERNAME = (process.env.DB_DEFAULT_USER_USERNAME || 'standard_user').trim().toLowerCase();
+const DEFAULT_USER_EMAIL = (process.env.DB_DEFAULT_USER_EMAIL || 'admin@local.test').trim().toLowerCase();
+const DEFAULT_USER_USERNAME = (process.env.DB_DEFAULT_USER_USERNAME || 'admin_local').trim().toLowerCase();
 const DEFAULT_USER_PASSWORD = process.env.DB_DEFAULT_USER_PASSWORD || 'ChangeMe123!';
-const DEFAULT_USER_FIRST_NAME = (process.env.DB_DEFAULT_USER_FIRST_NAME || 'Standard').trim();
-const DEFAULT_USER_LAST_NAME = (process.env.DB_DEFAULT_USER_LAST_NAME || 'User').trim();
+const DEFAULT_USER_FIRST_NAME = (process.env.DB_DEFAULT_USER_FIRST_NAME || 'Local').trim();
+const DEFAULT_USER_LAST_NAME = (process.env.DB_DEFAULT_USER_LAST_NAME || 'Admin').trim();
 const DEFAULT_USER_ROLE = (process.env.DB_DEFAULT_USER_ROLE || 'platform_admin').trim().toLowerCase();
 const DEFAULT_USER_BLOCKED = (process.env.DB_DEFAULT_USER_BLOCKED || 'false').trim().toLowerCase() === 'true';
 
@@ -161,6 +161,12 @@ const ensureDefaultUserSeed = async (q: Queryable) => {
 
     await q.query('BEGIN');
     try {
+      // Ensure role exists in roles table before assignment
+      const roleExistsRes = await q.query('SELECT 1 FROM roles WHERE role_key = $1 LIMIT 1', [DEFAULT_USER_ROLE]);
+      if ((roleExistsRes.rowCount ?? 0) === 0) {
+          console.warn(`[MIGRATIONS] Target role '${DEFAULT_USER_ROLE}' not found in roles table. Seed assignment might be incomplete.`);
+      }
+
       const upserted = await q.query(
           `INSERT INTO users (
               email,

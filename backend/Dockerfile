@@ -2,7 +2,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY backend/package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 COPY backend/ ./
 RUN npm run build

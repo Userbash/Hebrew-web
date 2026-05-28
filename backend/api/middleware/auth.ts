@@ -29,9 +29,24 @@ export const getJwtSecret = () => {
 export const getAccessTokenTtlMs = () => ACCESS_TOKEN_TTL_SECONDS * 1000;
 export const getRefreshTokenTtlMs = () => REFRESH_TOKEN_TTL_SECONDS * 1000;
 
+const parseBooleanEnv = (value?: string) => {
+    if (!value) return null;
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    return null;
+};
+
+const shouldUseSecureCookies = () => {
+    const explicit = parseBooleanEnv(process.env.AUTH_COOKIE_SECURE || process.env.COOKIE_SECURE);
+    if (explicit !== null) return explicit;
+
+    return process.env.NODE_ENV === 'production' && Boolean(process.env.DOMAIN_NAME);
+};
+
 export const getAccessCookieOptions = () => ({
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     sameSite: 'strict' as const,
     path: '/',
     maxAge: getAccessTokenTtlMs()
@@ -39,7 +54,7 @@ export const getAccessCookieOptions = () => ({
 
 export const getRefreshCookieOptions = () => ({
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     sameSite: 'strict' as const,
     path: '/api/auth',
     maxAge: getRefreshTokenTtlMs()
@@ -48,14 +63,14 @@ export const getRefreshCookieOptions = () => ({
 export const clearAuthCookies = (res: Response) => {
     res.clearCookie(ACCESS_COOKIE_NAME, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: shouldUseSecureCookies(),
         sameSite: 'strict',
         path: '/'
     });
 
     res.clearCookie(REFRESH_COOKIE_NAME, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: shouldUseSecureCookies(),
         sameSite: 'strict',
         path: '/api/auth'
     });

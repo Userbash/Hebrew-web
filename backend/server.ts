@@ -81,6 +81,10 @@ app.use(helmet({
                 'http://127.0.0.1:3001',
                 'http://localhost:8081',
                 'http://127.0.0.1:8081',
+                'http://localhost:8082',
+                'http://127.0.0.1:8082',
+                'http://localhost:3002',
+                'http://127.0.0.1:3002',
             ]
         }
     }
@@ -95,16 +99,21 @@ const configuredOrigins = (process.env.CORS_ORIGINS || '')
     .filter(Boolean);
 
 const fallbackOrigins = [
+    'http://localhost',
+    'http://127.0.0.1',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+    'http://localhost:8082',
+    'http://127.0.0.1:8082',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    'http://localhost:8081',
-    'http://127.0.0.1:8081',
 ];
 
 const productionOrigins = [
     process.env.DOMAIN_NAME ? `https://${process.env.DOMAIN_NAME}` : '',
+    process.env.DOMAIN_NAME ? `http://${process.env.DOMAIN_NAME}` : '',
 ].filter(Boolean);
 
 const defaultOrigins = process.env.NODE_ENV === 'production'
@@ -123,18 +132,22 @@ const isAllowedOrigin = (origin: string) => {
 
 app.use(cors({
     origin: (origin, callback) => {
+        // Allow same-origin requests or allowed CORS origins
         if (!origin || isAllowedOrigin(origin)) {
             callback(null, true);
             return;
         }
+
+        console.warn(`[CORS] Request from blocked origin denied: ${origin}`);
+        console.warn(`[CORS] Current allowed origins: ${allowedOriginPatterns.join(', ')}`);
 
         const error = new Error(`CORS origin denied: ${origin}`) as Error & { status?: number };
         error.status = 403;
         callback(error);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
     optionsSuccessStatus: 204,
 }));
 
