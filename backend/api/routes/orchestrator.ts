@@ -11,6 +11,8 @@ const router = express.Router();
 
 const ORCHESTRATOR_QUEUE_FILE = process.env.ORCHESTRATOR_QUEUE_FILE || path.resolve(process.cwd(), '..', '.agent', 'bridge_queue.json');
 const ORCHESTRATOR_RESULTS_DIR = process.env.ORCHESTRATOR_RESULTS_DIR || path.resolve(process.cwd(), '..', '.agent', 'bridge_results');
+const ORCHESTRATOR_BRIDGE_URL = process.env.ORCHESTRATOR_BRIDGE_URL || 'http://127.0.0.1:8000';
+const ORCHESTRATOR_CHAT_TIMEOUT_MS = Number(process.env.ORCHESTRATOR_CHAT_TIMEOUT_MS || 90_000);
 
 const MAX_DESCRIPTION_LEN = 10_000;
 const MAX_LIST_ITEMS = 200;
@@ -29,6 +31,13 @@ interface OrchestratorTaskSubmitBody {
   session_id?: string;
 }
 
+interface OrchestratorChatBody {
+  message?: string;
+  session_id?: string;
+  user_id?: string;
+  provider?: 'gpt' | 'gemini' | 'auto';
+}
+
 interface OrchestratorTaskPayload {
   task_id: string;
   type: 'plan' | 'code' | 'review' | 'test' | 'docs' | 'fix' | 'research';
@@ -45,6 +54,7 @@ interface OrchestratorTaskPayload {
 
 const taskTypes = new Set<OrchestratorTaskPayload['type']>(['plan', 'code', 'review', 'test', 'docs', 'fix', 'research']);
 const priorities = new Set<OrchestratorTaskPayload['priority']>(['low', 'normal', 'high', 'critical']);
+const chatProviders = new Set<NonNullable<OrchestratorChatBody['provider']>>(['gpt', 'gemini', 'auto']);
 
 const toStringList = (value: unknown, field: string): string[] => {
   if (value == null) {
@@ -137,6 +147,130 @@ router.get(
       results_dir: ORCHESTRATOR_RESULTS_DIR,
       timestamp: new Date().toISOString(),
     });
+  })
+);
+
+router.post(
+  '/chat',
+  asyncHandler(async (req: Request<unknown, unknown, OrchestratorChatBody>, res: Response) => {
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    if (!message) {
+      throw new ValidationError('message is required');
+    }
+    if (message.length > MAX_DESCRIPTION_LEN) {
+      throw new ValidationError('message exceeds max length (' + MAX_DESCRIPTION_LEN + ')');
+    }
+
+    const providerRaw = typeof req.body?.provider === 'string' ? req.body.provider.trim().toLowerCase() : 'auto';
+    if (!chatProviders.has(providerRaw as NonNullable<OrchestratorChatBody['provider']>)) {
+      throw new ValidationError('Invalid provider: ' + providerRaw);
+    }
+
+    const bridgePayload = {
+      user_id: typeof req.body?.user_id === 'string' && req.body.user_id.trim() ? req.body.user_id.trim() : 'backend:' + providerRaw,
+      session_id: typeof req.body?.session_id === 'string' && req.body.session_id.trim() ? req.body.session_id.trim() : 'backend-' + Date.now(),
+      message,
+      source: 'backend_orchestrator_api',
+      provider: providerRaw,
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ORCHESTRATOR_CHAT_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(ORCHESTRATOR_BRIDGE_URL + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bridgePayload),
+        signal: controller.signal,
+      });
+
+      const text = await response.text();
+      let parsed: unknown = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = { raw: text };
+      }
+
+      if (!response.ok) {
+        res.status(502).json({
+          success: false,
+          error: 'OrchestratorBridgeError',
+          message: 'Orchestrator bridge returned non-OK status',
+          bridge_status: response.status,
+          bridge_response: parsed,
+        });
+        return;
+      }
+
+      if (parsed && typeof parsed === 'object' && (parsed as { status?: string }).status === 'error') {
+        res.status(502).json({
+          success: false,
+          error: 'OrchestratorExecutionError',
+          message: 'Orchestrator returned execution error',
+          bridge_response: parsed,
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        status: 'completed',
+        provider: providerRaw,
+        orchestrator_url: ORCHESTRATOR_BRIDGE_URL + '/chat',
+        data: parsed,
+      });
+    } catch (error) {
+      const isAbort = (error as { name?: string })?.name === 'AbortError';
+      res.status(isAbort ? 504 : 502).json({
+        success: false,
+        error: isAbort ? 'OrchestratorTimeout' : 'OrchestratorUnavailable',
+        message: isAbort ? 'Orchestrator chat timeout' : 'Failed to reach orchestrator bridge',
+        details: isAbort ? { timeout_ms: ORCHESTRATOR_CHAT_TIMEOUT_MS } : undefined,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  })
+);
+
+router.get(
+  '/chat/health',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+
+    try {
+      const response = await fetch(ORCHESTRATOR_BRIDGE_URL + '/health', {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      const text = await response.text();
+      let parsed: unknown = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch {
+        parsed = { raw: text };
+      }
+
+      res.status(response.ok ? 200 : 502).json({
+        success: response.ok,
+        orchestrator_url: ORCHESTRATOR_BRIDGE_URL + '/health',
+        bridge_status: response.status,
+        bridge_response: parsed,
+      });
+    } catch (error) {
+      const isAbort = (error as { name?: string })?.name === 'AbortError';
+      res.status(isAbort ? 504 : 502).json({
+        success: false,
+        error: isAbort ? 'OrchestratorTimeout' : 'OrchestratorUnavailable',
+        message: isAbort ? 'Orchestrator health timeout' : 'Failed to reach orchestrator health endpoint',
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   })
 );
 

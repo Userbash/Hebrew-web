@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from .kernel_protocol import KernelAPI, KernelModule
@@ -19,6 +20,8 @@ class ChatRequest(BaseModel):
     user_id: str
     message: str
     session_id: str
+    source: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class RegistrationRequest(BaseModel):
@@ -78,14 +81,19 @@ class APIBridgeModule:
             if not self._api:
                 return {"status": "error", "message": "Kernel API not available"}
 
+            source_label = request.source or "http_api"
+            provider_label = request.provider or "auto"
+
             payload = {
                 "user_id": request.user_id,
                 "message": request.message,
                 "session_id": request.session_id,
+                "source": source_label,
+                "provider": provider_label,
             }
 
             try:
-                result = self._api.submit_user_task(payload, source="http_api")  # type: ignore
+                result = await run_in_threadpool(self._api.submit_user_task, payload, source=source_label)  # type: ignore
                 
                 agents_used = []
                 for r in result.get("results", []):
@@ -112,6 +120,8 @@ class APIBridgeModule:
                 return {
                     "task_id": result.get("task_id", "unknown"),
                     "status": "completed",
+                    "source": source_label,
+                    "provider": provider_label,
                     "result": merged if merged else result.get("results", []),
                 }
             except Exception as e:

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-BRIDGE_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bridge/exec.sh"
+BRIDGE_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/ai_bridge/scripts/bridge/exec.sh"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 BACKEND_IMAGE="localhost/hebrew-backend:latest"

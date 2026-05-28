@@ -13,12 +13,19 @@ def test_modprobe_style_load_unload():
 
     assert "ai_activity" in orchestrator.loaded_kernel_modules()
     assert "orchestrator_control" in orchestrator.loaded_kernel_modules()
+    assert "model_availability" in orchestrator.loaded_kernel_modules()
 
     orchestrator.unload_kernel_module("ai_activity")
     assert "ai_activity" not in orchestrator.loaded_kernel_modules()
 
     orchestrator.load_kernel_module("ai_activity")
     assert "ai_activity" in orchestrator.loaded_kernel_modules()
+
+    orchestrator.unload_kernel_module("model_availability")
+    assert "model_availability" not in orchestrator.loaded_kernel_modules()
+
+    orchestrator.load_kernel_module("model_availability")
+    assert "model_availability" in orchestrator.loaded_kernel_modules()
 
 
 def test_ai_activity_in_final_result():

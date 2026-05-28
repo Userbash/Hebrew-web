@@ -21,7 +21,7 @@ from .security_gate import SecurityGate
 from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
 from .session_memory import MemoryScope, SessionMemory
-from .availability import ModelAvailability
+from .availability import ModelAvailability, ModelAvailabilityModule
 from .ai_activity_module import AIActivityModule
 from .api_bridge_module import APIBridgeModule
 from .smart_decomposer_module import SmartDecomposerModule
@@ -107,6 +107,7 @@ class Orchestrator:
         self.module_manager.register(AIActivityModule())
         self.module_manager.register(OrchestratorControlModule())
         self.module_manager.register(ModelUsageModule())
+        self.module_manager.register(ModelAvailabilityModule())
         self.module_manager.register(APIBridgeModule())
         self.module_manager.register(SmartDecomposerModule())
         self.module_manager.register(PromptOptimizerModule())
@@ -119,6 +120,7 @@ class Orchestrator:
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
+        self.module_manager.load("model_availability")
         self.module_manager.load("api_bridge")
         self.module_manager.load("smart_decomposer")
         self.module_manager.load("prompt_optimizer")
@@ -163,6 +165,7 @@ class Orchestrator:
         self.module_manager.register(AIActivityModule())
         self.module_manager.register(OrchestratorControlModule())
         self.module_manager.register(ModelUsageModule())
+        self.module_manager.register(ModelAvailabilityModule())
         self.module_manager.register(APIBridgeModule())
         self.module_manager.register(SmartDecomposerModule())
         self.module_manager.register(PromptOptimizerModule())
@@ -172,6 +175,7 @@ class Orchestrator:
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
+        self.module_manager.load("model_availability")
         self.module_manager.load("api_bridge")
         self.module_manager.load("smart_decomposer")
         self.module_manager.load("prompt_optimizer")
@@ -204,6 +208,17 @@ class Orchestrator:
         from .task_submission_api import create_standard_task, normalize_user_payload
 
         normalized = normalize_user_payload(payload)
+        
+        # Try to use trigger dispatcher for semantic routing if message is provided
+        message = normalized.get("message") or normalized.get("description")
+        if isinstance(message, str) and message:
+            trigger_mod = self.module_manager.get_module("trigger_dispatcher")
+            if isinstance(trigger_mod, TriggerDispatcherModule):
+                triggered = trigger_mod.process_chat_input(message)
+                if triggered:
+                    # Merge triggered data into normalized payload
+                    normalized.update(triggered)
+
         task = create_standard_task(normalized)
         control = self._control_module()
         if control is not None:
@@ -376,13 +391,20 @@ class Orchestrator:
             f"fallback={fallback} secondary_review={choice.requires_secondary_review}",
         )
 
-        # Pre-flight availability check
+        # Pre-flight provider diagnostics: verify DNS/TCP/API/model readiness before spending a task attempt.
         provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
+        provider_health = self.availability.check_provider(provider, live=True)
+        module_context["availability_preflight"] = provider_health.as_dict()
         if not self.availability.is_provider_ready(provider):
-            self.console.emit("EXECUTION", f"Provider {provider} is not ready. Trying fallback providers.")
+            diag = provider_health.as_dict()
+            self.console.emit(
+                "EXECUTION",
+                f"Provider {provider} is not ready ({provider_health.status.value}: {provider_health.error or 'no details'}). Trying fallback providers.",
+            )
             fallback_chain = self.provider_budget_router.preferred_providers(task, choice)
             selected_fallback_id = None
             selected_fallback_record = None
+            selected_fallback_health = None
 
             for candidate_provider in fallback_chain:
                 fallback_agent_id = self._select_agent_by_provider_preference(capability, [candidate_provider], exclude={agent_id})
@@ -390,22 +412,32 @@ class Orchestrator:
                     continue
                 fallback_record = self.registry.get(fallback_agent_id)
                 fallback_provider = self._normalize_provider(fallback_record.provider if fallback_record else "")
-                if not fallback_provider or not self.availability.is_provider_ready(fallback_provider):
-                    self.console.emit("EXECUTION", f"Fallback provider {fallback_provider or '-'} is not ready. Skipping.")
+                if not fallback_provider:
+                    continue
+                fallback_health = self.availability.check_provider(fallback_provider, live=True)
+                if not self.availability.is_provider_ready(fallback_provider):
+                    self.console.emit(
+                        "EXECUTION",
+                        f"Fallback provider {fallback_provider} is not ready ({fallback_health.status.value}: {fallback_health.error or 'no details'}). Skipping.",
+                    )
                     continue
                 selected_fallback_id = fallback_agent_id
                 selected_fallback_record = fallback_record
+                selected_fallback_health = fallback_health
                 break
 
             if selected_fallback_id and selected_fallback_record:
-                self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={selected_fallback_id} reason=provider_not_ready")
+                self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={selected_fallback_id} reason=preflight_{provider_health.status.value}")
                 agent_id = selected_fallback_id
                 agent_record = selected_fallback_record
                 module_context["agent_id"] = agent_id
                 module_context["provider"] = agent_record.provider
                 module_context["model"] = agent_record.model_name
+                if selected_fallback_health is not None:
+                    module_context["fallback_availability_preflight"] = selected_fallback_health.as_dict()
             else:
-                failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": f"Provider {provider} unavailable and no ready fallback", "files_changed": [], "commands_run": [], "test_results": [], "diff": ""}, 0.0, [f"Provider {provider} unavailable"], [])
+                summary = f"Provider {provider} unavailable and no ready fallback"
+                failed_result = AgentResult(task.task_id, agent_id, TaskStatus.FAILED, {"summary": summary, "files_changed": [], "commands_run": [], "test_results": [], "diff": "", "provider_diagnostics": diag}, 0.0, [f"Provider {provider} unavailable: {provider_health.status.value}: {provider_health.error or 'no details'}"], [])
                 self.module_manager.after_task(task, failed_result, module_context)
                 return failed_result
 
@@ -458,6 +490,7 @@ class Orchestrator:
                 source_provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
                 if classified:
                     self.provider_budget_router.mark_failure(task, source_provider, classified)
+                    self.availability.record_failure(source_provider, classified, result_errors)
 
                 # Proactive Soft Fallback for all critical/high failures or quota issues
                 should_fallback = (
@@ -587,13 +620,13 @@ class Orchestrator:
                 if result.status != TaskStatus.DONE:
                     merged = self.merger.merge(final_results)
                     module_state = self.module_manager.finalize()
-                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {}), "model_usage": module_state.get("model_usage", {})}
+                    return {"status": "failed", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {}), "model_usage": module_state.get("model_usage", {}), "model_availability": module_state.get("model_availability", {})}
                 completed.add(task.task_id)
                 pending.pop(task.task_id)
         merged = self.merger.merge(final_results)
         self.console.emit("DONE", "Все критерии выполнены")
         module_state = self.module_manager.finalize()
-        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {}), "model_usage": module_state.get("model_usage", {})}
+        return {"status": "done", "merged": merged, "results": [r.as_dict() for r in final_results], "metrics": self.metrics.snapshot(), "console": self.console.events, "live_trace": self.live_trace_rows, "disabled_agents": self.autoscaler.disabled_agents, "enabled_agents": self.autoscaler.enabled_agents, "scheduler": [decision.as_dict() for decision in self.scheduler.decisions], "kernel_modules": self.module_manager.loaded_modules(), "module_state": module_state, "ai_activity": module_state.get("ai_activity", {}), "model_usage": module_state.get("model_usage", {}), "model_availability": module_state.get("model_availability", {})}
 
     async def listen_for_tasks(self):
         from .task_listener import TaskListener

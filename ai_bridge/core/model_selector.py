@@ -72,6 +72,24 @@ LOW_RISK_PERMISSION_EXEMPTIONS = [
     "permission formatting",
 ]
 
+WEIGHTS = {
+    "capability": 0.35,
+    "reliability": 0.20,
+    "latency": 0.10,
+    "cost": 0.10,
+    "context": 0.15,
+    "safety": 0.10
+}
+
+class CircuitBreaker:
+    @staticmethod
+    def get_penalty(provider: str, error_rate: float, latency: float) -> float:
+        penalty = 0.0
+        if error_rate > 0.1: penalty -= 0.3
+        if error_rate > 0.5: penalty -= 1.0
+        if latency > 2000: penalty -= 0.2
+        return penalty
+
 
 @dataclass(slots=True)
 class RiskEvaluation:

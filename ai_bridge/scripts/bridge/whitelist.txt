@@ -16,3 +16,5 @@ network
 npx
 gemini
 podman
+curl
+wget
