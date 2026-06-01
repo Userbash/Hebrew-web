@@ -1,6 +1,8 @@
 from __future__ import annotations
 import asyncio
+import time
 from typing import Any
+from datetime import UTC, datetime
 
 from ai_bridge.agents.base_agent import BaseAgent
 
@@ -35,6 +37,10 @@ from .orchestrator_control_module import OrchestratorControlModule
 from .model_usage_module import ModelUsageModule
 from .provider_budget_router import ProviderBudgetRouter
 from .cold_boot_module import ColdBootModule
+from .kpi_event_logger import KPIEventLogger
+from .ui_design_system_module import UIDesignSystemModule
+from .ui_anti_template_module import UIAntiTemplateModule
+from .frontend_engineering_bridge_module import FrontendEngineeringBridgeModule
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -101,6 +107,7 @@ class Orchestrator:
         self.session_memory = components.session_memory
         self.memory_consolidator = components.memory_consolidator
         self.provider_budget_router = ProviderBudgetRouter()
+        self.kpi_events = KPIEventLogger.from_env()
         
         self.module_manager = KernelModuleManager()
         self.module_manager.set_api(self)
@@ -116,6 +123,9 @@ class Orchestrator:
         self.module_manager.register(JSONThemesModule())
         self.module_manager.register(UnifiedVFSModule())
         self.module_manager.register(ColdBootModule())
+        self.module_manager.register(UIDesignSystemModule())
+        self.module_manager.register(UIAntiTemplateModule())
+        self.module_manager.register(FrontendEngineeringBridgeModule())
         
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
@@ -129,6 +139,9 @@ class Orchestrator:
         self.module_manager.load("json_themes")
         self.module_manager.load("unified_vfs")
         self.module_manager.load("cold_boot")
+        self.module_manager.load("ui_design_system")
+        self.module_manager.load("ui_anti_template")
+        self.module_manager.load("frontend_engineering_bridge")
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents = {}
@@ -159,6 +172,7 @@ class Orchestrator:
         self.host_bridge = components.host_bridge
         self.session_memory = components.session_memory
         self.provider_budget_router = ProviderBudgetRouter()
+        self.kpi_events = KPIEventLogger.from_env()
 
         self.module_manager = KernelModuleManager()
         self.module_manager.set_api(self)
@@ -318,6 +332,8 @@ class Orchestrator:
         return None
 
     def run_task(self, task: Task) -> AgentResult:
+        started_at = datetime.now(UTC)
+        started_perf = time.perf_counter()
         self.log("info", f"[PRE-FLIGHT] Verifying readiness for task {task.task_id}")
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
         choice = self.model_selector.select(task)
@@ -379,6 +395,7 @@ class Orchestrator:
         selected_provider_norm = self._normalize_provider(choice.provider)
         routed_provider_norm = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
         fallback = bool(selected_provider_norm != routed_provider_norm)
+        fallback_count = 1 if fallback else 0
 
         module_context["agent_id"] = agent_id
         module_context["provider"] = agent_record.provider if agent_record else choice.provider
@@ -428,6 +445,7 @@ class Orchestrator:
 
             if selected_fallback_id and selected_fallback_record:
                 self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={selected_fallback_id} reason=preflight_{provider_health.status.value}")
+                fallback_count += 1
                 agent_id = selected_fallback_id
                 agent_record = selected_fallback_record
                 module_context["agent_id"] = agent_id
@@ -505,6 +523,7 @@ class Orchestrator:
                     fallback_agent_id = self._select_agent_by_provider_preference(capability, fallback_chain, exclude={agent_id})
                     if fallback_agent_id:
                         self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={fallback_agent_id} reason={classified or 'failure'}")
+                        fallback_count += 1
                         fallback_agent = self.local_agents.get(fallback_agent_id)
                         if fallback_agent:
                             result = fallback_agent.run(task, memory_context=memory_context)
@@ -574,6 +593,33 @@ class Orchestrator:
                 module_context["provider"] = resolved_record.provider
                 module_context["model"] = resolved_record.model_name
             self.module_manager.after_task(task, result, module_context)
+            finished_at = datetime.now(UTC)
+            latency_ms = round((time.perf_counter() - started_perf) * 1000.0, 2)
+            model_usage_state = self.module_manager.finalize().get("model_usage", {})
+            history = model_usage_state.get("history", []) if isinstance(model_usage_state, dict) else []
+            tokens_used = None
+            if isinstance(history, list) and history:
+                for item in reversed(history):
+                    if isinstance(item, dict) and item.get("task_id") == task.task_id:
+                        tokens_used = item.get("tokens_used")
+                        break
+            self.kpi_events.write({
+                "event_type": "task_lifecycle",
+                "task_id": task.task_id,
+                "task_type": task.type.value,
+                "priority": task.priority.value,
+                "status": result.status.value,
+                "agent_id": result.agent_id,
+                "provider": result.provider or module_context.get("provider"),
+                "model": result.model_name or module_context.get("model"),
+                "fallback_count": fallback_count,
+                "fallback_used": fallback_count > 0,
+                "started_at": started_at.isoformat(),
+                "finished_at": finished_at.isoformat(),
+                "latency_ms": latency_ms,
+                "tokens_used": tokens_used,
+                "errors_count": len(result.errors or []),
+            })
 
             if choice.requires_secondary_review:
                 self.console.emit(

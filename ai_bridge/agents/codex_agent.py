@@ -12,6 +12,7 @@ from ai_bridge.core.env_loader import load_env_file
 from ai_bridge.core.models import AgentHealth, AgentResult, AgentStatus, Task, TaskStatus
 
 logger = logging.getLogger("codex_agent")
+VISION_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".svg")
 
 
 class CodexAgent(BaseAgent):
@@ -69,6 +70,17 @@ class CodexAgent(BaseAgent):
         ]
         if task.input.files:
             prompt_parts.append(f"FILES: {', '.join(task.input.files)}")
+            image_refs = [p for p in task.input.files if p.lower().endswith(VISION_EXTENSIONS)]
+            if image_refs:
+                prompt_parts.append(
+                    "VISION MODE: Use referenced images as UI truth-source. "
+                    "Extract layout, spacing rhythm, hierarchy, contrast, and component states."
+                )
+                prompt_parts.append(f"IMAGE_REFERENCES: {', '.join(image_refs)}")
+                prompt_parts.append(
+                    "UI OUTPUT REQUIREMENTS: Return production-ready frontend changes "
+                    "(semantic HTML, accessible labels, responsive CSS, tokenized styles)."
+                )
         if task.input.constraints:
             prompt_parts.append(f"CONSTRAINTS: {'; '.join(task.input.constraints)}")
         if task.input.acceptance_criteria:

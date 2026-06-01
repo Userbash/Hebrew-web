@@ -17,6 +17,8 @@ from ai_bridge.agents.mistral_agent import MistralAgent
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.reviewer_agent import ReviewerAgent
 from ai_bridge.agents.tester_agent import TesterAgent
+from ai_bridge.agents.frontend_dev_agent import FrontendDevAgent
+from ai_bridge.agents.frontend_design_agent import FrontendDesignAgent
 from ai_bridge.core.orchestration_config import OrchestrationConfig
 from ai_bridge.core.dependency_manager import DependencyManager
 from ai_bridge.core.orchestrator import Orchestrator
@@ -70,6 +72,8 @@ async def main(argv: list[str] | None = None) -> None:
     orchestrator.attach_local_agent("mistral-1", MistralAgent("mistral-1", security_manager), agent_type="external_ai", critical=False, model_name="mistral-large-latest", provider="mistral")
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", model_name="gpt-test-standard", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", model_name="gpt-review-large", provider="openai")
+    orchestrator.attach_local_agent("frontend-dev-1", FrontendDevAgent("frontend-dev-1"), agent_type="codex", model_name="gpt-coding-large", provider="openai")
+    orchestrator.attach_local_agent("frontend-design-1", FrontendDesignAgent("frontend-design-1"), agent_type="docs", model_name="design-spec", provider="local")
 
     print(f"System Ready. Agents bound: {len(orchestrator.registry.list_agents())}")
     await orchestrator.listen_for_tasks()
