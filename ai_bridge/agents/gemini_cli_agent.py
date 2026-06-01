@@ -16,7 +16,7 @@ class GeminiCLIAgent(BaseAgent):
 
     def run(self, task: Task, memory_context: dict | None = None):
         # Enriched prompt with context
-        prompt_parts = [f"OBJECTIVE: {task.input.description}"]
+        prompt_parts = [task.input.description]
         if task.input.files:
             prompt_parts.append(f"FILES: {', '.join(task.input.files)}")
         if task.input.constraints:

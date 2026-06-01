@@ -22,9 +22,9 @@ services:
       - "--log.format=json"
       - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
     ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080" # Dashboard
+      - ":80"
+      - ":443"
+      - ":8080" # Dashboard
     volumes:
       - ${CONTAINER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
     labels:
@@ -99,6 +99,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-me}
     volumes:
       - avatar_uploads:/app/public/uploads/avatars
       - ./ai_bridge:/app/ai_bridge

@@ -4,11 +4,14 @@ import hashlib
 import json
 import logging
 import os
+import base64
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +132,10 @@ class PersistentMemoryManager:
     def __init__(self, settings: Any = None) -> None:
         self.settings = settings
         self.database_url = str(getattr(settings, "database_url", "") or os.getenv("AI_BRIDGE_MEMORY_DATABASE_URL", "")).strip()
-        self._pg_enabled = bool(self.database_url and ensure_storage_schema(self.database_url))
+        self.etcd_url = str(getattr(settings, "etcd_url", "") or os.getenv("AI_BRIDGE_ETCD_URL", "")).strip()
+        self.etcd_prefix = str(getattr(settings, "etcd_prefix", "") or os.getenv("AI_BRIDGE_ETCD_PREFIX", "/ai_bridge")).strip() or "/ai_bridge"
+        self._etcd_enabled = bool(self.etcd_url)
+        self._pg_enabled = bool((not self._etcd_enabled) and self.database_url and ensure_storage_schema(self.database_url))
 
         configured_dir = os.getenv("AI_BRIDGE_MEMORY_STORE_DIR", "").strip()
         if configured_dir:
@@ -156,7 +162,7 @@ class PersistentMemoryManager:
             self._index_record(row, idx)
             self._max_memory_id = max(self._max_memory_id, int(row.get("memory_id", 0)))
 
-        mode = "PostgreSQL" if self._pg_enabled else "file"
+        mode = "etcd" if self._etcd_enabled else ("PostgreSQL" if self._pg_enabled else "file")
         logger.info("[MEMORY] Operating in %s mode.", mode)
 
     def _connect(self):
@@ -167,6 +173,16 @@ class PersistentMemoryManager:
     def upsert_session(self, session_id: str, *, agent_id: str) -> str:
         _ = agent_id
         normalized = normalize_session_id(session_id)
+        if self._etcd_enabled:
+            row = self._etcd_get_json(self._session_map_key(session_id))
+            if row and row.get("normalized"):
+                return str(row.get("normalized"))
+            self._etcd_put_json(
+                self._session_map_key(session_id),
+                {"normalized": normalized, "agent_id": agent_id, "updated_at": datetime.now(UTC).isoformat()},
+            )
+            return normalized
+
         if self._pg_enabled:
             with self._connect() as conn:
                 with conn.cursor() as cur:
@@ -194,6 +210,28 @@ class PersistentMemoryManager:
         normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         metadata = kwargs.get("metadata") or {}
         importance_score = float(kwargs.get("importance_score", 0.5))
+
+        if self._etcd_enabled:
+            memory_id = self._etcd_next_id("memory")
+            now_iso = datetime.now(UTC).isoformat()
+            record = {
+                "memory_id": memory_id,
+                "session_id": normalized_session_id,
+                "source_session_id": session_id,
+                "agent_id": agent_id,
+                "memory_type": memory_type,
+                "content": content,
+                "metadata": metadata,
+                "importance_score": importance_score,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+            self._etcd_put_json(self._memory_item_key(memory_id), record)
+            self._etcd_append_json(self._memory_index_key(normalized_session_id, agent_id, memory_type), record)
+            key_val = str((metadata or {}).get("key", "")).strip()
+            if key_val:
+                self._etcd_put_json(self._memory_key_lookup_key(normalized_session_id, agent_id, memory_type, key_val), record)
+            return memory_id
 
         if self._pg_enabled:
             from psycopg2.extras import Json  # type: ignore
@@ -249,6 +287,10 @@ class PersistentMemoryManager:
     def retrieve_memories(self, *, session_id: str, agent_id: str, memory_type: str, top_k: int = 8) -> list[MemoryRecord]:
         normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
         limit = max(1, int(top_k))
+        if self._etcd_enabled:
+            rows = self._etcd_get_json(self._memory_index_key(normalized_session_id, agent_id, memory_type)) or []
+            return [self._record_from_dict(row) for row in list(reversed(rows))[:limit]]
+
         if self._pg_enabled:
             with self._connect() as conn:
                 with conn.cursor() as cur:
@@ -272,6 +314,10 @@ class PersistentMemoryManager:
 
     def retrieve_memory_by_key(self, *, session_id: str, agent_id: str, memory_type: str, key: str) -> MemoryRecord | None:
         normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
+        if self._etcd_enabled:
+            row = self._etcd_get_json(self._memory_key_lookup_key(normalized_session_id, agent_id, memory_type, key))
+            return self._record_from_dict(row) if row else None
+
         if self._pg_enabled:
             with self._connect() as conn:
                 with conn.cursor() as cur:
@@ -324,6 +370,10 @@ class PersistentMemoryManager:
 
     def store_command(self, *, session_id: str, agent_id: str, command: str, result: dict[str, Any], success: bool, **kwargs: Any) -> None:
         normalized_session_id = self.upsert_session(session_id, agent_id=agent_id)
+        if self._etcd_enabled:
+            row = self._etcd_get_json(self._memory_key_lookup_key(normalized_session_id, agent_id, memory_type, key))
+            return self._record_from_dict(row) if row else None
+
         if self._pg_enabled:
             from psycopg2.extras import Json  # type: ignore
 
@@ -427,6 +477,51 @@ class PersistentMemoryManager:
     @staticmethod
     def _write_json(path: Path, payload: Any) -> None:
         path.write_text(json.dumps(payload, ensure_ascii=True, default=str), encoding="utf-8")
+
+    def _session_map_key(self, session_id: str) -> str:
+        return f"{self.etcd_prefix}/sessions/{normalize_session_id(session_id)}"
+
+    def _memory_item_key(self, memory_id: int) -> str:
+        return f"{self.etcd_prefix}/memories/{int(memory_id)}"
+
+    def _memory_index_key(self, session_id: str, agent_id: str, memory_type: str) -> str:
+        return f"{self.etcd_prefix}/memory_index/{session_id}/{agent_id}/{memory_type}"
+
+    def _memory_key_lookup_key(self, session_id: str, agent_id: str, memory_type: str, key: str) -> str:
+        return f"{self.etcd_prefix}/memory_lookup/{session_id}/{agent_id}/{memory_type}/{key}"
+
+    def _etcd_next_id(self, namespace: str) -> int:
+        counter_key = f"{self.etcd_prefix}/counters/{namespace}"
+        payload = self._etcd_get_json(counter_key) or {"value": 0}
+        value = int(payload.get("value", 0)) + 1
+        self._etcd_put_json(counter_key, {"value": value})
+        return value
+
+    def _etcd_put_json(self, key: str, payload: Any) -> None:
+        url = f"{self.etcd_url.rstrip('/')}/v3/kv/put"
+        data = {
+            "key": base64.b64encode(key.encode("utf-8")).decode("ascii"),
+            "value": base64.b64encode(self.serialize_payload(payload).encode("utf-8")).decode("ascii"),
+        }
+        resp = requests.post(url, json=data, timeout=5)
+        resp.raise_for_status()
+
+    def _etcd_get_json(self, key: str) -> Any:
+        url = f"{self.etcd_url.rstrip('/')}/v3/kv/range"
+        data = {"key": base64.b64encode(key.encode("utf-8")).decode("ascii")}
+        resp = requests.post(url, json=data, timeout=5)
+        resp.raise_for_status()
+        parsed = resp.json()
+        kvs = parsed.get("kvs") or []
+        if not kvs:
+            return None
+        raw = base64.b64decode(kvs[0]["value"]).decode("utf-8")
+        return json.loads(raw)
+
+    def _etcd_append_json(self, key: str, item: Any) -> None:
+        rows = self._etcd_get_json(key) or []
+        rows.append(item)
+        self._etcd_put_json(key, rows)
 
     def _index_record(self, row: dict[str, Any], idx: int) -> None:
         session_id = str(row.get("session_id", ""))

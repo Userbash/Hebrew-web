@@ -1,0 +1,6 @@
+from __future__ import annotations
+from typing import Protocol, Any
+class ModelProvider(Protocol):
+    def complete(self, prompt: str, **kwargs: Any) -> dict[str, Any]: ...
+class ModelRouter(Protocol):
+    def select_model(self, task: Any, context: dict[str, Any]) -> dict[str, Any]: ...

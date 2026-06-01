@@ -130,5 +130,6 @@ class ModelUsageModule:
     def finalize(self) -> dict[str, Any]:
         return {
             "current": self.current,
+            "history": self.history,
             "stats": self.get_statistics()
         }

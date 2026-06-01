@@ -65,9 +65,15 @@ class Priority(str, Enum):
 class TaskStatus(str, Enum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
+    QUEUED = "queued"
     RUNNING = "running"
+    WAITING_INPUT = "waiting_input"
+    WAITING_DEPENDENCY = "waiting_dependency"
+    BLOCKED = "blocked"
+    RETRYING = "retrying"
     DONE = "done"
     FAILED = "failed"
+    CANCELED = "canceled"
     NEEDS_REVIEW = "needs_review"
 
 

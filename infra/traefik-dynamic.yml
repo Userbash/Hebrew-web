@@ -1,0 +1,19 @@
+http:
+  routers:
+    backend:
+      entryPoints: [web]
+      rule: "(Host(`localhost`) || Host(`127.0.0.1`)) && PathPrefix(`/api`)"
+      service: backend
+    frontend:
+      entryPoints: [web]
+      rule: "Host(`localhost`) || Host(`127.0.0.1`)"
+      service: frontend
+  services:
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://hebrew_ai_backend:3001"
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://hebrew_ai_frontend:80"

@@ -51,7 +51,8 @@ class SessionMemory(MemoryProtocol):
         a0, a1, a2 = args
         if isinstance(a0, MemoryScope):
             return a0, str(a1), str(a2)
-
+        if str(a0) in {m.value for m in MemoryScope}:
+            return MemoryScope(str(a0)), str(a1), str(a2)
         return MemoryScope.SESSION, str(a0), str(a1)
 
     def get(self, *args: Any) -> Any | None:

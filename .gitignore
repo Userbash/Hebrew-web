@@ -89,3 +89,7 @@ htmlcov/
 memory_store/
 system_test_report.py
 .agent/orchestrator.pid
+
+# AI Bridge bootstrap artifacts
+.venv_ai_bridge/
+ai_bridge/runtime_report.json

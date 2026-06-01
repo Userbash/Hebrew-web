@@ -70,7 +70,8 @@ class SmartDecomposerModule:
             )
 
             atomic_tasks = []
-            id_map = {} # Map LLM string ID to UUIDs
+            id_map = {}  # Map LLM string ID to UUIDs
+            raw_dependencies: list[tuple[Task, list[str]]] = []
 
             for i, st in enumerate(response.tasks):
                 # 1. Map type
@@ -92,12 +93,17 @@ class SmartDecomposerModule:
                 id_map[f"task_{i}"] = task.task_id
                 id_map[st.title.lower().replace(" ", "_")] = task.task_id
                 
-                # 4. Resolve dependencies (simple string matching for this demo)
-                for dep in st.dependencies:
-                    if dep in id_map:
-                        task.dependencies.append(id_map[dep])
-                
+                # Resolve dependencies in a second pass so forward references also work.
+                raw_dependencies.append((task, list(st.dependencies)))
                 atomic_tasks.append(task)
+
+            # Second pass dependency resolution.
+            for task, deps in raw_dependencies:
+                for dep in deps:
+                    dep_key = dep.strip()
+                    dep_id = id_map.get(dep_key)
+                    if dep_id and dep_id != task.task_id and dep_id not in task.dependencies:
+                        task.dependencies.append(dep_id)
 
             self._api.log("info", f"[DECOMP] Generated {len(atomic_tasks)} atomic tasks via LLM.")
             return ExecutionPlan(root_task_id=root_task.task_id, atomic_tasks=atomic_tasks)

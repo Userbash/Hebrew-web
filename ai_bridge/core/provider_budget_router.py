@@ -3,12 +3,11 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from .model_selector import ModelChoice
-from .models import Priority, Task, TaskType
+from .models import Priority, Task, TaskType, Complexity
 
-
-from datetime import UTC, datetime, timedelta
 
 @dataclass(slots=True)
 class ProviderState:
@@ -29,6 +28,7 @@ class ProviderBudgetRouter:
         self._session_provider_state: dict[str, dict[str, ProviderState]] = defaultdict(dict)
         self.force_gemini = os.getenv("AI_BRIDGE_FORCE_GEMINI", "false").strip().lower() in {"1", "true", "yes", "on"}
         self.recovery_timeout_min = int(os.getenv("AI_BRIDGE_RECOVERY_TIMEOUT_MIN", "5"))
+        self.policy_mode = os.getenv("AI_BRIDGE_POLICY_MODE", "legacy").strip().lower()
 
     @staticmethod
     def _session_id(task: Task) -> str:
@@ -64,17 +64,28 @@ class ProviderBudgetRouter:
     def preferred_providers(self, task: Task, choice: ModelChoice) -> list[str]:
         preferred = self._normalize_provider(choice.provider)
 
-        # Keep high-risk planning/review on OpenAI first.
-        if task.priority in {Priority.HIGH, Priority.CRITICAL} and task.type in {TaskType.PLAN, TaskType.REVIEW}:
+        is_critical = task.priority in {Priority.CRITICAL} or choice.complexity == Complexity.CRITICAL
+        is_high_risk = task.priority in {Priority.HIGH, Priority.CRITICAL} or choice.complexity in {Complexity.HIGH, Complexity.CRITICAL}
+
+        if is_critical:
+            # Security-critical first on openai, then resilient fallbacks.
             base = ["openai", "google", "mistral", "local"]
+        elif self.policy_mode == "strict":
+            # Strict cost-optimization: defer openai to the end for non-critical.
+            if task.type in {TaskType.CODE, TaskType.TEST, TaskType.FIX}:
+                base = [preferred, "mistral", "google", "local", "openai"]
+            else:
+                base = [preferred, "google", "mistral", "local", "openai"]
         elif self.force_gemini and task.type in {TaskType.CODE, TaskType.TEST, TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW, TaskType.FIX}:
-            base = ["google", "mistral", "openai", "local"]
+            base = ["google", "mistral", "local", "openai"]
         elif task.type in {TaskType.CODE, TaskType.TEST, TaskType.FIX}:
-            base = ["google", preferred, "mistral", "openai", "local"]
+            base = [preferred, "mistral", "google", "local", "openai"]
         elif task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
-            base = [preferred, "google", "mistral", "openai", "local"]
+            base = [preferred, "google", "mistral", "local", "openai"]
+        elif is_high_risk:
+            base = ["google", preferred, "mistral", "local", "openai"]
         else:
-            base = [preferred, "openai", "google", "mistral", "local"]
+            base = [preferred, "google", "mistral", "local", "openai"]
 
         seen: set[str] = set()
         ranked: list[str] = []
@@ -87,4 +98,4 @@ class ProviderBudgetRouter:
             if state.exhausted:
                 continue
             ranked.append(norm)
-        return ranked or ["openai", "google", "mistral", "local"]
+        return ranked or ["google", "mistral", "local", "openai"]
