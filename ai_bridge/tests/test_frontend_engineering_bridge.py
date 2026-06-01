@@ -10,6 +10,6 @@ def test_frontend_engineering_bridge_loaded_and_exposes_frameworks():
     bridge = state["frontend_engineering_bridge"]
     assert bridge["status"] == "active"
     assert bridge["bridge_mode"] == "kernel_first"
-    assert set(bridge["frameworks"]) == {"angular", "react", "svelte", "vue"}
+    assert {"react", "vue", "angular", "svelte", "nextjs", "nuxt", "remix", "astro"}.issubset(set(bridge["frameworks"]))
     assert bridge["quality_gate_min"] == 85
-    assert bridge["subsystems"] == 8
+    assert bridge["subsystems"] == 10

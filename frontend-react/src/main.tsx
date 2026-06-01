@@ -19,6 +19,7 @@ const RegistrationPage = lazy(() => import('./pages/RegistrationPage'));
 const PublicHomePage = lazy(() => import('./pages/PublicHomePage'));
 const PublicationsPage = lazy(() => import('./pages/PublicationsPage'));
 const UserPermissionsPage = lazy(() => import('./pages/admin/UserPermissionsPage'));
+const OrchestratorChatPage = lazy(() => import('./pages/OrchestratorChatPage')); // New import
 
 const queryClient = new QueryClient();
 
@@ -71,6 +72,7 @@ function Router() {
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/admin/" element={<AdminPanel />} />
             </Route>
+            <Route path="/orchestrator-chat" element={<OrchestratorChatPage />} /> // New route
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

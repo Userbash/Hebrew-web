@@ -33,7 +33,7 @@ class GeminiCLIAgent(BaseAgent):
 
         self.active_tasks += 1
         try:
-            bridge = ExternalAIBridge(self.host_bridge)
+            bridge = ExternalAIBridge(None)
             bridge_result = bridge.run_gemini_cli(task, prompt, timeout_sec=self.timeout_sec)
 
             if bridge_result.ok:

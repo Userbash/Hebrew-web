@@ -9,15 +9,21 @@ class FrontendModule:
     recognizer_api: str
     training_api: str
     enhancement_api: str
+    recommended_stack: list[str]
 
 
 class FrontendFrameworkModules:
     def __init__(self) -> None:
+        common = ("/api/ml/recognize", "/api/ml/train", "/api/ml/enhance-ui")
         self._modules = {
-            "react": FrontendModule("react", "/api/ml/recognize", "/api/ml/train", "/api/ml/enhance-ui"),
-            "vue": FrontendModule("vue", "/api/ml/recognize", "/api/ml/train", "/api/ml/enhance-ui"),
-            "angular": FrontendModule("angular", "/api/ml/recognize", "/api/ml/train", "/api/ml/enhance-ui"),
-            "svelte": FrontendModule("svelte", "/api/ml/recognize", "/api/ml/train", "/api/ml/enhance-ui"),
+            "react": FrontendModule("react", *common, ["react", "vite", "typescript", "tailwindcss", "radix-ui", "shadcn-ui", "react-hook-form", "zod", "tanstack-query", "framer-motion", "lucide-react"]),
+            "nextjs": FrontendModule("nextjs", *common, ["next", "typescript", "tailwindcss", "radix-ui", "shadcn-ui", "react-hook-form", "zod", "tanstack-query", "framer-motion"]),
+            "vue": FrontendModule("vue", *common, ["vue", "vite", "typescript", "tailwindcss", "pinia", "vue-router", "zod"]),
+            "nuxt": FrontendModule("nuxt", *common, ["nuxt", "typescript", "tailwindcss", "pinia"]),
+            "angular": FrontendModule("angular", *common, ["angular", "typescript", "rxjs", "angular-material", "ngrx"]),
+            "svelte": FrontendModule("svelte", *common, ["sveltekit", "typescript", "tailwindcss", "zod"]),
+            "remix": FrontendModule("remix", *common, ["remix", "typescript", "tailwindcss", "zod"]),
+            "astro": FrontendModule("astro", *common, ["astro", "typescript", "tailwindcss", "mdx"]),
         }
 
     def get(self, framework: str) -> FrontendModule:

@@ -59,6 +59,41 @@ def _as_list(raw: Any) -> list[str]:
     return [str(raw)]
 
 
+
+
+def _is_frontend_oneshot_request(data: dict[str, Any]) -> bool:
+    text = " ".join(str(data.get(k, "")) for k in ("description", "message", "prompt", "objective")).lower()
+    return any(k in text for k in ["frontend", "ui", "ux", "landing", "catalog", "page", "website", "site", "веб", "страниц", "дизайн"])
+
+
+def _inject_frontend_standardization(data: dict[str, Any]) -> dict[str, Any]:
+    if not _is_frontend_oneshot_request(data):
+        return data
+    out = dict(data)
+    out.setdefault("type", "code")
+    out.setdefault("framework", "react")
+    out.setdefault("frontend_output_root", "frontend-react")
+    out.setdefault("frontend_app_name", "frontend-app")
+    out.setdefault("acceptance_criteria", [
+        "responsive ui",
+        "design tokens applied",
+        "semantic sections generated",
+        "content seeded",
+    ])
+    out.setdefault("frontend_schema", {
+        "components": [
+            {"name": "SiteHeader"},
+            {"name": "HeroSection"},
+            {"name": "CatalogGrid"},
+            {"name": "CourseCard"},
+            {"name": "CartSummary"},
+            {"name": "AccountPanel"},
+            {"name": "SiteFooter"},
+        ],
+        "pages": ["/", "/catalog", "/course/:id", "/cart", "/checkout", "/account", "/account/lessons"],
+    })
+    return out
+
 def _extract_description(data: dict[str, Any]) -> str:
     for key in ("description", "message", "text", "prompt", "objective"):
         value = data.get(key)
@@ -69,7 +104,7 @@ def _extract_description(data: dict[str, Any]) -> str:
 
 def normalize_user_payload(payload: Any) -> dict[str, Any]:
     if isinstance(payload, dict):
-        return payload
+        return _inject_frontend_standardization(payload)
     if isinstance(payload, str):
         stripped = payload.strip()
         if not stripped:
@@ -80,7 +115,7 @@ def normalize_user_payload(payload: Any) -> dict[str, Any]:
                 return parsed
         except json.JSONDecodeError:
             pass
-        return {"description": stripped}
+        return _inject_frontend_standardization({"description": stripped})
     return {}
 
 

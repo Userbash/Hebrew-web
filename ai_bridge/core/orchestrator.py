@@ -1,5 +1,8 @@
 from __future__ import annotations
 import asyncio
+import hashlib
+import json
+import os
 import time
 from typing import Any
 from datetime import UTC, datetime
@@ -23,7 +26,7 @@ from .security_gate import SecurityGate
 from .result_merger import ResultMerger
 from .smart_scheduler import SmartScheduler
 from .session_memory import MemoryScope, SessionMemory
-from .availability import ModelAvailability, ModelAvailabilityModule
+from .availability import ModelAvailability, ModelAvailabilityModule, ProviderStatus
 from .ai_activity_module import AIActivityModule
 from .api_bridge_module import APIBridgeModule
 from .smart_decomposer_module import SmartDecomposerModule
@@ -41,6 +44,7 @@ from .kpi_event_logger import KPIEventLogger
 from .ui_design_system_module import UIDesignSystemModule
 from .ui_anti_template_module import UIAntiTemplateModule
 from .frontend_engineering_bridge_module import FrontendEngineeringBridgeModule
+from .autodev_pipeline_module import AutodevPipelineModule
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -126,6 +130,7 @@ class Orchestrator:
         self.module_manager.register(UIDesignSystemModule())
         self.module_manager.register(UIAntiTemplateModule())
         self.module_manager.register(FrontendEngineeringBridgeModule())
+        self.module_manager.register(AutodevPipelineModule())
         
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
@@ -142,6 +147,7 @@ class Orchestrator:
         self.module_manager.load("ui_design_system")
         self.module_manager.load("ui_anti_template")
         self.module_manager.load("frontend_engineering_bridge")
+        self.module_manager.load("autodev_pipeline")
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents = {}
@@ -222,7 +228,15 @@ class Orchestrator:
         from .task_submission_api import create_standard_task, normalize_user_payload
 
         normalized = normalize_user_payload(payload)
-        
+        session_id = str(normalized.get("session_id") or "default")
+        idem_raw = json.dumps(normalized, sort_keys=True, ensure_ascii=True)
+        idempotency_key = hashlib.sha256(idem_raw.encode("utf-8")).hexdigest()
+        cache_key = f"submit:{idempotency_key}"
+        cached = self.session_memory.get(MemoryScope.SESSION, session_id, cache_key)
+        if isinstance(cached, dict) and cached.get("status") in {"done", "failed"}:
+            self.console.emit("IDEMPOTENCY", f"cache hit for session={session_id} key={idempotency_key[:12]}")
+            return cached
+
         # Try to use trigger dispatcher for semantic routing if message is provided
         message = normalized.get("message") or normalized.get("description")
         if isinstance(message, str) and message:
@@ -237,7 +251,15 @@ class Orchestrator:
         control = self._control_module()
         if control is not None:
             control.register_submission(task, source=source)
-        return self.run(task)
+        result = self.run(task)
+        self.session_memory.set(MemoryScope.SESSION, session_id, cache_key, result, ttl_sec=3600)
+        return result
+
+    def run_autodev_pipeline(self, specs: str, project_root: str = ".", figma_api_available: bool = False) -> dict[str, object]:
+        module = self.module_manager.get_module("autodev_pipeline")
+        if not isinstance(module, AutodevPipelineModule):
+            raise RuntimeError("autodev_pipeline module is not loaded")
+        return module.run_pipeline(specs=specs, project_root=project_root, figma_api_available=figma_api_available)
 
     def monitoring_snapshot(self) -> dict[str, object]:
         control = self._control_module()
@@ -410,9 +432,11 @@ class Orchestrator:
 
         # Pre-flight provider diagnostics: verify DNS/TCP/API/model readiness before spending a task attempt.
         provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
-        provider_health = self.availability.check_provider(provider, live=True)
+        preflight_live = os.getenv("AI_BRIDGE_PREFLIGHT_LIVE_PROBE", "false").strip().lower() in {"1", "true", "yes", "on"}
+        provider_health = self.availability.check_provider(provider, live=preflight_live)
         module_context["availability_preflight"] = provider_health.as_dict()
-        if not self.availability.is_provider_ready(provider):
+        provider_ready = provider_health.status in {ProviderStatus.HEALTHY, ProviderStatus.DEGRADED}
+        if not provider_ready:
             diag = provider_health.as_dict()
             self.console.emit(
                 "EXECUTION",
@@ -431,8 +455,9 @@ class Orchestrator:
                 fallback_provider = self._normalize_provider(fallback_record.provider if fallback_record else "")
                 if not fallback_provider:
                     continue
-                fallback_health = self.availability.check_provider(fallback_provider, live=True)
-                if not self.availability.is_provider_ready(fallback_provider):
+                fallback_health = self.availability.check_provider(fallback_provider, live=preflight_live)
+                fallback_ready = fallback_health.status in {ProviderStatus.HEALTHY, ProviderStatus.DEGRADED}
+                if not fallback_ready:
                     self.console.emit(
                         "EXECUTION",
                         f"Fallback provider {fallback_provider} is not ready ({fallback_health.status.value}: {fallback_health.error or 'no details'}). Skipping.",

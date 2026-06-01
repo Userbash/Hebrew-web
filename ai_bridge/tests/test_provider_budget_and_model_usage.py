@@ -28,7 +28,7 @@ def test_decomposer_sets_code_test_normal_and_review_high():
     assert by_type[TaskType.REVIEW].priority == Priority.HIGH
 
 
-def test_provider_budget_router_prefers_google_for_normal_code():
+def test_provider_budget_router_prefers_primary_provider_for_normal_code():
     task = Task(
         TaskType.CODE,
         TaskInput("Implement feature"),
@@ -39,7 +39,7 @@ def test_provider_budget_router_prefers_google_for_normal_code():
     class _Choice:
         provider = "mistral"
     providers = router.preferred_providers(task, _Choice())
-    assert providers[0] == "google"
+    assert providers[0] == "mistral"
 
 
 def test_orchestrator_exposes_model_usage_snapshot():

@@ -63,9 +63,10 @@ class ProviderBudgetRouter:
 
     def preferred_providers(self, task: Task, choice: ModelChoice) -> list[str]:
         preferred = self._normalize_provider(choice.provider)
+        choice_complexity = getattr(choice, "complexity", task.complexity)
 
-        is_critical = task.priority in {Priority.CRITICAL} or choice.complexity == Complexity.CRITICAL
-        is_high_risk = task.priority in {Priority.HIGH, Priority.CRITICAL} or choice.complexity in {Complexity.HIGH, Complexity.CRITICAL}
+        is_critical = task.priority in {Priority.CRITICAL} or choice_complexity == Complexity.CRITICAL
+        is_high_risk = task.priority in {Priority.HIGH, Priority.CRITICAL} or choice_complexity in {Complexity.HIGH, Complexity.CRITICAL}
 
         if is_critical:
             # Security-critical first on openai, then resilient fallbacks.

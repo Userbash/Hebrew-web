@@ -12,7 +12,7 @@ const router = express.Router();
 const ORCHESTRATOR_QUEUE_FILE = process.env.ORCHESTRATOR_QUEUE_FILE || path.resolve(process.cwd(), '..', '.agent', 'bridge_queue.json');
 const ORCHESTRATOR_RESULTS_DIR = process.env.ORCHESTRATOR_RESULTS_DIR || path.resolve(process.cwd(), '..', '.agent', 'bridge_results');
 const ORCHESTRATOR_BRIDGE_URL = process.env.ORCHESTRATOR_BRIDGE_URL || 'http://127.0.0.1:8000';
-const ORCHESTRATOR_CHAT_TIMEOUT_MS = Number(process.env.ORCHESTRATOR_CHAT_TIMEOUT_MS || 90_000);
+const ORCHESTRATOR_CHAT_TIMEOUT_MS = Number(process.env.ORCHESTRATOR_CHAT_TIMEOUT_MS || 300_000);
 
 const MAX_DESCRIPTION_LEN = 10_000;
 const MAX_LIST_ITEMS = 200;

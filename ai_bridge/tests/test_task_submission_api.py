@@ -23,3 +23,12 @@ def test_create_standard_task_with_aliases_and_string_lists():
     assert task.input.description == "Repair auth flow"
     assert task.input.files == ["backend/auth.ts", "backend/session.ts"]
     assert task.input.acceptance_criteria == ["tests pass", "no regressions"]
+
+
+def test_frontend_oneshot_payload_is_standardized():
+    payload = normalize_user_payload({"description": "Generate modern frontend landing with catalog and cart"})
+    assert payload["type"] == "code"
+    assert payload["framework"] == "react"
+    assert payload["frontend_output_root"] == "frontend-react"
+    assert isinstance(payload.get("frontend_schema"), dict)
+    assert "/catalog" in payload["frontend_schema"]["pages"]

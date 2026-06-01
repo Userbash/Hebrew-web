@@ -58,3 +58,14 @@ def test_submit_user_task_uses_orchestrator_as_source_of_truth():
     assert snapshot["submitted_total"] >= 1
     assert snapshot["finished_total"] >= 1
     assert isinstance(snapshot["tasks"], dict)
+
+
+def test_submit_user_task_idempotency_returns_cached_result():
+    from ai_bridge.core.orchestrator import Orchestrator
+
+    orchestrator = Orchestrator()
+    payload = {"type": "plan", "description": "Build frontend page", "session_id": "idem-1"}
+    first = orchestrator.submit_user_task(payload, source="test")
+    second = orchestrator.submit_user_task(payload, source="test")
+    assert first.get("status") == second.get("status")
+    assert isinstance(second, dict)

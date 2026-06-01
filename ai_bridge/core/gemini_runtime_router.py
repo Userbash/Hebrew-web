@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from .gemini_model_registry import GeminiModelRegistry
 from .models import Complexity, Task
 
 
@@ -20,9 +21,11 @@ class GeminiRoutingPlan:
 
 class GeminiRuntimeRouter:
     _session_token_usage: dict[str, int] = {}
+    _session_blocked_models: dict[str, set[str]] = {}
 
     def __init__(self) -> None:
         self.session_budget = self._read_int("GEMINI_SESSION_TOKEN_BUDGET", 200_000)
+        self.registry = GeminiModelRegistry()
 
     @staticmethod
     def _read_int(key: str, default: int) -> int:
@@ -46,15 +49,22 @@ class GeminiRuntimeRouter:
             return 2048
         return 4096
 
-    @staticmethod
-    def _complexity_ordered_models(complexity: Complexity) -> list[str]:
+    def _complexity_ordered_models(self, complexity: Complexity, *, force_refresh: bool = False) -> list[str]:
+        catalog = self.registry.get_catalog(force_refresh=force_refresh)
+        # Prefer stable, currently available models from live API/cache.
+        low = catalog.lite + catalog.flash + catalog.pro
+        medium = catalog.flash + catalog.lite + catalog.pro
+        high = catalog.pro + catalog.flash + catalog.lite
+        low_fb = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
+        med_fb = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.5-pro"]
+        high_fb = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
         if complexity == Complexity.LOW:
-            return ["gemini-2.5-flash-lite", "gemini-3-flash-preview", "gemini-1.5-flash"]
+            return low or low_fb
         if complexity == Complexity.MEDIUM:
-            return ["gemini-3-flash-preview", "gemini-2.0-flash-exp", "gemini-1.5-pro"]
+            return medium or med_fb
         if complexity == Complexity.HIGH:
-            return ["gemini-2.5-pro", "gemini-3-flash-preview", "gemini-1.5-pro"]
-        return ["gemini-3-flash-preview", "gemini-1.5-pro", "gemini-2.0-pro-exp"]
+            return high or high_fb
+        return high or high_fb
 
     @staticmethod
     def _parse_extra_fallbacks() -> list[str]:
@@ -72,9 +82,14 @@ class GeminiRuntimeRouter:
 
         if remaining <= 0 or estimated > remaining * 2:
             # If budget is almost depleted, use only lightweight model.
-            models = ["gemini-2.5-flash-lite"]
+            models = ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
         else:
-            models = self._complexity_ordered_models(complexity)
+            # Before first model call in session, force-refresh catalog from API.
+            first_call = used <= 0
+            models = self._complexity_ordered_models(complexity, force_refresh=first_call)
+
+        blocked = self._session_blocked_models.get(session_id, set())
+        models = [m for m in models if m not in blocked]
 
         extra = self._parse_extra_fallbacks()
         seen: set[str] = set()
@@ -94,3 +109,9 @@ class GeminiRuntimeRouter:
         session_id = task.session_id or "default"
         current = self._session_token_usage.get(session_id, 0)
         self._session_token_usage[session_id] = max(0, current + max(0, consumed_tokens))
+
+    def block_model(self, task: Task, model: str) -> None:
+        session_id = task.session_id or "default"
+        blocked = self._session_blocked_models.setdefault(session_id, set())
+        blocked.add(model)
+

@@ -35,13 +35,13 @@ rm -f .agent/bridge_queue.json
 # 4. Start Core (Daemon mode)
 echo "[*] Starting Orchestrator Core with integrated API..."
 export PYTHONPATH=$PYTHONPATH:.
-python3 ai_bridge/scripts/orchestrator_daemon.py &
+python3 -m ai_bridge.scripts.orchestrator_daemon &
 CORE_PID=$!
 
 echo "[+] Orchestrator is running (PID: $CORE_PID)"
 echo "[+] HTTP API is available at http://localhost:8000/chat"
 echo ""
-echo "You can now run: python3 ai_bridge/scripts/chat_console.py"
+echo "You can now run: python3 -m ai_bridge.scripts.chat_console"
 echo "To stop everything, run: kill $CORE_PID"
 
 # Keep the script alive if not running in background

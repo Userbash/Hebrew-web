@@ -15,4 +15,4 @@ export AI_BRIDGE_CODEX_ECONOMY_MODE=${AI_BRIDGE_CODEX_ECONOMY_MODE:-true}
 export AI_BRIDGE_POLICY_MODE=${AI_BRIDGE_POLICY_MODE:-legacy}
 export PYTHONPATH=.
 
-exec .venv_ai_bridge/bin/python ai_bridge/scripts/orchestrator_daemon.py
+exec .venv_ai_bridge/bin/python -m ai_bridge.scripts.orchestrator_daemon

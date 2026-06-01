@@ -134,6 +134,8 @@ services:
       context: .
       dockerfile: ./ai_bridge/Dockerfile
     container_name: hebrew_ai_orchestrator
+    env_file:
+      - .env.gemini.local
     working_dir: /app
     environment:
       PYTHONPATH: /app

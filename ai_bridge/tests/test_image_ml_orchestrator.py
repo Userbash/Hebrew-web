@@ -19,4 +19,4 @@ def test_training_schedule_validation():
 def test_frontend_module_registry_supports_common_frameworks():
     modules = FrontendFrameworkModules()
     assert modules.get("react").recognizer_api == "/api/ml/recognize"
-    assert set(modules.supported()) == {"angular", "react", "svelte", "vue"}
+    assert {"react", "vue", "angular", "svelte", "nextjs", "nuxt", "remix", "astro"}.issubset(set(modules.supported()))

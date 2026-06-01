@@ -62,7 +62,7 @@ class ModelAvailability:
 
     @staticmethod
     def _probe_timeout_sec() -> float:
-        raw = os.getenv("AI_BRIDGE_PROVIDER_PROBE_TIMEOUT_SEC", "5").strip()
+        raw = os.getenv("AI_BRIDGE_PROVIDER_PROBE_TIMEOUT_SEC", "20").strip()
         try:
             return max(1.0, float(raw))
         except ValueError:
@@ -174,7 +174,7 @@ class ModelAvailability:
             return self._cache(health)
 
         model = os.getenv("GEMINI_PROBE_MODEL", "gemini-2.5-flash-lite")
-        cmd = ["npx", "@google/gemini-cli", "--prompt", "healthcheck: respond with ok", "--model", model, "--output-format", "text"]
+        cmd = ["npx", "@google/gemini-cli", "--prompt", "healthcheck: respond with ok", "--model", model, "--output-format", "text", "--skip-trust"]
         diagnostics["model_probe"] = {"command": "npx @google/gemini-cli", "model": model}
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._probe_timeout_sec())

@@ -93,6 +93,7 @@ class ExternalAIBridge:
                 model,
                 "--output-format",
                 "text",
+                "--skip-trust",
             ]
 
             def _run_once() -> subprocess.CompletedProcess[str]:
@@ -138,6 +139,8 @@ class ExternalAIBridge:
                     return BridgeExecResult(False, "", f"timeout: {exc}", "gemini-cli", model, attempts, error_type="sdk_hang")
                 except RuntimeError as exc:
                     last_error = str(exc)
+                    if model and (self._is_capacity_error(last_error) or self._is_token_error(last_error) or self.classify_error(last_error) in {"quota_exhaustion", "auth_fail"}):
+                        self.router.block_model(task, model)
                 except Exception as exc:
                     return BridgeExecResult(False, "", f"execution_error: {exc}", "gemini-cli", model, attempts, error_type=self.classify_error(str(exc)))
                 continue
@@ -158,11 +161,14 @@ class ExternalAIBridge:
 
                 stderr = (proc.stderr or "").strip()
                 last_error = stderr or f"non-zero exit code: {proc.returncode}"
-                if (self._is_capacity_error(last_error) or self._is_token_error(last_error)) and attempt < retries:
+                classified = self.classify_error(last_error)
+                retryable = self._is_capacity_error(last_error) or self._is_token_error(last_error) or classified in {"quota_exhaustion", "auth_fail"}
+                if retryable and attempt < retries:
                     time.sleep(self._backoff_sec(attempt))
                     continue
-                if not (self._is_capacity_error(last_error) or self._is_token_error(last_error)):
-                    return BridgeExecResult(False, "", last_error, "gemini-cli", model, attempts, error_type=self.classify_error(last_error))
-                break
+                if retryable:
+                    self.router.block_model(task, model)
+                    break
+                return BridgeExecResult(False, "", last_error, "gemini-cli", model, attempts, error_type=classified)
 
         return BridgeExecResult(False, "", f"routing_exhausted: {last_error}", "gemini-cli", plan.models[-1], attempts, error_type=self.classify_error(last_error))

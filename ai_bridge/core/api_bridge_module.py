@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -41,7 +42,17 @@ class APIBridgeModule:
 
     def on_load(self, api: KernelAPI) -> None:
         self._api = api
+        enabled = os.getenv("AI_BRIDGE_API_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+        self.host = os.getenv("AI_BRIDGE_API_HOST", self.host)
+        try:
+            self.port = int(os.getenv("AI_BRIDGE_API_PORT", str(self.port)))
+        except ValueError:
+            self.port = 8000
+
         self._api.log("info", f"[API] {self.name} module loading...")
+        if not enabled:
+            self._api.log("info", "[API] api_bridge disabled by AI_BRIDGE_API_ENABLED")
+            return
 
         # We run the FastAPI server in a separate thread to not block the Orchestrator
         self._server_thread = threading.Thread(target=self._run_server, daemon=True)

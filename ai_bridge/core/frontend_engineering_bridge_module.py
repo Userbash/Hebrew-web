@@ -59,6 +59,15 @@ class FrontendEngineeringBridgeModule(KernelModule):
                 "recognizer_api": mod.recognizer_api,
                 "training_api": mod.training_api,
                 "enhancement_api": mod.enhancement_api,
+                "recommended_stack": mod.recommended_stack,
+            },
+            "libraries": {
+                "ui": ["radix-ui", "shadcn-ui", "lucide-react", "framer-motion"],
+                "state_data": ["tanstack-query", "zustand", "redux-toolkit"],
+                "forms_validation": ["react-hook-form", "zod", "yup"],
+                "styles": ["tailwindcss", "postcss", "sass"],
+                "backend_fullstack": ["fastapi", "prisma", "supabase", "stripe", "redis", "celery"],
+                "content_automation": ["markdown", "mdx", "headless-cms"],
             },
             "subsystems": [
                 "design_analysis",
@@ -69,6 +78,8 @@ class FrontendEngineeringBridgeModule(KernelModule):
                 "ui_coding_assist",
                 "frontend_scaffold_generator",
                 "component_codegen_module",
+                "content_seed",
+                "fullstack_delivery",
             ],
             "quality_gate": {
                 "min_score": self._protocol.min_quality_score if self._protocol else 85,
@@ -89,12 +100,47 @@ class FrontendEngineeringBridgeModule(KernelModule):
         if hasattr(result, "output") and isinstance(getattr(result, "output"), dict):
             summary = str(getattr(result, "output").get("summary", ""))
         score = 0.85 if "unique" in summary.lower() or "brand" in summary.lower() else 0.65
+
+        generated: dict[str, Any] = {"status": "skipped"}
+        if self._should_codegen(task) and self._scaffold and self._codegen:
+            target_root = str(context.get("frontend_output_root") or "frontend-react")
+            app_name = str(context.get("frontend_app_name") or "frontend-app")
+            scaffold = self._scaffold.generate(target_root, app_name=app_name)
+            schema = context.get("frontend_schema") if isinstance(context.get("frontend_schema"), dict) else self._default_schema()
+            codegen = self._codegen.generate(target_root, schema)
+            content_seed = {
+                "headline": "Modern language learning without overload",
+                "subheadline": "Catalog → Course → Cart → Checkout → Lessons",
+                "cta_primary": "Browse catalog",
+                "cta_secondary": "Open dashboard",
+            }
+            generated = {"status": "generated", "root": target_root, "scaffold": scaffold, "codegen": codegen, "content_seed": content_seed}
+            context["frontend_generated"] = generated
+
         self._api.get_memory().set(  # type: ignore[call-arg]
             MemoryScope.CAPABILITY,
             "frontend_bridge",
             f"last:{framework}",
-            {"summary": summary[:500], "score": score},
+            {"summary": summary[:500], "score": score, "generated": generated},
         )
+
+
+    def _should_codegen(self, task: Any) -> bool:
+        t = str(getattr(getattr(task, "type", None), "value", getattr(task, "type", ""))).lower()
+        text = str(getattr(getattr(task, "input", None), "raw", "")).lower()
+        return t in {"code", "plan", "docs"} and any(k in text for k in ["frontend", "ui", "landing", "page", "catalog", "react", "design"])
+
+    @staticmethod
+    def _default_schema() -> dict[str, Any]:
+        return {
+            "components": [
+                {"name": "HeroSection"},
+                {"name": "CategorySidebar"},
+                {"name": "CourseCard"},
+                {"name": "FeatureGrid"},
+                {"name": "FooterNav"},
+            ]
+        }
 
     def finalize(self) -> dict[str, Any]:
         frameworks = self._frameworks.supported() if self._frameworks else []
@@ -102,6 +148,6 @@ class FrontendEngineeringBridgeModule(KernelModule):
             "status": "active",
             "frameworks": frameworks,
             "bridge_mode": "kernel_first",
-            "subsystems": 8,
+            "subsystems": 10,
             "quality_gate_min": self._protocol.min_quality_score if self._protocol else 85,
         }
