@@ -5,9 +5,9 @@ import os
 from datetime import datetime, UTC
 
 from .agent_registry import AgentRegistry
-from .load_balancer import LoadBalancer
+from .load_balancer import LoadBalancer, UNROUTABLE_AGENT_STATUSES, is_agent_routable
 from .model_selector import evaluate_risk_context
-from .models import AgentRecord, AgentStatus, ExecutionPlan, Priority, Task, TaskAcceptance, TaskStatus, TaskType, TaskEnvelope
+from .models import AgentRecord, ExecutionPlan, Priority, Task, TaskAcceptance, TaskStatus, TaskType, TaskEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class TaskRouter:
     def route_envelope(self, envelope: TaskEnvelope) -> TaskAcceptance:
         """Route a network-like TaskEnvelope based on policy, QoS, and risk."""
         capability = envelope.target_capability
-        candidates = self._candidate_agents(capability)
+        candidates = [agent for agent in self._candidate_agents(capability) if is_agent_routable(agent, envelope.priority)]
 
         if not candidates:
             return TaskAcceptance(envelope.task_id, TaskStatus.REJECTED, None, "high", f"No available agent for capability {capability}")
@@ -74,14 +74,14 @@ class TaskRouter:
 
     def route(self, task: Task) -> TaskAcceptance:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
-        candidates = self._candidate_agents(capability)
+        candidates = [agent for agent in self._candidate_agents(capability) if is_agent_routable(agent, task.priority)]
 
         if not candidates:
             return TaskAcceptance(task.task_id, TaskStatus.REJECTED, None, self.estimate_complexity(task), f"No available agent for capability {capability}")
 
         chosen_pool = self._apply_economy_policy(task, candidates)
 
-        agent = self.load_balancer.choose(chosen_pool, capability)
+        agent = self.load_balancer.choose(chosen_pool, capability, task.priority)
         if not agent:
             return TaskAcceptance(task.task_id, TaskStatus.REJECTED, None, self.estimate_complexity(task), f"No available agent for capability {capability}")
 
@@ -92,7 +92,7 @@ class TaskRouter:
         return [
             agent
             for agent in self.registry.list_agents()
-            if capability in agent.capabilities and agent.status not in {AgentStatus.OFFLINE, AgentStatus.DISABLED, AgentStatus.FAILED}
+            if capability in agent.capabilities and agent.status not in UNROUTABLE_AGENT_STATUSES
         ]
 
     def _apply_economy_policy_envelope(self, envelope: TaskEnvelope, candidates: list[AgentRecord]) -> list[AgentRecord]:

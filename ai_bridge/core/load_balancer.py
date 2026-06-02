@@ -2,15 +2,44 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from .models import AgentRecord, AgentStatus
+from .models import AgentRecord, AgentStatus, Priority
+
+
+UNROUTABLE_AGENT_STATUSES = {
+    AgentStatus.OFFLINE,
+    AgentStatus.DISABLED,
+    AgentStatus.FAILED,
+    AgentStatus.OVERLOADED,
+}
+
+
+def agent_load_ratio(agent: AgentRecord) -> float:
+    limit = float(agent.limits.get("max_active_tasks", 5) or 5)
+    return (agent.metrics.active_tasks + agent.metrics.queue_depth) / limit
+
+
+def agent_accepts_task_priority(agent: AgentRecord, priority: Priority | str | None) -> bool:
+    if agent.status == AgentStatus.BUSY:
+        return priority == Priority.LOW or priority == Priority.LOW.value
+    return True
+
+
+def is_agent_routable(agent: AgentRecord, priority: Priority | str | None = None) -> bool:
+    if agent.status in UNROUTABLE_AGENT_STATUSES:
+        return False
+    if agent_load_ratio(agent) > 1:
+        agent.status = AgentStatus.OVERLOADED
+        agent.metrics.status = agent.status
+        return False
+    return agent_accepts_task_priority(agent, priority)
 
 
 class LoadBalancer:
     def __init__(self, overload_threshold: float = 0.85) -> None:
         self.overload_threshold = overload_threshold
 
-    def score(self, agent: AgentRecord, capability: str) -> float:
-        if agent.status in {AgentStatus.OFFLINE, AgentStatus.DISABLED, AgentStatus.FAILED}:
+    def score(self, agent: AgentRecord, capability: str, priority: Priority | str | None = None) -> float:
+        if not is_agent_routable(agent, priority):
             return float("-inf")
         
         # Calibration formula (Section 6): 
@@ -38,14 +67,14 @@ class LoadBalancer:
             - overload_penalty
         ) * agent.metrics.priority_score
 
-    def choose(self, agents: list[AgentRecord], capability: str) -> AgentRecord | None:
+    def choose(self, agents: list[AgentRecord], capability: str, priority: Priority | str | None = None) -> AgentRecord | None:
         candidates = [
             agent for agent in agents
-            if capability in agent.capabilities and agent.status not in {AgentStatus.OFFLINE, AgentStatus.DISABLED, AgentStatus.FAILED}
+            if capability in agent.capabilities and is_agent_routable(agent, priority)
         ]
         if not candidates:
             return None
-        return max(candidates, key=lambda agent: self.score(agent, capability))
+        return max(candidates, key=lambda agent: self.score(agent, capability, priority))
 
     def _availability(self, agent: AgentRecord) -> float:
         if agent.status in {AgentStatus.READY, AgentStatus.IDLE}:
@@ -74,8 +103,7 @@ class LoadBalancer:
         return max(0.0, min(1.0, 1.0 / (1.0 + cost)))
 
     def _overload_penalty(self, agent: AgentRecord) -> float:
-        limit = float(agent.limits.get("max_active_tasks", 5) or 5)
-        load = (agent.metrics.active_tasks + agent.metrics.queue_depth) / limit
+        load = agent_load_ratio(agent)
         if load > 1:
             agent.status = AgentStatus.OVERLOADED
             agent.metrics.status = agent.status

@@ -15,7 +15,7 @@ from .feedback_loop import FeedbackLoop
 from .healthcheck import HealthChecker
 from .host_bridge import HostBridge
 from .kpi import KPIEvaluator
-from .load_balancer import LoadBalancer
+from .load_balancer import LoadBalancer, is_agent_routable
 from .metrics import MetricsCollector
 from .message_bus import MessageBus
 from .model_selector import ModelSelector
@@ -45,6 +45,8 @@ from .ui_design_system_module import UIDesignSystemModule
 from .ui_anti_template_module import UIAntiTemplateModule
 from .frontend_engineering_bridge_module import FrontendEngineeringBridgeModule
 from .autodev_pipeline_module import AutodevPipelineModule
+from .local_llm_bridge import LocalLLMBridge
+from .local_llm_module import LocalLLMModule
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -81,6 +83,30 @@ class Orchestrator:
     def unload_module(self, name: str) -> None:
         self.module_manager.unload(name)
 
+    @staticmethod
+    def _local_llm_autostart_enabled() -> bool:
+        return os.getenv("AI_BRIDGE_AUTOSTART_LOCAL_LLM", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _autostart_local_llm(self) -> None:
+        if os.getenv("TESTING") == "true" or not self._local_llm_autostart_enabled():
+            return
+
+        module = self.module_manager.get_module("local_llm")
+        if not isinstance(module, LocalLLMModule):
+            self.log("warning", "[LOCAL_LLM] local_llm module is not registered; skipping autostart.")
+            return
+
+        try:
+            ready = self.local_llm_bridge.ensure_ready(module.model_name)
+        except Exception as exc:
+            self.log("warning", f"[LOCAL_LLM] Autostart failed: {exc}")
+            return
+
+        if ready:
+            self.log("info", f"[LOCAL_LLM] Autostart complete for {module.model_name}.")
+        else:
+            self.log("warning", f"[LOCAL_LLM] Autostart could not confirm readiness for {module.model_name}.")
+
     def __init__(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents: dict[str, BaseAgent] = {}
         self.results: dict[str, AgentResult] = {}
@@ -112,6 +138,7 @@ class Orchestrator:
         self.memory_consolidator = components.memory_consolidator
         self.provider_budget_router = ProviderBudgetRouter()
         self.kpi_events = KPIEventLogger.from_env()
+        self.local_llm_bridge = LocalLLMBridge(host_bridge=self.host_bridge)
         
         self.module_manager = KernelModuleManager()
         self.module_manager.set_api(self)
@@ -131,6 +158,7 @@ class Orchestrator:
         self.module_manager.register(UIAntiTemplateModule())
         self.module_manager.register(FrontendEngineeringBridgeModule())
         self.module_manager.register(AutodevPipelineModule())
+        self.module_manager.register(LocalLLMModule())
         
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
@@ -148,6 +176,11 @@ class Orchestrator:
         self.module_manager.load("ui_anti_template")
         self.module_manager.load("frontend_engineering_bridge")
         self.module_manager.load("autodev_pipeline")
+        self._autostart_local_llm()
+        
+        # Load local_llm only if not in testing environment
+        if os.getenv("TESTING") != "true":
+            self.module_manager.load("local_llm")
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents = {}
@@ -274,7 +307,7 @@ class Orchestrator:
             return "google"
         return p
 
-    def _select_agent_by_provider_preference(self, capability: str, providers: list[str], exclude: set[str] | None = None) -> str | None:
+    def _select_agent_by_provider_preference(self, capability: str, providers: list[str], exclude: set[str] | None = None, priority: Priority | str | None = None) -> str | None:
         skip = exclude or set()
         normalized = [self._normalize_provider(p) for p in providers]
         for provider in normalized:
@@ -285,7 +318,7 @@ class Orchestrator:
                     continue
                 if self._normalize_provider(record.provider) != provider:
                     continue
-                if record.status.value in {"offline", "disabled", "failed"}:
+                if not is_agent_routable(record, priority):
                     continue
                 if record.id in self.local_agents:
                     return record.id
@@ -338,7 +371,7 @@ class Orchestrator:
                 context[key] = value
         return context
 
-    def _find_fallback_agent(self, capability: str, providers: list[str], exclude: set[str]) -> str | None:
+    def _find_fallback_agent(self, capability: str, providers: list[str], exclude: set[str], priority: Priority | str | None = None) -> str | None:
         for provider in providers:
             for record in self.registry.list_agents():
                 if record.id in exclude:
@@ -347,7 +380,7 @@ class Orchestrator:
                     continue
                 if capability not in record.capabilities:
                     continue
-                if record.status.value in {"offline", "disabled", "failed"}:
+                if not is_agent_routable(record, priority):
                     continue
                 if record.id in self.local_agents:
                     return record.id
@@ -384,7 +417,7 @@ class Orchestrator:
             self.console.emit("SCHEDULER", f"P2P route allowed: {decision.reason}")
 
         preferred_providers = self.provider_budget_router.preferred_providers(task, choice)
-        preferred_agent_id = self._select_agent_by_provider_preference(capability, preferred_providers)
+        preferred_agent_id = self._select_agent_by_provider_preference(capability, preferred_providers, priority=task.priority)
         if preferred_agent_id:
             acceptance = TaskAcceptance(task.task_id, TaskStatus.ACCEPTED, preferred_agent_id, self.router.estimate_complexity(task), "Task accepted (provider budget routing)")
         else:
@@ -448,7 +481,7 @@ class Orchestrator:
             selected_fallback_health = None
 
             for candidate_provider in fallback_chain:
-                fallback_agent_id = self._select_agent_by_provider_preference(capability, [candidate_provider], exclude={agent_id})
+                fallback_agent_id = self._select_agent_by_provider_preference(capability, [candidate_provider], exclude={agent_id}, priority=task.priority)
                 if not fallback_agent_id:
                     continue
                 fallback_record = self.registry.get(fallback_agent_id)
@@ -545,7 +578,7 @@ class Orchestrator:
                 if should_fallback:
                     fallback_chain = self.provider_budget_router.preferred_providers(task, choice)
                     # Exclude the failed agent
-                    fallback_agent_id = self._select_agent_by_provider_preference(capability, fallback_chain, exclude={agent_id})
+                    fallback_agent_id = self._select_agent_by_provider_preference(capability, fallback_chain, exclude={agent_id}, priority=task.priority)
                     if fallback_agent_id:
                         self.console.emit("FALLBACK", f"task_id={task.task_id} from={agent_id} to={fallback_agent_id} reason={classified or 'failure'}")
                         fallback_count += 1

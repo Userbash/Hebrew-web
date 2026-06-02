@@ -35,6 +35,7 @@ rm -f .agent/bridge_queue.json
 # 4. Start Core (Daemon mode)
 echo "[*] Starting Orchestrator Core with integrated API..."
 export PYTHONPATH=$PYTHONPATH:.
+export AI_BRIDGE_AUTOSTART_LOCAL_LLM=true
 python3 -m ai_bridge.scripts.orchestrator_daemon &
 CORE_PID=$!
 
