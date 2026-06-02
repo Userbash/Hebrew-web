@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass
 
 from .models import Complexity, Priority, Task, TaskType
+from .openai_runtime_router import OpenAIRuntimeRouter
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class ModelChoice:
 class ModelSelector:
     def __init__(self) -> None:
         self.policy_mode = os.getenv("AI_BRIDGE_POLICY_MODE", "legacy").strip().lower()
+        self.openai_router = OpenAIRuntimeRouter()
 
     def classify(self, task: Task) -> Complexity:
         if task.complexity:
@@ -52,12 +54,22 @@ class ModelSelector:
             return Complexity.MEDIUM
         return Complexity.LOW
 
+    def _openai_choice(self, task: Task, complexity: Complexity, secondary_review: bool, reason: str, fallback_model: str) -> ModelChoice:
+        if not OpenAIRuntimeRouter.enabled():
+            return ModelChoice(fallback_model, "openai", complexity, secondary_review, reason=reason)
+        if not os.getenv("OPENAI_API_KEY", "").strip():
+            if os.getenv("MISTRAL_API_KEY", "").strip():
+                return ModelChoice("mistral-large-latest", "mistral", complexity, secondary_review, reason=f"openai_auto_no_key_mistral_fallback:{reason}")
+            return ModelChoice("gemini-2.5-pro", "google", complexity, secondary_review, reason=f"openai_auto_no_key_gemini_fallback:{reason}")
+        plan = self.openai_router.build_plan(task, task.input.description)
+        return ModelChoice(plan.models[0], "openai", complexity, secondary_review, reason=f"openai_auto_{plan.reason}:{reason}")
+
     def _select_legacy(self, task: Task, complexity: Complexity) -> ModelChoice:
         if complexity == Complexity.CRITICAL:
-            return ModelChoice("gpt-senior-secure", "openai", complexity, True, reason="critical_risk_openai_escalation")
+            return self._openai_choice(task, complexity, True, "critical_risk_openai_escalation", "gpt-senior-secure")
         if complexity == Complexity.HIGH:
             if task.type in {TaskType.PLAN, TaskType.REVIEW}:
-                return ModelChoice("gpt-coding-large", "openai", complexity, True, reason="high_complexity_openai_escalation")
+                return self._openai_choice(task, complexity, True, "high_complexity_openai_escalation", "gpt-coding-large")
             return ModelChoice("gemini-2.5-pro", "google", complexity, True, reason="high_reasoning_gemini_pro")
         if complexity == Complexity.LOW:
             return ModelChoice("local-small", "local", complexity, False, reason="low_simple_local_routing")
@@ -71,7 +83,7 @@ class ModelSelector:
     def _select_strict(self, task: Task, complexity: Complexity) -> ModelChoice:
         # strict minimizes OpenAI except explicit critical/high-risk.
         if complexity == Complexity.CRITICAL:
-            return ModelChoice("gpt-senior-secure", "openai", complexity, True, reason="critical_openai_only")
+            return self._openai_choice(task, complexity, True, "critical_openai_only", "gpt-senior-secure")
         if complexity == Complexity.HIGH:
             if task.type in {TaskType.PLAN, TaskType.REVIEW}:
                 return ModelChoice("gemini-2.5-pro", "google", complexity, True, reason="high_plan_review_gemini_pro")

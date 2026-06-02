@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from .base_agent import BaseAgent
 from ai_bridge.core.env_loader import load_env_file
+from ai_bridge.core.openai_runtime_router import OpenAIRuntimeRouter
 from ai_bridge.core.models import AgentHealth, AgentResult, AgentStatus, Task, TaskStatus
 
 logger = logging.getLogger("codex_agent")
@@ -28,6 +29,7 @@ class CodexAgent(BaseAgent):
         self.mistral_key = os.getenv("MISTRAL_API_KEY")
         self._provider = "unknown"
         self._model = "unknown"
+        self.openai_router = OpenAIRuntimeRouter()
         self._configure()
 
     def _configure(self) -> None:
@@ -90,13 +92,24 @@ class CodexAgent(BaseAgent):
 
     def _run_openai(self, task: Task, prompt: str) -> AgentResult:
         client = OpenAI(api_key=self.openai_key)
+        model = task.assigned_model or self._model
+        if OpenAIRuntimeRouter.enabled():
+            model = self.openai_router.select_model(task, prompt)
+            task.assigned_model = model
         response = client.chat.completions.create(
-            model=self._model,
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
         )
         content = response.choices[0].message.content or ""
-        return self.result(task, content, TaskStatus.DONE, 0.9)
+        usage = getattr(response, "usage", None)
+        total_tokens = int(getattr(usage, "total_tokens", 0) or 0) if usage else 0
+        if total_tokens:
+            self.openai_router.register_usage(task, total_tokens)
+        result = self.result(task, content, TaskStatus.DONE, 0.9)
+        result.provider = "openai"
+        result.model_name = model
+        return result
 
     def _run_mistral(self, task: Task, prompt: str) -> AgentResult:
         endpoint = "https://api.mistral.ai/v1/chat/completions"

@@ -69,8 +69,11 @@ class ProviderBudgetRouter:
         is_high_risk = task.priority in {Priority.HIGH, Priority.CRITICAL} or choice_complexity in {Complexity.HIGH, Complexity.CRITICAL}
 
         if is_critical:
-            # Security-critical first on openai, then resilient fallbacks.
-            base = ["openai", "google", "mistral", "local"]
+            # Security-critical uses OpenAI first when selected/available; otherwise honor the selector's ready fallback.
+            if preferred == "openai":
+                base = ["openai", "google", "mistral", "local"]
+            else:
+                base = [preferred, "mistral", "google", "local", "openai"]
         elif self.policy_mode == "strict":
             # Strict cost-optimization: defer openai to the end for non-critical.
             if task.type in {TaskType.CODE, TaskType.TEST, TaskType.FIX}:

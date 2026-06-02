@@ -124,11 +124,14 @@ python3 -m pytest ai_bridge/tests
 ## Documentation
 
 See `docs/` for:
-- architecture,
+- architecture and runtime flows,
+- AI Bridge routing and provider policy,
 - API references,
 - operations runbooks,
 - migration and release policies,
 - RBAC and security governance.
+
+The current AI Bridge routing guide is `docs/AI_BRIDGE_RUNTIME_ROUTING.md`.
 
 ## License
 

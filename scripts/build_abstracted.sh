@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-BRIDGE_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bridge/exec.sh"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BRIDGE_CMD="$PROJECT_ROOT/ai_bridge/scripts/bridge/exec.sh"
 
 BACKEND_DIR="$PROJECT_ROOT/backend"
 FRONTEND_DIR="$PROJECT_ROOT/frontend-react"
@@ -29,6 +29,11 @@ fi
 
 if [[ ! -f "$FRONTEND_DIR/Dockerfile" ]]; then
   echo "[ERROR] Frontend Dockerfile not found: $FRONTEND_DIR/Dockerfile"
+  exit 1
+fi
+
+if [[ ! -x "$BRIDGE_CMD" ]]; then
+  echo "[ERROR] BridgeOS exec script not found or not executable: $BRIDGE_CMD"
   exit 1
 fi
 

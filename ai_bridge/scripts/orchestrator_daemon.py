@@ -37,12 +37,16 @@ async def main():
     # Prefer mistral for codex-main when MISTRAL key exists (cost-saving mode).
     mistral_key = (os.getenv("MISTRAL_API_KEY") or "").strip()
     openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if mistral_key:
+    openai_auto = os.getenv("AI_BRIDGE_OPENAI_AUTO_MODEL", "true").strip().lower() in {"1", "true", "yes", "on"}
+    if openai_auto and openai_key:
+        codex_provider = "openai"
+        codex_model = os.getenv("CODEX_OPENAI_MODEL", "gpt-5-mini")
+    elif mistral_key:
         codex_provider = "mistral"
         codex_model = "mistral-large-latest"
     elif openai_key:
         codex_provider = "openai"
-        codex_model = "gpt-coding-large"
+        codex_model = os.getenv("CODEX_OPENAI_MODEL", "gpt-coding-large")
     else:
         codex_provider = "local"
         codex_model = "local-small"

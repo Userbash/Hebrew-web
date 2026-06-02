@@ -4,7 +4,9 @@
 
 - `ARCHITECTURE.md` - system architecture and runtime flows
 - `PROJECT_FULL_DOCUMENTATION_EN.md` - full project deep-dive
-- `AI_BRIDGE_ARCHITECTURE.md` - AI Bridge-specific architecture
+- `AI_BRIDGE_RUNTIME_ROUTING.md` - current AI Bridge model/provider routing rules
+- `AI_BRIDGE_ARCHITECTURE.md` - AI Bridge component overview and wiring
+- `AI_ORCHESTRATOR_CORE.md` - deeper technical reference, kept for legacy detail
 
 ## Governance and Process
 
@@ -46,6 +48,7 @@
 
 - `AI_BRIDGE_HARDENING_BACKLOG.md` - micro-task backlog with owners, dependencies, and DoD
 - `AI_BRIDGE_EXECUTION_PLAN_R1_R4.md` - encapsulated by-agent plan and decapsulated release execution model
+- `GEMINI_AUTO_ROUTING_MODULE_PLAN.md` - earlier Gemini routing plan, now superseded by the shared runtime routing doc
 
 ## Session Memory
 

@@ -1,5 +1,9 @@
 # Gemini Auto Routing Module Plan
 
+Status: historical implementation plan for the Gemini side of runtime routing.
+The current shared routing rules for OpenAI, Gemini, Mistral, and local
+fallback live in `AI_BRIDGE_RUNTIME_ROUTING.md`.
+
 ## Decomposition (Micro Tasks)
 
 1. Add runtime router module for Gemini model selection by task complexity.

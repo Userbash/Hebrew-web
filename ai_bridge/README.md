@@ -223,20 +223,30 @@ If KPI drops below the configured threshold, Codex reduces the agent priority sc
 
 ## Model Selection
 
-`ModelSelector` maps task complexity to models:
+`ModelSelector` keeps the cheap path cheap and only opens the expensive path
+when the task actually needs it. The router now works with provider policy, so
+the selected model depends on task complexity, available providers, and the
+session budget.
 
-| Complexity | Example | Model |
+| Complexity | Typical work | Default direction |
 | --- | --- | --- |
-| Low | docs, formatting, small fixes | `local-small` |
-| Medium | module, tests, API, refactor | `gpt-coding-standard` |
-| High | architecture, distributed debugging | `gpt-coding-large` |
-| Critical | security, secrets, production, migrations | `gpt-senior-secure` |
+| Low | docs, formatting, small fixes | `local-small` or a light local provider |
+| Medium | module work, tests, API changes, refactors | `mistral-small-or-medium`, with Gemini for docs/research |
+| High | architecture, larger debugging, cross-module work | stronger provider choice, with OpenAI only when auto-routing is enabled |
+| Critical | security, secrets, production, migrations | strongest available provider, then fallback if OpenAI is not configured |
 
 Critical tasks should run through:
 
 ```text
-planner -> senior codex -> reviewer -> tester -> security reviewer
+planner -> codex -> reviewer -> tester -> security reviewer
 ```
+
+### OpenAI Auto-Routing
+
+If `AI_BRIDGE_OPENAI_AUTO_MODEL=true`, the runtime checks `OPENAI_API_KEY`,
+discovers live models through `/v1/models`, and applies
+`OPENAI_SESSION_TOKEN_BUDGET` before it picks a heavier model. The first task
+in a session refreshes the catalog; later tasks can reuse the cache.
 
 ## Visible User Console
 
@@ -257,7 +267,7 @@ It can also render per-agent status:
 Agent: codex-main
 Status: busy
 Task: creating module load_balancer.py
-Model: gpt-coding-large
+Model: selected-per-task
 Progress: 65%
 Current stage: writing code
 Errors: none

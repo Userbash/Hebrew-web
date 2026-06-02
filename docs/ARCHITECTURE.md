@@ -22,7 +22,8 @@ Hebrew AI Platform is a multi-service learning platform composed of:
 - `ai_bridge` decomposes root tasks into DAG-like atomic tasks.
 - Routing is capability-driven; model selection is risk/complexity-aware.
 - Quality gates, feedback loops, and result merging drive final output quality.
-- For deep technical details, see [AI Orchestrator: Core Technical Reference](./AI_ORCHESTRATOR_CORE.md).
+- For current model/provider routing, see [AI Bridge Runtime Routing](./AI_BRIDGE_RUNTIME_ROUTING.md).
+- For deeper technical background, see [AI Orchestrator: Core Technical Reference](./AI_ORCHESTRATOR_CORE.md).
 
 4. Data and State Layer
 - PostgreSQL: primary persistence and relational constraints.

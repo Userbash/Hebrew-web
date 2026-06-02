@@ -136,8 +136,15 @@ File: `ai_bridge/core/orchestrator.py`
 
 ### 7.2 Routing and model selection
 - `core/task_router.py` — selects agents by capability.
-- `core/model_selector.py` — selects model by task complexity/risk.
+- `core/model_selector.py` — selects the route by task complexity and risk.
+- `core/openai_model_registry.py` — fetches and caches the live OpenAI model list when auto-routing is enabled.
+- `core/openai_runtime_router.py` — builds the per-task OpenAI model plan and respects the session token budget.
+- `core/provider_budget_router.py` — keeps the task on cheaper Mistral/Gemini/local paths when OpenAI is absent or not worth the cost.
 - `core/smart_scheduler.py` — decides P2P vs orchestrator route.
+
+The current runtime does not rely on one fixed OpenAI model name. It prefers
+the live account model list, then falls back to the configured provider chain
+when OpenAI is not available.
 
 ### 7.3 Execution protocol
 (commit 2026-05-23)

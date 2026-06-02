@@ -1,72 +1,81 @@
-# AI Orchestrator: Core Technical Reference
+# AI Orchestrator Core
 
-This document serves as the definitive guide to the internal mechanics, component architecture, and operational logic of the AI Orchestrator Core.
+This is the deeper technical reference for the orchestration runtime. The
+current provider and model routing policy is documented in
+`AI_BRIDGE_RUNTIME_ROUTING.md`.
 
-## 1. Design Philosophy
-The system is built on a **Modular Kernel** architecture. The `Orchestrator` acts as the central bus, while specialized logic is offloaded to independent modules and agents. Reliability is enforced through a multi-stage pipeline: **Intake -> Decomposition -> Routing -> Execution -> Validation -> Consolidation**.
+## Design approach
 
-## 2. Core Component Directory
+The runtime is built around a modular orchestrator. The orchestrator handles
+intake, decomposition, routing, execution, validation, and consolidation.
+Specialized modules own the details so the core flow stays predictable.
+
+## Core components
 
 ### Orchestrator (`core/orchestrator.py`)
-The primary runtime engine. It initializes the component tree and orchestrates the execution of both atomic tasks and complex task graphs (DAGs).
-- **`run_task(task)`**: The atomic execution unit. Handles pre-flight checks, model selection, routing to a specific agent, execution, quality analysis, and potential auto-fix loops.
-- **`run(root_task)`**: The entry point for complex operations. Decomposes the root goal and executes the resulting dependency graph, ensuring tasks run in the correct order.
-- **`submit_user_task(payload)`**: Normalizes raw user input into a formal `Task` object before triggering the execution pipeline.
+
+- `run_task(task)` handles the full single-task flow from preflight to result.
+- `run(root_task)` executes a decomposed task graph in dependency order.
+- `submit_user_task(payload)` turns raw user input into a `Task`.
 
 ### ModelSelector (`core/model_selector.py`)
-The brain behind model routing. It analyzes task requirements against a set of heuristic rules and risk markers.
-- **`classify(task)`**: Categorizes tasks into `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL` complexity. It flags tasks involving security, database migrations, or payments as high-risk.
-- **`select(task)`**: Uses a weighted scoring algorithm to pick the best model/provider. Factors include capability match (e.g., Codestral for coding), historical reliability, and latency.
 
-### HybridMemory (`core/hybrid_memory.py`)
-A dual-layer memory system providing low-latency access and long-term persistence.
-- **Hot Layer**: In-memory cache for high-frequency access during a session.
-- **Persistent Layer**: Synchronous file-based storage ensuring data survives process restarts.
-- **`soft_flush()`**: Synchronizes the hot layer with persistent storage.
-- **Maintenance Loop**: A background task that periodically evicts stale data based on a recency/importance score.
+- classifies work into `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`;
+- uses task shape, risk, and provider policy to pick the route;
+- now works together with the OpenAI runtime router when auto-routing is on.
 
-### TaskRouter & SmartScheduler (`core/task_router.py`, `core/smart_scheduler.py`)
-Handles the assignment of tasks to specific agent instances.
-- **Economy Policy**: Prevents over-usage of expensive models (like GPT-4) for low-complexity tasks.
-- **Routing**: Matches required capabilities (code, test, review) to available agents in the `AgentRegistry`.
-- **P2P vs Orchestrator**: Small, low-risk tasks may use direct agent communication, while strategic tasks always route through the central Orchestrator for full auditing.
+### OpenAIModelRegistry (`core/openai_model_registry.py`)
+
+- fetches the live OpenAI model list when `OPENAI_API_KEY` is present;
+- filters out non-text models;
+- caches the result so the runtime does not call the API on every task.
+
+### OpenAIRuntimeRouter (`core/openai_runtime_router.py`)
+
+- builds an ordered model plan for the current task;
+- estimates prompt and completion token use;
+- blocks models that already failed in the current session;
+- keeps the session budget in view before it picks a heavier model.
+
+### TaskRouter and SmartScheduler (`core/task_router.py`, `core/smart_scheduler.py`)
+
+- assign tasks to agents by capability and availability;
+- keep small safe work on cheaper paths;
+- keep strategic work under orchestrator control.
 
 ### SecurityGate (`core/security_gate/`)
-Enforces the "Security-First" mandate.
-- **Allowlist Validation**: Restricts shell commands to a predefined set of safe binaries.
-- **Redaction**: Automatically masks API keys and credentials in all logs and task context before they are sent to external AI providers.
 
-## 3. The Execution Pipeline (Step-by-Step)
+- validates shell commands against a safe allowlist;
+- redacts secrets before data leaves the local runtime;
+- keeps external AI providers away from raw credentials.
 
-1.  **Normalization**: Raw input is turned into a `Task` with defined files, constraints, and criteria.
-2.  **Risk Analysis**: Keywords are scanned to detect high-risk operations (e.g., `destructive`, `production`).
-3.  **Decomposition**: High-level plans are split into `PLAN -> CODE -> TEST -> REVIEW` cycles.
-4.  **Routing**: The `ModelSelector` picks a model (e.g., `gemini-1.5-pro`), and the `TaskRouter` finds a specific agent (e.g., `mistral-1`).
-5.  **Context Injection**: `HybridMemory` injects relevant historical data or thoughts into the task prompt.
-6.  **Execution**: The agent performs the work (local script execution or external API call).
-7.  **Quality Check**: The `QualityAnalyzer` verifies the output against the task's acceptance criteria.
-8.  **Feedback**: If criteria are not met, a `FIX` task is generated and re-inserted into the loop.
-9.  **Consolidation**: Final results and "thoughts" are saved back to memory.
+## Execution pipeline
 
-## 4. Key Improvements & Stability Fixes
+1. Normalize the incoming request into a `Task`.
+2. Classify the risk and complexity of the task.
+3. Split the work into `PLAN`, `CODE`, `TEST`, and `REVIEW` steps where needed.
+4. Choose the provider model and the target agent.
+5. Inject safe context into the task prompt.
+6. Execute the task and collect the result.
+7. Run quality checks against the acceptance criteria.
+8. Create a `FIX` task if the result is not good enough.
+9. Store the final output and the relevant execution notes.
 
-### Synchronous Memory Runtime
-To prevent deadlocks and `RuntimeWarnings` caused by nested event loops, the memory layer (`PersistentMemoryManager`) is now **fully synchronous**. This ensures that disk I/O does not block or conflict with the asynchronous `TaskListener` or API Bridge.
+## Stability notes
 
-### Robust Provider Fallback
-The `ExternalAIBridge` now handles environment-specific failures gracefully. If a host-level binary (like `npx`) is missing, the system automatically falls back to local execution. It also classifies errors (quota, timeout, auth) to inform future routing decisions.
+- memory operations stay synchronous to avoid nested event-loop problems;
+- provider fallback is designed to fail closed into a local path instead of
+  breaking the task;
+- model names are taken from the live account model list when auto-routing is
+  enabled.
 
-### Model Routing Accuracy
-Futuristic or non-existent model names have been replaced with stable, verified identifiers:
-- `gemini-3-flash-preview` (Default for high-speed tasks)
-- `gemini-1.5-pro` (Detailed research)
-- `codestral-latest` (Specialized coding agent)
-- `gpt-4o` (High-accuracy fallback)
+## Maintenance
 
-## 5. Maintenance & Debugging
-- **`verify_core.py`**: A comprehensive health check script that verifies module wiring, security gates, and API connectivity.
-- **`repoins.py`**: A broadcast utility that sends an inspection task to **every** registered agent. This is the fastest way to verify the entire system's operational readiness.
-- **`orchestrator.log`**: Centralized log file tracking all kernel activities and task transitions.
+- `verify_core.py` checks wiring, security gates, and API connectivity;
+- `repoins.py` sends an inspection task to every registered agent;
+- `orchestrator.log` carries the main execution trace.
 
-## 6. Extending the System
-To add a new agent, inherit from `BaseAgent` and use `orchestrator.attach_local_agent()`. The core will automatically begin including the new agent in the routing pool based on its declared capabilities.
+## Extending the system
+
+New agents should be registered with their capabilities first. The router then
+adds them to the pool when the declared capability matches the task.

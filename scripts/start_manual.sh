@@ -115,6 +115,9 @@ $BRIDGE_CMD podman run -d --pull=never \
   -e DB_NAME=hebrew_ai_db \
   -e REDIS_HOST=hebrew_ai_redis \
   -e REDIS_PORT=6379 \
+  -e ORCHESTRATOR_BRIDGE_URL="${ORCHESTRATOR_BRIDGE_URL:-http://host.containers.internal:8000}" \
+  -e AI_BRIDGE_OPENAI_AUTO_MODEL="${AI_BRIDGE_OPENAI_AUTO_MODEL:-true}" \
+  -e OPENAI_SESSION_TOKEN_BUDGET="${OPENAI_SESSION_TOKEN_BUDGET:-120000}" \
   -v "$AVATAR_VOLUME_NAME":/app/public/uploads/avatars:Z \
   -v "$PROJECT_ROOT/ai_bridge":/app/ai_bridge:Z \
   -v "$PROJECT_ROOT/.agent":/app/.agent:Z \

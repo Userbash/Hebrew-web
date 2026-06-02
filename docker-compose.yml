@@ -95,7 +95,9 @@ services:
       # Required for AI Bridge persistent memory
       AI_BRIDGE_MEMORY_ENABLED: ${AI_BRIDGE_MEMORY_ENABLED:-true}
       AI_BRIDGE_MEMORY_DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-hebrew_ai_db}
-      ORCHESTRATOR_BRIDGE_URL: http://orchestrator:8000
+      ORCHESTRATOR_BRIDGE_URL: ${ORCHESTRATOR_BRIDGE_URL:-http://orchestrator:8000}
+      AI_BRIDGE_OPENAI_AUTO_MODEL: ${AI_BRIDGE_OPENAI_AUTO_MODEL:-true}
+      OPENAI_SESSION_TOKEN_BUDGET: ${OPENAI_SESSION_TOKEN_BUDGET:-120000}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -108,8 +110,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      orchestrator:
-        condition: service_started
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`${DOMAIN_NAME}`) && PathPrefix(`/api`)"
@@ -130,6 +130,8 @@ services:
 
 
   orchestrator:
+    profiles:
+      - ai
     build:
       context: .
       dockerfile: ./ai_bridge/Dockerfile
@@ -143,6 +145,12 @@ services:
       AI_BRIDGE_MEMORY_DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-hebrew_ai_db}
       AI_BRIDGE_LIVE_MODEL_PROBE: ${AI_BRIDGE_LIVE_MODEL_PROBE:-false}
       AI_BRIDGE_REQUIRE_EXTERNAL_SCANNERS: ${AI_BRIDGE_REQUIRE_EXTERNAL_SCANNERS:-false}
+      AI_BRIDGE_OPENAI_AUTO_MODEL: ${AI_BRIDGE_OPENAI_AUTO_MODEL:-true}
+      OPENAI_SESSION_TOKEN_BUDGET: ${OPENAI_SESSION_TOKEN_BUDGET:-120000}
+      OPENAI_LOW_MODELS: ${OPENAI_LOW_MODELS:-gpt-5-nano,gpt-4.1-nano,gpt-4o-mini}
+      OPENAI_MEDIUM_MODELS: ${OPENAI_MEDIUM_MODELS:-gpt-5-mini,gpt-4.1-mini,gpt-4o-mini}
+      OPENAI_HIGH_MODELS: ${OPENAI_HIGH_MODELS:-gpt-5.1-codex,gpt-5.1,gpt-5,gpt-4.1}
+      OPENAI_CRITICAL_MODELS: ${OPENAI_CRITICAL_MODELS:-gpt-5.2-codex,gpt-5.2,gpt-5.2-pro,gpt-5.1}
     depends_on:
       postgres:
         condition: service_healthy
