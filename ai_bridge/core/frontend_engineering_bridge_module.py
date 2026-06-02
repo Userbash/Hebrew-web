@@ -6,6 +6,7 @@ from typing import Any
 from .frontend_architecture_protocol import FrontendArchitectureProtocol
 from .frontend_scaffold_generator import FrontendScaffoldGenerator
 from .component_codegen_module import ComponentCodegenModule
+from .intent_analyzer_module import IntentAnalyzerModule
 from .integrations import DesignLearningModule, FrontendFrameworkModules, ImageMLOrchestrator
 from .kernel_protocol import KernelAPI, KernelModule
 from .session_memory import MemoryScope, SessionMemory
@@ -21,6 +22,7 @@ class FrontendEngineeringBridgeModule(KernelModule):
     _protocol: FrontendArchitectureProtocol | None = None
     _scaffold: FrontendScaffoldGenerator | None = None
     _codegen: ComponentCodegenModule | None = None
+    _analyzer: IntentAnalyzerModule | None = None
 
     def on_load(self, api: KernelAPI) -> None:
         self._api = api
@@ -33,6 +35,8 @@ class FrontendEngineeringBridgeModule(KernelModule):
         self._protocol = FrontendArchitectureProtocol()
         self._scaffold = FrontendScaffoldGenerator()
         self._codegen = ComponentCodegenModule()
+        self._analyzer = IntentAnalyzerModule()
+        self._analyzer.on_load(api)
         self._api.log("info", "[FRONTEND_BRIDGE] unified frontend engineering bridge loaded")
 
     def on_unload(self) -> None:
@@ -42,6 +46,7 @@ class FrontendEngineeringBridgeModule(KernelModule):
         self._protocol = None
         self._scaffold = None
         self._codegen = None
+        self._analyzer = None
 
     def before_task(self, task: Any, context: dict[str, Any]) -> None:
         if not (self._frameworks and self._learning):
@@ -93,7 +98,7 @@ class FrontendEngineeringBridgeModule(KernelModule):
         context["frontend_bridge"]["suggestion"] = suggestion
 
     def after_task(self, task: Any, result: Any, context: dict[str, Any]) -> None:
-        if not (self._learning and self._api):
+        if not (self._learning and self._api and self._analyzer):
             return
         framework = str((context.get("frontend_bridge") or {}).get("framework") or "react")
         summary = ""
@@ -105,14 +110,25 @@ class FrontendEngineeringBridgeModule(KernelModule):
         if self._should_codegen(task) and self._scaffold and self._codegen:
             target_root = str(context.get("frontend_output_root") or "frontend-react")
             app_name = str(context.get("frontend_app_name") or "frontend-app")
+            
+            # Use IntentAnalyzer to get a structured schema
+            raw_input = str(getattr(getattr(task, "input", None), "description", ""))
+            design_schema = self._analyzer.analyze_user_prompt(raw_input)
+            
             scaffold = self._scaffold.generate(target_root, app_name=app_name)
-            schema = context.get("frontend_schema") if isinstance(context.get("frontend_schema"), dict) else self._default_schema()
-            codegen = self._codegen.generate(target_root, schema)
+            
+            # Convert DesignSchema Pydantic model to dict for ComponentCodegen
+            # ComponentCodegen expects a list of dictionaries in 'components' key
+            schema_dict = design_schema.model_dump()
+            schema_dict["components"] = [{"name": c} for c in design_schema.components]
+            
+            codegen = self._codegen.generate(target_root, schema_dict)
+            
             content_seed = {
-                "headline": "Modern language learning without overload",
-                "subheadline": "Catalog → Course → Cart → Checkout → Lessons",
-                "cta_primary": "Browse catalog",
-                "cta_secondary": "Open dashboard",
+                "headline": f"Modern {design_schema.vibe} design",
+                "subheadline": f"Based on {design_schema.layout} layout",
+                "cta_primary": "Get Started",
+                "cta_secondary": "Learn More",
             }
             generated = {"status": "generated", "root": target_root, "scaffold": scaffold, "codegen": codegen, "content_seed": content_seed}
             context["frontend_generated"] = generated
@@ -127,8 +143,11 @@ class FrontendEngineeringBridgeModule(KernelModule):
 
     def _should_codegen(self, task: Any) -> bool:
         t = str(getattr(getattr(task, "type", None), "value", getattr(task, "type", ""))).lower()
-        text = str(getattr(getattr(task, "input", None), "raw", "")).lower()
+        description = getattr(task, "input", None)
+        text = str(getattr(description, "description", "")).lower()
+
         return t in {"code", "plan", "docs"} and any(k in text for k in ["frontend", "ui", "landing", "page", "catalog", "react", "design"])
+
 
     @staticmethod
     def _default_schema() -> dict[str, Any]:
