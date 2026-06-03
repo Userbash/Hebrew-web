@@ -16,24 +16,29 @@ import {
 import {
   Activity,
   AlertTriangle,
-  BadgeCheck,
   BookMarked,
   CheckCircle2,
   CircleUserRound,
   ChevronDown,
   ChevronRight,
-  ClipboardList,
+  Cpu,
+  Database,
   FileText,
+  Globe,
+  HardDrive,
+  History,
   KeyRound,
   LayoutDashboard,
   Lock,
   LogOut,
   Settings,
   Shield,
+  ShieldCheck,
   Siren,
+  Terminal,
   UserPlus,
   Users,
-  UsersRound,
+  Zap,
   X,
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
@@ -460,7 +465,9 @@ export default function AdminPanel() {
   const [publicationOwnerFilter, setPublicationOwnerFilter] = useState<'all' | 'mine'>('all');
 
   const [logs, setLogs] = useState<AdminLogItem[]>([]);
-  const [logsSummary, setLogsSummary] = useState({ total: 0, server_errors: 0, client_errors: 0, success: 0, blocked: 0, errors: 0, authenticated: 0, locked_accounts: 0, avg_response_ms: 0 });
+  const [logsSummary, setLogsSummary] = useState({ total: 0, server_errors: 0, client_errors: 0, success: 0, blocked: 0, errors: 0, code_400: 0, code_401: 0, code_403: 0, code_429: 0, authenticated: 0, locked_accounts: 0, avg_response_ms: 0 });
+  const [logCodes, setLogCodes] = useState<Array<{ status_code: number; count: number }>>([]);
+  const [failingPaths, setFailingPaths] = useState<Array<{ method: string; path: string; status_code: number; outcome: string; count: number }>>([]);
   const [logMethod, setLogMethod] = useState('');
   const [logArea, setLogArea] = useState('');
   const [logOutcome, setLogOutcome] = useState('');
@@ -573,8 +580,7 @@ export default function AdminPanel() {
 
   const reloadLogs = async () => {
     const statusCodeNumber = Number.parseInt(logStatusCode, 10);
-
-    const data = await adminLogsApi.list({
+    const params = {
       page: 1,
       limit: 100,
       method: logMethod || undefined,
@@ -583,7 +589,12 @@ export default function AdminPanel() {
       path: logPath || undefined,
       loginIdentifier: logLoginIdentifier || undefined,
       statusCode: Number.isFinite(statusCodeNumber) && statusCodeNumber > 0 ? statusCodeNumber : undefined,
-    });
+    };
+
+    const [data, codesData] = await Promise.all([
+      adminLogsApi.list(params),
+      adminLogsApi.codes({ ...params, top: 8 }),
+    ]);
 
     setLogs(data.logs || []);
 
@@ -595,10 +606,16 @@ export default function AdminPanel() {
       success: summary.success ?? 0,
       blocked: summary.blocked ?? 0,
       errors: summary.errors ?? 0,
+      code_400: summary.code_400 ?? 0,
+      code_401: summary.code_401 ?? 0,
+      code_403: summary.code_403 ?? 0,
+      code_429: summary.code_429 ?? 0,
       authenticated: summary.authenticated ?? 0,
       locked_accounts: summary.locked_accounts ?? 0,
       avg_response_ms: summary.avg_response_ms ?? 0,
     });
+    setLogCodes(codesData.histogram?.status_codes || []);
+    setFailingPaths(codesData.histogram?.failing_paths || []);
   };
 
   const reloadSystemMetrics = async () => {
@@ -1173,6 +1190,42 @@ export default function AdminPanel() {
     return { riskScore, dbPressure, diskPressure, memoryPressure };
   }, [systemMetrics]);
 
+  const runtimeSummary = useMemo(() => {
+    if (!systemMetrics) {
+      return [
+        { label: 'Runtime', value: 'Loading', detail: 'Waiting for system metrics' },
+        { label: 'Database', value: 'Loading', detail: 'Probe pending' },
+        { label: 'Storage', value: 'Loading', detail: 'Disk usage pending' },
+        { label: 'Memory', value: 'Loading', detail: 'Heap usage pending' },
+      ];
+    }
+
+    return [
+      { label: 'Runtime', value: systemMetrics.site.uptime_human, detail: `${systemMetrics.site.environment} / ${systemMetrics.site.node_version}` },
+      { label: 'Database', value: systemMetrics.database.status, detail: `${systemMetrics.database.probe_latency_ms} ms probe / ${systemMetrics.database.active_connections} connections` },
+      { label: 'Storage', value: `${systemMetrics.system.disk.used_percent}%`, detail: `${formatBytes(systemMetrics.database.storage.database_size_bytes)} DB / ${systemMetrics.database.storage.table_count} tables` },
+      { label: 'Memory', value: `${systemMetrics.system.memory.used_percent}%`, detail: `${formatBytes(systemMetrics.system.memory.used_bytes)} used` },
+    ];
+  }, [systemMetrics]);
+
+  const accessSummary = useMemo(() => {
+    const systemGroups = groups.filter((group) => group.is_system).length;
+    const customGroups = Math.max(groups.length - systemGroups, 0);
+    const assignedUsers = groups.reduce((sum, group) => sum + Number(group.assignments_count || 0), 0);
+    const grantedPermissions = Object.values(rolePermissionMap).reduce((sum, permissions) => sum + permissions.length, 0);
+    return { systemGroups, customGroups, assignedUsers, grantedPermissions };
+  }, [groups, rolePermissionMap]);
+
+  const auditCoverage = useMemo(() => {
+    const coveredSections = new Set(auditMap.map((item) => `${item.area}:${item.resource}`));
+    return [
+      { label: 'Admin writes', value: auditSummary.admin_actions, detail: 'User, role and content changes' },
+      { label: 'Site writes', value: auditSummary.site_actions, detail: 'Frontend-facing activity' },
+      { label: 'Mapped scopes', value: coveredSections.size, detail: 'Distinct area/resource pairs' },
+      { label: 'Non-success', value: auditSummary.blocked + auditSummary.errors, detail: 'Blocked or failed audited changes' },
+    ];
+  }, [auditMap, auditSummary]);
+
   const topTabs = NAV_GROUPS.flatMap((group) => group.items);
 
   const attentionItems = useMemo(() => {
@@ -1271,7 +1324,7 @@ export default function AdminPanel() {
 
             return (
               <div className="admin-nav-group" key={group.id}>
-                <button type="button" className="admin-nav-group-toggle" onClick={() => toggleNavGroup(group.id)}>
+                <button type="button" className="admin-nav-group-toggle" onClick={() => toggleNavGroup(group.id)} aria-expanded={isOpen} data-testid={`admin-nav-group-${group.id}`}>
                   <span className="admin-nav-group-title">
                     {group.icon}
                     {group.title}
@@ -1287,6 +1340,7 @@ export default function AdminPanel() {
                         type="button"
                         className={`admin-nav-item ${activeSection === item.id ? 'active' : ''}`}
                         onClick={() => setActiveSection(item.id)}
+                        data-testid={`admin-nav-item-${item.id}`}
                       >
                         {item.label}
                       </button>
@@ -1330,6 +1384,7 @@ export default function AdminPanel() {
                 type="button"
                 role="tab"
                 aria-selected={activeSection === item.id}
+                data-testid={`admin-top-tab-${item.id}`}
                 className={`admin-top-tab ${activeSection === item.id ? 'active' : ''}`}
                 onClick={() => setActiveSection(item.id)}
               >
@@ -1397,375 +1452,242 @@ export default function AdminPanel() {
         </Card>
 
         {activeSection === 'overview' && (
-          <>
-            <Row className="g-3 mb-4">
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">Users</div><div className="kpi-value">{usersTotal}</div><div className="kpi-sub">Active directory records</div></Card></Col>
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">Groups</div><div className="kpi-value">{groups.length}</div><div className="kpi-sub">RBAC groups / roles</div></Card></Col>
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">Publications</div><div className="kpi-value">{publications.length}</div><div className="kpi-sub">Draft + review + published</div></Card></Col>
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">Avg response</div><div className="kpi-value">{logsSummary.avg_response_ms} ms</div><div className="kpi-sub">From API telemetry stream</div></Card></Col>
-            </Row>
+          <div className="admin-layout-dashboard">
+            <div className="admin-main-section d-flex flex-column gap-4">
+              <div className="admin-kpi-row">
+                <Card className="admin-kpi" style={{ borderTop: '6px solid #3b82f6' }}><Card.Body><div className="kpi-title">GLOBAL INGRESS</div><div className="kpi-value">{logsSummary.total}</div><div className="kpi-sub">Total telemetry signals</div></Card.Body></Card>
+                <Card className="admin-kpi" style={{ borderTop: '6px solid #22c55e' }}><Card.Body><div className="kpi-title">ACTIVE IDENTITY</div><div className="kpi-value">{usersTotal}</div><div className="kpi-sub">Verified user entities</div></Card.Body></Card>
+                <Card className="admin-kpi" style={{ borderTop: '6px solid #f59e0b' }}><Card.Body><div className="kpi-title">RBAC CONTAINERS</div><div className="kpi-value">{groups.length}</div><div className="kpi-sub">Secure access groups</div></Card.Body></Card>
+                <Card className="admin-kpi" style={{ borderTop: '6px solid #ef4444' }}><Card.Body><div className="kpi-title">UPSTREAM ERROR</div><div className="kpi-value">{logsSummary.server_errors}</div><div className="kpi-sub">Managed exceptions</div></Card.Body></Card>
+              </div>
 
-            <Row className="g-3 mb-3">
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">Site uptime</div><div className="kpi-value">{systemMetrics?.site.uptime_human || '—'}</div><div className="kpi-sub">Application runtime</div></Card></Col>
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">CPU load</div><div className="kpi-value">{systemMetrics ? `${systemMetrics.system.cpu.load_percent_1m}%` : '—'}</div><div className="kpi-sub">1m normalized by cores</div></Card></Col>
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">Memory used</div><div className="kpi-value">{systemMetrics ? `${systemMetrics.system.memory.used_percent}%` : '—'}</div><div className="kpi-sub">Host memory usage</div></Card></Col>
-              <Col md={6} xl={3}><Card body className="admin-kpi"><div className="kpi-title">DB latency</div><div className="kpi-value">{systemMetrics ? `${systemMetrics.database.probe_latency_ms} ms` : '—'}</div><div className="kpi-sub">SELECT 1 probe time</div></Card></Col>
-            </Row>
-
-            <Row className="g-3 mb-3">
-              <Col lg={8}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">System state</h5>
-                    <div className="admin-chart-list">
-                      <div className="admin-chart-item">
-                        <div className="admin-chart-head"><span>API success rate</span><strong>{logsHealth.successRate}%</strong></div>
-                        <ProgressBar now={logsHealth.successRate} variant={logsHealth.successRate >= 95 ? 'success' : logsHealth.successRate >= 80 ? 'warning' : 'danger'} />
-                      </div>
-                      <div className="admin-chart-item">
-                        <div className="admin-chart-head"><span>Platform health score</span><strong>{logsHealth.healthScore}/100</strong></div>
-                        <ProgressBar now={logsHealth.healthScore} variant={logsHealth.healthScore >= 85 ? 'success' : logsHealth.healthScore >= 65 ? 'warning' : 'danger'} />
-                      </div>
-                      <div className="admin-chart-item">
-                        <div className="admin-chart-head"><span>Published content ratio</span><strong>{publications.length > 0 ? Math.round((publicationSummary.published / publications.length) * 100) : 0}%</strong></div>
-                        <ProgressBar now={publications.length > 0 ? Math.round((publicationSummary.published / publications.length) * 100) : 0} variant="info" />
-                      </div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col lg={4}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">Data footprint</h5>
-                    <div className="admin-health-list">
-                      <div><span><UsersRound size={15} /> Users (visible)</span><strong>{users.length}</strong></div>
-                      <div><span><Shield size={15} /> Groups / roles</span><strong>{groups.length}</strong></div>
-                      <div><span><ClipboardList size={15} /> Role catalog</span><strong>{catalogHierarchy.length}</strong></div>
-                      <div><span><BookMarked size={15} /> Publications</span><strong>{publications.length}</strong></div>
-                      <div><span><Activity size={15} /> Log events</span><strong>{logsSummary.total}</strong></div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
-
-            <Row className="g-3 mb-3">
-              <Col xs={12}>
-                <Card className="admin-surface">
-                  <Card.Body>
-                    <h5 className="mb-3">Admin map</h5>
-                    <div className="admin-map-grid">
-                      {NAV_GROUPS.map((group) => (
-                        <div key={group.id} className="admin-map-item">
-                          <strong>{group.title}</strong>
-                          <div className="small text-secondary">{group.items.map((item) => item.label).join(' • ')}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
-
-            <Row className="g-3">
-              <Col lg={8}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">Recent API activity</h5>
-                    <div className="table-responsive">
-                      <Table hover className="admin-table">
-                        <thead>
-                          <tr>
-                            <th>When</th>
-                            <th>Method</th>
-                            <th>Path</th>
-                            <th>Status</th>
-                            <th>User</th>
-                            <th>Time</th>
+              <Card className="admin-surface">
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h5 className="fw-bold m-0"><Terminal size={18} className="me-2 text-primary" /> LIVE COMMAND STREAM</h5>
+                    <Button size="sm" variant="outline-primary" onClick={() => void reloadLogs()}>REFRESH FEED</Button>
+                  </div>
+                  <div className="table-responsive">
+                    <Table hover className="admin-table border-top">
+                      <thead>
+                        <tr><th>TIME</th><th>COMMAND</th><th>ENDPOINT PATH</th><th>RESULT</th><th>OPERATOR</th></tr>
+                      </thead>
+                      <tbody>
+                        {logs.slice(0, 15).map((item) => (
+                          <tr key={item.id}>
+                            <td className="text-secondary small">{formatDate(item.created_at)}</td>
+                            <td><Badge className="badge-soft font-monospace">{item.method}</Badge></td>
+                            <td className="font-monospace small">{item.path}</td>
+                            <td><Badge bg={item.status_code < 400 ? 'success' : 'danger'} style={{ minWidth: '40px' }}>{item.status_code}</Badge></td>
+                            <td className="fw-bold">{item.username || 'SYSTEM'}</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {logs.slice(0, 8).map((item) => (
-                            <tr key={item.id}>
-                              <td>{formatDate(item.created_at)}</td>
-                              <td><Badge bg="dark">{item.method}</Badge></td>
-                              <td>{item.path}</td>
-                              <td>{item.status_code}</td>
-                              <td>{item.username || item.email || 'anonymous'}</td>
-                              <td>{item.response_time_ms} ms</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col lg={4}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">Operational summary</h5>
-                    <div className="admin-health-list">
-                      <div><span><BadgeCheck size={15} /> Active users (visible)</span><strong>{visibleUsersSummary.active}</strong></div>
-                      <div><span><Shield size={15} /> Blocked users (visible)</span><strong>{visibleUsersSummary.blocked}</strong></div>
-                      <div><span><ClipboardList size={15} /> 4xx / 5xx errors</span><strong>{logsSummary.client_errors} / {logsSummary.server_errors}</strong></div>
-                      <div><span><BookMarked size={15} /> Draft / review queue</span><strong>{publicationSummary.draft} / {publicationSummary.review}</strong></div>
-                      <div><span><Activity size={15} /> Successful API calls</span><strong>{logsHealth.success}</strong></div>
-                      <div><span><UsersRound size={15} /> Selected user</span><strong>{selectedUser?.username || 'none'}</strong></div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
-          </>
-        )}
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
 
-        {activeSection === 'admin-map' && (
-          <>
-            <Row className="g-3 mb-3">
-              <Col lg={8}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                      <h5 className="mb-0">Admin functional map</h5>
-                      <Button variant="outline-light" size="sm" onClick={() => void withAction(loadInitial, 'Admin map refreshed')}>Refresh map data</Button>
+            <div className="admin-side-section d-flex flex-column gap-4">
+              <Card className="admin-surface" style={{ background: 'linear-gradient(135deg, #fff 0%, #f0f7ff 100%)' }}>
+                <Card.Body>
+                  <h5 className="fw-bold mb-4"><ShieldCheck size={18} className="me-2 text-success" /> HEALTH RADAR</h5>
+                  <div className="admin-chart-list">
+                    <div className="admin-chart-item mb-4 border-0 p-0 bg-transparent">
+                      <div className="admin-chart-head mb-2"><span>NETWORK AVAILABILITY</span><strong className="text-success">{logsHealth.successRate}%</strong></div>
+                      <ProgressBar now={logsHealth.successRate} variant="success" style={{ height: '10px' }} />
                     </div>
-                    <div className="table-responsive">
-                      <Table hover className="admin-table">
-                        <thead>
-                          <tr>
-                            <th>Section</th>
-                            <th>Purpose</th>
-                            <th>Actions</th>
-                            <th>REST API</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ADMIN_SECTION_MAP.map((row) => (
-                            <tr key={row.section}>
-                              <td className="fw-semibold">{row.section}</td>
-                              <td>{row.purpose}</td>
-                              <td>{row.primaryActions}</td>
-                              <td><code>{row.apiScope}</code></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
+                    <div className="admin-chart-item border-0 p-0 bg-transparent">
+                      <div className="admin-chart-head mb-2"><span>LOGIC INTEGRITY</span><strong className="text-primary">{logsHealth.healthScore}/100</strong></div>
+                      <ProgressBar now={logsHealth.healthScore} variant="info" style={{ height: '10px' }} />
                     </div>
-                  </Card.Body>
-                </Card>
-              </Col>
+                  </div>
+                </Card.Body>
+              </Card>
 
-              <Col lg={4}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">Quick jump</h5>
-                    <div className="admin-quick-action-grid">
-                      <Button variant="outline-light" onClick={() => setActiveSection('user-directory')}>Users directory</Button>
-                      <Button variant="outline-light" onClick={() => setActiveSection('user-create')}>Create user</Button>
-                      <Button variant="outline-light" onClick={() => setActiveSection('groups-catalog')}>Groups catalog</Button>
-                      <Button variant="outline-light" onClick={() => setActiveSection('group-assignments')}>Role assignments</Button>
-                      <Button variant="outline-light" onClick={() => setActiveSection('publications-review')}>Publications queue</Button>
-                      <Button variant="outline-light" onClick={() => setActiveSection('audit-trail')}>Change audit trail</Button>
-                      <Button variant="outline-light" onClick={() => setActiveSection('audit-logs')}>API activity logs</Button>
-                      <Button variant="primary" onClick={() => setActiveSection('system-monitoring')}>System monitoring</Button>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
+              <Card className="admin-surface">
+                <Card.Body>
+                  <h5 className="fw-bold mb-4"><Database size={18} className="me-2 text-warning" /> RESOURCE MAP</h5>
+                  <div className="admin-health-list">
+                    <div className="border-0 bg-light mb-2"><span>DATABASE SIZE</span><strong>{formatBytes(systemMetrics?.database.storage.database_size_bytes || 0)}</strong></div>
+                    <div className="border-0 bg-light mb-2"><span>ACTIVE CONNS</span><strong>{systemMetrics?.database.active_connections}</strong></div>
+                    <div className="border-0 bg-light mb-2"><span>CORE LOAD (1M)</span><strong>{systemMetrics ? systemMetrics.system.cpu.load_percent_1m : 0}%</strong></div>
+                    <div className="border-0 bg-light mb-2"><span>IO WAIT</span><strong>{systemMetrics?.database.probe_latency_ms} ms</strong></div>
+                  </div>
+                </Card.Body>
+              </Card>
 
-            <Row className="g-3">
-              <Col lg={7}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">Logging map</h5>
-                    <div className="table-responsive">
-                      <Table hover className="admin-table">
-                        <thead>
-                          <tr>
-                            <th>Event type</th>
-                            <th>Source</th>
-                            <th>Where to inspect</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {LOGGING_EVENT_MAP.map((row) => (
-                            <tr key={row.eventType}>
-                              <td className="fw-semibold">{row.eventType}</td>
-                              <td>{row.source}</td>
-                              <td>{row.whereToCheck}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-
-              <Col lg={5}>
-                <Card className="admin-surface h-100">
-                  <Card.Body>
-                    <h5 className="mb-3">Live logging counters</h5>
-                    <div className="admin-health-list">
-                      <div><span>All change events</span><strong>{auditSummary.total}</strong></div>
-                      <div><span>Success events</span><strong>{auditSummary.success}</strong></div>
-                      <div><span>Blocked events</span><strong>{auditSummary.blocked}</strong></div>
-                      <div><span>Error events</span><strong>{auditSummary.errors}</strong></div>
-                      <div><span>Admin area changes</span><strong>{auditSummary.admin_actions}</strong></div>
-                      <div><span>Site area changes</span><strong>{auditSummary.site_actions}</strong></div>
-                      <div><span>Average mutation latency</span><strong>{auditSummary.avg_duration_ms} ms</strong></div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
-          </>
+              <Card className="admin-surface flex-grow-1">
+                <Card.Body>
+                  <h5 className="fw-bold mb-3"><Globe size={18} className="me-2 text-primary" /> STATUS CODES</h5>
+                  <div className="admin-compact-list">
+                    {logCodes.slice(0, 6).map((item) => (
+                      <div key={item.status_code} className="admin-compact-row">
+                        <span>HTTP {item.status_code}</span>
+                        <strong>{item.count}</strong>
+                      </div>
+                    ))}
+                    {logCodes.length === 0 && <div className="text-secondary small">No telemetry status codes yet.</div>}
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+          </div>
         )}
 
         {activeSection === 'system-monitoring' && (
-          <>
-            <Card className="admin-surface mb-3">
-              <Card.Body>
-                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                  <h5 className="mb-0">System and infrastructure telemetry</h5>
-                  <Button variant="primary" onClick={() => void withAction(reloadSystemMetrics, 'System metrics refreshed')}>Refresh metrics</Button>
-                </div>
+          <div className="admin-layout-dashboard">
+            <div className="admin-full-row">
+              <Card className="admin-surface">
+                <Card.Body>
+                  <div className="admin-panel-head">
+                    <h5 className="mb-0 fw-bold"><Activity size={18} className="me-2 text-primary" /> Runtime health</h5>
+                    <Button size="sm" variant="primary" onClick={() => void withAction(reloadSystemMetrics, 'System metrics refreshed')}>Refresh</Button>
+                  </div>
+                  <div className="admin-monitoring-grid admin-monitoring-grid-4 mt-3">
+                    {runtimeSummary.map((item) => (
+                      <div key={item.label} className="admin-metric-tile">
+                        <div className="kpi-title">{item.label}</div>
+                        <div className="kpi-value">{item.value}</div>
+                        <div className="kpi-sub">{item.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
 
-                {!systemMetrics && <p className="text-secondary mb-0">Metrics are loading...</p>}
-
-                {systemMetrics && (
-                  <Row className="g-3">
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">Site uptime</div><div className="kpi-value">{systemMetrics.site.uptime_human}</div><div className="kpi-sub">PID: {systemMetrics.site.pid} • {systemMetrics.site.environment}</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">CPU 1m</div><div className="kpi-value">{systemMetrics.system.cpu.load_percent_1m}%</div><div className="kpi-sub">{systemMetrics.system.cpu.cores} cores • proc {systemMetrics.system.cpu.process_cpu_percent}%</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">Memory used</div><div className="kpi-value">{systemMetrics.system.memory.used_percent}%</div><div className="kpi-sub">{formatBytes(systemMetrics.system.memory.used_bytes)} / {formatBytes(systemMetrics.system.memory.total_bytes)}</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">Disk used</div><div className="kpi-value">{systemMetrics.system.disk.used_percent}%</div><div className="kpi-sub">Inodes: {systemMetrics.system.disk.inode_used_percent}%</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">DB size</div><div className="kpi-value">{formatBytes(systemMetrics.database.storage.database_size_bytes)}</div><div className="kpi-sub">{systemMetrics.database.storage.table_count} tables • {systemMetrics.database.storage.index_count} indexes</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">Longest DB query</div><div className="kpi-value">{systemMetrics.database.max_active_query_age_seconds}s</div><div className="kpi-sub">Long-running: {systemMetrics.database.long_running_queries}</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">Lock waiting queries</div><div className="kpi-value">{systemMetrics.database.lock_waiting_queries}</div><div className="kpi-sub">Waiting locks: {systemMetrics.database.waiting_locks}</div></Card></Col>
-                    <Col md={6} xl={3}><Card body className="admin-surface-sub"><div className="kpi-title">Infra risk score</div><div className="kpi-value">{monitoringSignals.riskScore}/100</div><div className="kpi-sub">DB {monitoringSignals.dbPressure}% • Disk {monitoringSignals.diskPressure}%</div></Card></Col>
-                  </Row>
-                )}
-              </Card.Body>
-            </Card>
-
-            {systemMetrics && (
-              <>
-                <Row className="g-3 mb-3">
-                  <Col lg={8}>
-                    <Card className="admin-surface h-100">
-                      <Card.Body>
-                        <h5 className="mb-3">Load and bottleneck signals</h5>
-                        <div className="admin-chart-list">
-                          <div className="admin-chart-item">
-                            <div className="admin-chart-head"><span>CPU load (1m)</span><strong>{systemMetrics.system.cpu.load_percent_1m}%</strong></div>
-                            <ProgressBar now={Math.min(systemMetrics.system.cpu.load_percent_1m, 100)} variant={systemMetrics.system.cpu.load_percent_1m >= 90 ? 'danger' : systemMetrics.system.cpu.load_percent_1m >= 70 ? 'warning' : 'success'} />
-                          </div>
-                          <div className="admin-chart-item">
-                            <div className="admin-chart-head"><span>Memory usage</span><strong>{systemMetrics.system.memory.used_percent}%</strong></div>
-                            <ProgressBar now={Math.min(systemMetrics.system.memory.used_percent, 100)} variant={systemMetrics.system.memory.used_percent >= 90 ? 'danger' : systemMetrics.system.memory.used_percent >= 75 ? 'warning' : 'success'} />
-                          </div>
-                          <div className="admin-chart-item">
-                            <div className="admin-chart-head"><span>Disk usage</span><strong>{systemMetrics.system.disk.used_percent}%</strong></div>
-                            <ProgressBar now={Math.min(systemMetrics.system.disk.used_percent, 100)} variant={systemMetrics.system.disk.used_percent >= 90 ? 'danger' : systemMetrics.system.disk.used_percent >= 75 ? 'warning' : 'success'} />
-                          </div>
-                          <div className="admin-chart-item">
-                            <div className="admin-chart-head"><span>DB probe latency</span><strong>{systemMetrics.database.probe_latency_ms} ms</strong></div>
-                            <ProgressBar now={Math.min((systemMetrics.database.probe_latency_ms / 800) * 100, 100)} variant={systemMetrics.database.probe_latency_ms >= 500 ? 'danger' : systemMetrics.database.probe_latency_ms >= 200 ? 'warning' : 'success'} />
-                          </div>
-                        </div>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-
-                  <Col lg={4}>
-                    <Card className="admin-surface h-100">
-                      <Card.Body>
-                        <h5 className="mb-3">Alerts</h5>
-                        <div className="admin-alert-stack">
-                          {systemMetrics.alerts.map((alert) => (
-                            <Alert key={`${alert.code}-${alert.message}`} variant={alert.level === 'critical' ? 'danger' : alert.level === 'warn' ? 'warning' : 'success'} className="mb-0">
-                              <div className="fw-semibold text-uppercase small">{alert.code}</div>
-                              <div>{alert.message}</div>
-                            </Alert>
-                          ))}
-                        </div>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-                </Row>
-
-                <Row className="g-3 mb-3">
-                  <Col lg={6}>
-                    <Card className="admin-surface h-100">
-                      <Card.Body>
-                        <h5 className="mb-3">Database health</h5>
-                        <div className="admin-health-list">
-                          <div><span>Status</span><strong>{systemMetrics.database.status}</strong></div>
-                          <div><span>Active connections</span><strong>{systemMetrics.database.active_connections}</strong></div>
-                          <div><span>Waiting locks</span><strong>{systemMetrics.database.waiting_locks}</strong></div>
-                          <div><span>Lock waiting queries</span><strong>{systemMetrics.database.lock_waiting_queries}</strong></div>
-                          <div><span>Long running queries</span><strong>{systemMetrics.database.long_running_queries}</strong></div>
-                          <div><span>Longest active query</span><strong>{systemMetrics.database.max_active_query_age_seconds}s</strong></div>
-                          <div><span>Cache hit ratio</span><strong>{systemMetrics.database.cache_hit_percent}%</strong></div>
-                          <div><span>Deadlocks</span><strong>{systemMetrics.database.errors.deadlocks}</strong></div>
-                        </div>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-
-                  <Col lg={6}>
-                    <Card className="admin-surface h-100">
-                      <Card.Body>
-                        <h5 className="mb-3">DB I/O and throughput</h5>
-                        <div className="admin-health-list">
-                          <div><span>Blocks read</span><strong>{systemMetrics.database.io.blocks_read}</strong></div>
-                          <div><span>Blocks hit</span><strong>{systemMetrics.database.io.blocks_hit}</strong></div>
-                          <div><span>Read time</span><strong>{systemMetrics.database.io.read_time_ms} ms</strong></div>
-                          <div><span>Write time</span><strong>{systemMetrics.database.io.write_time_ms} ms</strong></div>
-                          <div><span>Temp files</span><strong>{systemMetrics.database.io.temp_files}</strong></div>
-                          <div><span>Temp bytes</span><strong>{formatBytes(systemMetrics.database.io.temp_bytes)}</strong></div>
-                        </div>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-                </Row>
-
-                <Card className="admin-surface">
-                  <Card.Body>
-                    <h5 className="mb-3">Runtime and storage details</h5>
-                    <div className="table-responsive">
-                      <Table hover className="admin-table">
-                        <tbody>
-                          <tr><th>Collected at</th><td>{formatDate(systemMetrics.collected_at)}</td><th>Node</th><td>{systemMetrics.site.node_version}</td></tr>
-                          <tr><th>Host</th><td>{systemMetrics.system.hostname}</td><th>Platform</th><td>{systemMetrics.system.platform} / {systemMetrics.system.arch} / {systemMetrics.system.release}</td></tr>
-                          <tr><th>System uptime</th><td>{systemMetrics.system.uptime_human}</td><th>Site uptime</th><td>{systemMetrics.site.uptime_human}</td></tr>
-                          <tr><th>Disk total</th><td>{formatBytes(systemMetrics.system.disk.total_bytes)}</td><th>Disk free</th><td>{formatBytes(systemMetrics.system.disk.free_bytes)}</td></tr>
-                          <tr><th>Disk available</th><td>{formatBytes(systemMetrics.system.disk.available_bytes)}</td><th>Inodes used</th><td>{systemMetrics.system.disk.inode_used_percent}%</td></tr>
-                          <tr><th>DB commits</th><td>{systemMetrics.database.transaction.commits}</td><th>DB rollbacks</th><td>{systemMetrics.database.transaction.rollbacks}</td></tr>
-                          <tr><th>Rows returned</th><td>{systemMetrics.database.rows.returned}</td><th>Rows fetched</th><td>{systemMetrics.database.rows.fetched}</td></tr>
-                          <tr><th>Rows inserted</th><td>{systemMetrics.database.rows.inserted}</td><th>Rows updated/deleted</th><td>{systemMetrics.database.rows.updated} / {systemMetrics.database.rows.deleted}</td></tr>
-                          <tr><th>DB size</th><td>{formatBytes(systemMetrics.database.storage.database_size_bytes)}</td><th>Tables / indexes</th><td>{systemMetrics.database.storage.table_count} / {systemMetrics.database.storage.index_count}</td></tr>
-                          <tr><th>Longest active query</th><td>{systemMetrics.database.max_active_query_age_seconds}s</td><th>Lock waiting queries</th><td>{systemMetrics.database.lock_waiting_queries}</td></tr>
-                          <tr><th>Sessions by state</th><td colSpan={3}>{Object.entries(systemMetrics.database.sessions_by_state).map(([state, count]) => `${state}: ${count}`).join(' | ') || '—'}</td></tr>
-                          <tr><th>Stats reset</th><td colSpan={3}>{formatDate(systemMetrics.database.stats_reset_at)}</td></tr>
-                        </tbody>
-                      </Table>
+            <div className="admin-main-section">
+              <Card className="admin-surface h-100">
+                <Card.Body>
+                  <h5 className="mb-3 fw-bold"><Zap size={18} className="me-2 text-warning" /> Load and database pressure</h5>
+                  <div className="admin-chart-list">
+                    <div className="admin-chart-item">
+                      <div className="admin-chart-head"><span>Overall risk</span><strong>{monitoringSignals.riskScore}/100</strong></div>
+                      <ProgressBar now={monitoringSignals.riskScore} variant={monitoringSignals.riskScore >= 70 ? 'danger' : monitoringSignals.riskScore >= 40 ? 'warning' : 'success'} />
                     </div>
-                  </Card.Body>
-                </Card>
-              </>
-            )}
-          </>
+                    <div className="admin-chart-item">
+                      <div className="admin-chart-head"><span>Database pressure</span><strong>{monitoringSignals.dbPressure}/100</strong></div>
+                      <ProgressBar now={monitoringSignals.dbPressure} variant="warning" />
+                    </div>
+                    <div className="admin-chart-item">
+                      <div className="admin-chart-head"><span>Disk pressure</span><strong>{monitoringSignals.diskPressure}/100</strong></div>
+                      <ProgressBar now={monitoringSignals.diskPressure} variant="info" />
+                    </div>
+                    <div className="admin-chart-item">
+                      <div className="admin-chart-head"><span>Memory pressure</span><strong>{monitoringSignals.memoryPressure}/100</strong></div>
+                      <ProgressBar now={monitoringSignals.memoryPressure} variant="primary" />
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+
+            <div className="admin-side-section">
+              <Card className="admin-surface h-100">
+                <Card.Body>
+                  <h5 className="mb-3 fw-bold"><Siren size={18} className="me-2 text-warning" /> Live signals</h5>
+                  <div className="admin-alert-stack">
+                    {systemMetrics?.alerts.map((alert) => (
+                      <Alert key={alert.code} variant={alert.level === 'critical' ? 'danger' : 'warning'} className="mb-0">
+                        <div className="fw-bold small text-uppercase">{alert.code}</div>
+                        <div className="small mt-1">{alert.message}</div>
+                      </Alert>
+                    ))}
+                    {(!systemMetrics || systemMetrics.alerts.length === 0) && (
+                      <div className="admin-empty-state">
+                        <ShieldCheck size={32} />
+                        <strong>No active system alerts</strong>
+                        <span>CPU, memory, disk and database probes are within configured thresholds.</span>
+                      </div>
+                    )}
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+
+            <div className="admin-full-row">
+              <Card className="admin-surface">
+                <Card.Body>
+                  <h5 className="mb-3 fw-bold"><Database size={18} className="me-2 text-primary" /> Runtime environment stack</h5>
+                  <div className="admin-runtime-grid">
+                    {[
+                      { label: 'Node runtime', value: systemMetrics?.site.node_version },
+                      { label: 'Host platform', value: systemMetrics?.system.platform },
+                      { label: 'Hostname', value: systemMetrics?.system.hostname },
+                      { label: 'CPU arch', value: systemMetrics?.system.arch },
+                      { label: 'DB status', value: systemMetrics?.database.status.toUpperCase() },
+                      { label: 'Active DB sessions', value: systemMetrics?.database.active_connections },
+                      { label: 'Cache hit', value: systemMetrics ? `${systemMetrics.database.cache_hit_percent}%` : undefined },
+                      { label: 'Stats reset', value: formatDate(systemMetrics?.database.stats_reset_at) },
+                    ].map((item) => (
+                      <div key={item.label} className="admin-runtime-item">
+                        <div className="admin-runtime-label">{item.label}</div>
+                        <div className="admin-runtime-value">{item.value || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'admin-map' && (
+          <div className="admin-layout-dashboard">
+            <div className="admin-main-section">
+              <Card className="admin-surface h-100">
+                <Card.Body>
+                  <h5 className="fw-bold mb-3"><Globe size={18} className="me-2 text-primary" /> Admin surface map</h5>
+                  <div className="admin-monitoring-grid">
+                    {ADMIN_SECTION_MAP.map((item) => (
+                      <div key={item.section} className="admin-map-item">
+                        <strong>{item.section}</strong>
+                        <span>{item.purpose}</span>
+                        <small>{item.primaryActions}</small>
+                        <code>{item.apiScope}</code>
+                      </div>
+                    ))}
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+            <div className="admin-side-section d-flex flex-column gap-3">
+              <Card className="admin-surface">
+                <Card.Body>
+                  <h5 className="fw-bold mb-3"><History size={18} className="me-2 text-primary" /> Logging coverage</h5>
+                  <div className="admin-compact-list">
+                    {auditCoverage.map((item) => (
+                      <div key={item.label} className="admin-compact-row stacked">
+                        <span>{item.label}</span>
+                        <strong>{item.value}</strong>
+                        <small>{item.detail}</small>
+                      </div>
+                    ))}
+                  </div>
+                </Card.Body>
+              </Card>
+              <Card className="admin-surface">
+                <Card.Body>
+                  <h5 className="fw-bold mb-3"><Shield size={18} className="me-2 text-success" /> RBAC inventory</h5>
+                  <div className="admin-compact-list">
+                    <div className="admin-compact-row"><span>System groups</span><strong>{accessSummary.systemGroups}</strong></div>
+                    <div className="admin-compact-row"><span>Custom groups</span><strong>{accessSummary.customGroups}</strong></div>
+                    <div className="admin-compact-row"><span>Role assignments</span><strong>{accessSummary.assignedUsers}</strong></div>
+                    <div className="admin-compact-row"><span>Granted permissions</span><strong>{accessSummary.grantedPermissions}</strong></div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+          </div>
         )}
 
         {activeSection === 'user-directory' && (
           <>
             <Card className="admin-surface mb-3">
               <Card.Body>
-                <Row className="g-3 align-items-center">
+                <Row className="g-3 align-items-center admin-form-grid admin-form-grid-3">
                   <Col lg={5}>
                     <InputGroup>
                       <InputGroup.Text>Search</InputGroup.Text>
@@ -2129,9 +2051,9 @@ export default function AdminPanel() {
                       <Button size="sm" variant={publicationOwnerFilter === 'mine' ? 'primary' : 'outline-light'} onClick={() => setPublicationOwnerFilter('mine')}>My publications</Button>
                     </div>
                   </div>
-                    <Row className="g-3">
-                      <Col md={6}><Form.Control value={publicationForm.title} placeholder="Title" onChange={(e) => setPublicationForm({ ...publicationForm, title: e.target.value })} /></Col>
-                      <Col md={3}>
+                    <Row className="g-3 admin-publication-form-grid">
+                      <Col md={6} className="admin-field-half"><Form.Control value={publicationForm.title} placeholder="Title" onChange={(e) => setPublicationForm({ ...publicationForm, title: e.target.value })} /></Col>
+                      <Col md={3} className="admin-field-small">
                         <Form.Select value={publicationForm.status} onChange={(e) => setPublicationForm({ ...publicationForm, status: e.target.value })}>
                           <option value="draft">draft</option>
                           <option value="review">review</option>
@@ -2139,15 +2061,15 @@ export default function AdminPanel() {
                           <option value="archived">archived</option>
                         </Form.Select>
                       </Col>
-                      <Col md={3}>
+                      <Col md={3} className="admin-field-small">
                         <Form.Select value={publicationForm.visibility} onChange={(e) => setPublicationForm({ ...publicationForm, visibility: e.target.value as 'private' | 'team' | 'public' })}>
                           <option value="private">private</option>
                           <option value="team">team</option>
                           <option value="public">public</option>
                         </Form.Select>
                       </Col>
-                      <Col xs={12}><Form.Control value={publicationForm.tags} placeholder="Tags (comma-separated)" onChange={(e) => setPublicationForm({ ...publicationForm, tags: e.target.value })} /></Col>
-                      <Col xs={12}><Form.Control as="textarea" rows={3} value={publicationForm.description} placeholder="Description" onChange={(e) => setPublicationForm({ ...publicationForm, description: e.target.value })} /></Col>
+                      <Col xs={12} className="admin-field-half"><Form.Control value={publicationForm.tags} placeholder="Tags (comma-separated)" onChange={(e) => setPublicationForm({ ...publicationForm, tags: e.target.value })} /></Col>
+                      <Col xs={12} className="admin-field-full"><Form.Control as="textarea" rows={3} value={publicationForm.description} placeholder="Description" onChange={(e) => setPublicationForm({ ...publicationForm, description: e.target.value })} /></Col>
                     </Row>
                     <div className="mt-3 text-end">
                       <Button onClick={() => void createPublication()}>Create Publication</Button>
@@ -2215,7 +2137,7 @@ export default function AdminPanel() {
           <>
             <Card className="admin-surface mb-3">
               <Card.Body>
-                <Row className="g-3 align-items-end">
+                <Row className="g-3 align-items-end admin-form-grid admin-form-grid-6">
                   <Col md={2}>
                     <Form.Label>Area</Form.Label>
                     <Form.Select value={auditArea} onChange={(e) => setAuditArea(e.target.value)}>
@@ -2242,18 +2164,18 @@ export default function AdminPanel() {
                     <Form.Label>Action</Form.Label>
                     <Form.Control value={auditAction} onChange={(e) => setAuditAction(e.target.value)} placeholder="create / update / delete" />
                   </Col>
-                  <Col md={3}>
+                  <Col md={3} className="admin-field-wide">
                     <Form.Label>Path</Form.Label>
                     <Form.Control value={auditPath} onChange={(e) => setAuditPath(e.target.value)} placeholder="/api/admin/users" />
                   </Col>
-                  <Col md={1} className="text-md-end">
+                  <Col md={1} className="text-md-end admin-field-action">
                     <Button variant="primary" onClick={() => void withAction(reloadAuditEvents, 'Audit trail refreshed')}>Run</Button>
                   </Col>
                 </Row>
               </Card.Body>
             </Card>
 
-            <Row className="g-3 mb-3">
+            <Row className="g-3 mb-3 admin-kpi-grid">
               <Col md={4}><Card body className="admin-kpi"><div className="kpi-title">Total changes</div><div className="kpi-value">{auditSummary.total}</div></Card></Col>
               <Col md={4}><Card body className="admin-kpi"><div className="kpi-title">Success / blocked / errors</div><div className="kpi-value">{auditSummary.success} / {auditSummary.blocked} / {auditSummary.errors}</div></Card></Col>
               <Col md={4}><Card body className="admin-kpi"><div className="kpi-title">Avg action time</div><div className="kpi-value">{auditSummary.avg_duration_ms} ms</div></Card></Col>
@@ -2330,7 +2252,7 @@ export default function AdminPanel() {
           <>
             <Card className="admin-surface mb-3">
               <Card.Body>
-                <Row className="g-3 align-items-end mb-2">
+                <Row className="g-3 align-items-end admin-form-grid admin-form-grid-6 mb-2">
                   <Col md={2}>
                     <Form.Label>Method</Form.Label>
                     <Form.Select value={logMethod} onChange={(e) => setLogMethod(e.target.value)}>
@@ -2360,7 +2282,7 @@ export default function AdminPanel() {
                       <option value="error">error</option>
                     </Form.Select>
                   </Col>
-                  <Col md={4}>
+                  <Col md={4} className="admin-field-wide">
                     <Form.Label>Path contains</Form.Label>
                     <Form.Control value={logPath} onChange={(e) => setLogPath(e.target.value)} placeholder="/api/admin/users" />
                   </Col>
@@ -2368,7 +2290,7 @@ export default function AdminPanel() {
                     <Form.Label>Status</Form.Label>
                     <Form.Control value={logStatusCode} onChange={(e) => setLogStatusCode(e.target.value)} placeholder="200" />
                   </Col>
-                  <Col md={1} className="text-md-end">
+                  <Col md={1} className="text-md-end admin-field-action">
                     <Button variant="outline-light" onClick={() => void withAction(reloadLogs, 'Logs refreshed')}>Run</Button>
                   </Col>
                 </Row>
@@ -2382,12 +2304,28 @@ export default function AdminPanel() {
               </Card.Body>
             </Card>
 
-            <Row className="g-3 mb-3">
+            <Row className="g-3 mb-3 admin-kpi-grid">
               <Col md={3}><Card body className="admin-kpi"><div className="kpi-title">Total events</div><div className="kpi-value">{logsSummary.total}</div></Card></Col>
               <Col md={3}><Card body className="admin-kpi"><div className="kpi-title">Success / blocked / errors</div><div className="kpi-value">{logsSummary.success || 0} / {logsSummary.blocked || 0} / {logsSummary.errors || 0}</div></Card></Col>
               <Col md={3}><Card body className="admin-kpi"><div className="kpi-title">Auth sessions</div><div className="kpi-value">{logsSummary.authenticated || 0}</div><div className="kpi-sub">Locked accounts: {logsSummary.locked_accounts || 0}</div></Card></Col>
               <Col md={3}><Card body className="admin-kpi"><div className="kpi-title">Average API latency</div><div className="kpi-value">{logsSummary.avg_response_ms} ms</div><div className="kpi-sub">4xx / 5xx: {logsSummary.client_errors} / {logsSummary.server_errors}</div></Card></Col>
             </Row>
+
+            <Card className="admin-surface mb-3">
+              <Card.Body>
+                <h5 className="mb-3 fw-bold"><AlertTriangle size={18} className="me-2 text-warning" /> Top failing paths</h5>
+                <div className="admin-monitoring-grid">
+                  {failingPaths.slice(0, 8).map((item) => (
+                    <div key={`${item.method}-${item.path}-${item.status_code}`} className="admin-map-item">
+                      <strong>{item.method} HTTP {item.status_code}</strong>
+                      <span>{item.path}</span>
+                      <small>{item.outcome} / {item.count} events</small>
+                    </div>
+                  ))}
+                  {failingPaths.length === 0 && <div className="text-secondary small">No failing paths for the current filters.</div>}
+                </div>
+              </Card.Body>
+            </Card>
 
             <Card className="admin-surface">
               <Card.Body>

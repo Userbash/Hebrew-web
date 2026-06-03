@@ -29,6 +29,7 @@ import accessControlRoutes from './api/routes/accessControl.js';
 import adminRoutes from './api/routes/admin.js';
 import profileAvatarRoutes from './api/routes/profileAvatar.js';
 import orchestratorRoutes from './api/routes/orchestrator.js';
+import coursesRoutes from './api/routes/courses.js';
 
 import { errorHandler, notFound } from './api/middleware/errorHandler.js';
 import { telemetryMiddleware } from './api/middleware/telemetry.js';
@@ -178,6 +179,7 @@ app.use('/api/access', accessControlRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/profile-avatar', profileAvatarRoutes);
 app.use('/api/orchestrator', orchestratorRoutes);
+app.use('/api/courses', coursesRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

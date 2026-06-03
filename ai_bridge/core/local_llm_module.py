@@ -112,3 +112,20 @@ class LocalLLMModule(KernelModule):
             "available_models": probe.get("available_models", []),
             "last_error": probe.get("error"),
         }
+
+    def task_profile(self) -> dict[str, Any]:
+        return {
+            "agent_type": "local_llm",
+            "model": self.model_name,
+            "endpoint": self.endpoint,
+            "capabilities": ["code", "fix", "refactor", "test", "docs", "research", "review"],
+            "primary_tasks": [
+                "code generation",
+                "bug fixing",
+                "refactoring",
+                "test generation",
+                "documentation",
+                "research summaries",
+                "review and critique",
+            ],
+        }

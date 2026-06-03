@@ -41,6 +41,10 @@ export interface AdminLogsResponse {
     success?: number;
     blocked?: number;
     errors?: number;
+    code_400?: number;
+    code_401?: number;
+    code_403?: number;
+    code_429?: number;
     authenticated?: number;
     locked_accounts?: number;
   };

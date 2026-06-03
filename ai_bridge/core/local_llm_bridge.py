@@ -4,6 +4,7 @@ import logging
 import os
 import shlex
 import subprocess
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.error import URLError
@@ -55,6 +56,60 @@ class LocalLLMBridge:
         except Exception:
             return False
 
+    def host_runtime_available(self) -> dict[str, bool]:
+        probes = {
+            "distrobox": self._run(["bash", "-lc", "command -v distrobox >/dev/null 2>&1"]).returncode == 0,
+            "ollama": self._run(["bash", "-lc", "command -v ollama >/dev/null 2>&1"]).returncode == 0,
+        }
+        return probes
+
+    def bootstrap_container(self, model_name: str) -> bool:
+        if not self.host_runtime_available()["distrobox"]:
+            logger.warning("Local LLM bootstrap skipped: distrobox unavailable on host.")
+            return False
+
+        if not self.container_exists():
+            create_cmd = [
+                "distrobox",
+                "create",
+                "--name",
+                self.container_name,
+                "--image",
+                "docker.io/library/debian:bookworm",
+                "--yes",
+                "--nvidia",
+                "--additional-flags",
+                f"--publish {self.ollama_port}:{self.ollama_port}",
+            ]
+            create = self._run(create_cmd)
+            if create.returncode != 0:
+                logger.warning("Failed to create local LLM container %s: %s", self.container_name, (create.stderr or create.stdout).strip())
+                return False
+
+        install_script = (
+            "set -euo pipefail; "
+            "export DEBIAN_FRONTEND=noninteractive; "
+            "apt-get update; "
+            "apt-get install -y curl ca-certificates python3-pip; "
+            "curl -fsSL https://ollama.com/install.sh | sh"
+        )
+        install = self._run(["distrobox", "enter", self.container_name, "--", "bash", "-lc", install_script])
+        if install.returncode != 0:
+            logger.warning("Failed to install Ollama in local LLM container %s: %s", self.container_name, (install.stderr or install.stdout).strip())
+            return False
+
+        start_script = (
+            f"set -euo pipefail; export OLLAMA_HOST={shlex.quote(self.ollama_host)} OLLAMA_ORIGINS=*; "
+            "if ! pgrep -x ollama >/dev/null 2>&1; then nohup ollama serve > /tmp/ollama.log 2>&1 & fi; "
+            f"sleep 5; ollama pull {shlex.quote(model_name)}"
+        )
+        start = self._run(["distrobox", "enter", self.container_name, "--", "bash", "-lc", start_script])
+        if start.returncode != 0:
+            logger.warning("Failed to start Ollama in local LLM container %s: %s", self.container_name, (start.stderr or start.stdout).strip())
+            return False
+
+        return self._host_probe().get("ok", False) and self.is_model_downloaded(model_name)
+
     def is_container_running(self) -> bool:
         try:
             result = self._run(["distrobox", "list", "--no-color"])
@@ -87,8 +142,8 @@ class LocalLLMBridge:
 
     def ensure_ready(self, model_name: str) -> bool:
         if not self.container_exists():
-            logger.warning("Local LLM container '%s' does not exist; skipping autostart.", self.container_name)
-            return False
+            if not self.bootstrap_container(model_name):
+                return False
 
         quoted_model = shlex.quote(model_name)
         boot_cmd = (
@@ -111,5 +166,22 @@ class LocalLLMBridge:
         return self.is_model_downloaded(model_name)
 
     def query(self, prompt: str, model_name: str) -> str:
-        # Placeholder for integration with Orchestrator
-        return "Not implemented"
+        url = f"http://127.0.0.1:{self.ollama_port}/api/generate"
+        import json
+        import requests
+        try:
+            response = requests.post(
+                url,
+                json={
+                    "model": model_name,
+                    "prompt": prompt,
+                    "stream": False,
+                },
+                timeout=300.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("response", "")
+        except Exception as exc:
+            logger.error("Failed to query local LLM: %s", exc)
+            return f"Error: {exc}"

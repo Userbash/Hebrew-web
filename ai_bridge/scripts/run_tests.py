@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import subprocess
-import sys
+from ai_bridge.core.orchestrator import Orchestrator
 
 
 def main() -> int:
-    return subprocess.call([sys.executable, "-m", "pytest", "ai_bridge/tests"])
+    orchestrator = Orchestrator()
+    result = orchestrator.run_test_suite(project_root=".")
+    return 0 if result.get("ok") else 1
 
 
 if __name__ == "__main__":

@@ -1,18 +1,32 @@
-from ai_bridge.core.integrations.design_learning_module import DesignLearningModule, DesignSample
-from ai_bridge.core.session_memory import SessionMemory
+from __future__ import annotations
+
+from ai_bridge.core.design_learning_module import DesignLearningModule
+from ai_bridge.core.orchestrator import Orchestrator
 
 
-def test_design_learning_improves_confidence_for_framework():
-    module = DesignLearningModule(SessionMemory())
-    module.add_sample(
-        DesignSample(
-            project_id="p1",
-            framework="react",
-            image_labels=["saas", "dashboard", "clean"],
-            user_feedback_score=0.9,
-        )
-    )
-    result = module.suggest_ui_direction("react")
-    assert result["style"] == "data-trained-modern"
-    assert result["confidence"] > 0.7
-    assert "dashboard" in result["tokens"]
+def test_design_learning_module_turns_findings_into_actions():
+    module = DesignLearningModule()
+    report = {
+        "analysis": {
+            "findings": [
+                {"severity": "high", "category": "alignment", "description": "left rail dominates", "evidence": {"asymmetry": 0.42}},
+                {"severity": "medium", "category": "spacing", "description": "vertical gaps are uneven", "evidence": {"asymmetry": 0.31}},
+            ]
+        }
+    }
+
+    artifact = module.learn_from_audit(report)
+
+    assert artifact["profile"]["issue_count"] == 2
+    assert "alignment" in artifact["profile"]["categories"]
+    assert artifact["recommendations"]["pipeline"][1]["agent"] == "frontend_design"
+    assert len(artifact["recommendations"]["next_actions"]) == 2
+
+
+def test_orchestrator_exposes_design_learning_module():
+    orchestrator = Orchestrator()
+    module = orchestrator.get_module("design_learning")
+
+    assert module is not None
+    status = orchestrator.design_learning_status()
+    assert status["status"] == "active"

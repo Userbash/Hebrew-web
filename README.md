@@ -1,4 +1,4 @@
-# Language School Platform
+Ш# Language School Platform
 
 A full-stack learning platform with one consistent product flow:
 public website -> login -> student workspace -> admin console.

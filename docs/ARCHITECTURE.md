@@ -1,83 +1,61 @@
-# Architecture
+# System Architecture
 
-## System Context
+Hebrew AI Platform is a multi-service learning platform composed of a React frontend, a Node.js backend, and a Python-based AI orchestration layer.
 
-Hebrew AI Platform is a multi-service learning platform composed of:
-- `frontend-react`: web UI for learners and administrators
-- `backend`: API, authentication, RBAC, auditing, telemetry
-- `ai_bridge`: Python orchestration runtime for agent workflows
-- `infra`: routing, logging, and observability services
+## 1. High-Level Component Map
 
-## High-Level Component Map
+1. **Client Layer**: Browser clients consume REST API endpoints. User and admin UX is rendered by React/Vite frontend (`frontend-react`).
+2. **Application Layer**: Express backend (`backend`) handles auth/session lifecycle, domain policies, RBAC checks, and content operations.
+3. **AI Orchestration Layer**: `ai_bridge` (Python) decomposes root tasks into atomic agent workflows.
+4. **Data Layer**: PostgreSQL for persistence and Redis for cache/sessions.
+5. **Observability**: Traefik (edge), Loki/Promtail (logs), Grafana (dashboards).
 
-1. Client Layer
-- Browser clients consume REST API endpoints.
-- User and admin UX is rendered by React/Vite frontend.
+## 2. AI Bridge & Orchestration
 
-2. Application Layer
-- Express backend handles auth/session lifecycle, domain policies, RBAC checks, and content operations.
-- Admin scope is isolated under `/api/admin/*` with stricter role and permission gates.
+The `ai_bridge` is a modular runtime for autonomous agent workflows.
 
-3. AI Orchestration Layer
-- `ai_bridge` decomposes root tasks into DAG-like atomic tasks.
-- Routing is capability-driven; model selection is risk/complexity-aware.
-- Quality gates, feedback loops, and result merging drive final output quality.
-- For current model/provider routing, see [AI Bridge Runtime Routing](./AI_BRIDGE_RUNTIME_ROUTING.md).
-- For deeper technical background, see [AI Orchestrator: Core Technical Reference](./AI_ORCHESTRATOR_CORE.md).
+### 2.1 Core Components
+- **Orchestrator**: Handles intake, decomposition, routing, execution, and validation.
+- **ModelSelector**: Classifies task complexity (LOW, MEDIUM, HIGH, CRITICAL) and picks models.
+- **TaskRouter & SmartScheduler**: Assign tasks to agents based on capability and availability.
+- **SecurityGate**: Validates shell commands and redacts secrets before sending data to external AI providers.
 
-4. Data and State Layer
-- PostgreSQL: primary persistence and relational constraints.
-- Redis: cache/session acceleration.
-- SQL migrations under `backend/database/migrations/` are the source of schema truth.
+### 2.2 Runtime Flow
+1. Root task is decomposed into atomic tasks (`PLAN`, `CODE`, `TEST`, `REVIEW`).
+2. Model plan is built based on complexity and session token budget.
+3. Agents execute tasks in a rootless sandbox for isolation.
+4. `QualityAnalyzer` and `FeedbackLoop` verify output and trigger `FIX` tasks if needed.
+5. `ResultMerger` assembles the final response.
 
-5. Edge and Observability Layer
-- Traefik routes external traffic.
-- Loki + Promtail collect logs.
-- Grafana provides dashboards and operational visibility.
+### 2.3 Model Routing
+Routing is provider-agnostic. It prefers live account model lists from OpenAI (if enabled) and falls back to Gemini, Mistral, or local agents.
+- **Low**: local or lightweight provider.
+- **Medium**: Mistral/Gemini.
+- **High/Critical**: Stronger providers (OpenAI GPT-4 series) if budget allows.
 
-## Core Runtime Flows
+## 3. Data and Security
 
-### User Authentication Flow
-1. User submits credentials or registration form.
-2. Backend validates input and domain policies.
-3. Backend issues access/refresh tokens and persists session hash.
-4. Frontend uses authenticated API calls with role-aware UI access controls.
+### 3.1 Persistence
+SQL migrations under `backend/database/migrations/` are the source of truth for the PostgreSQL schema.
 
-### Administrative Control Flow
-1. Request enters `/api/admin/*`.
-2. Middleware chain enforces token validity, rate limit, role requirements.
-3. Route-level permission checks enforce action-level RBAC policy.
-4. Action and request context are written to telemetry and audit streams.
+### 3.2 Security and RBAC
+- **RBAC**: Strict separation between user and administrative surfaces (`/api/admin/*`).
+- **Auth**: JWT-based access/refresh tokens with refresh token hashes stored in `user_sessions`.
+- **Policy**: Email domain allow/block lists to harden registration.
 
-### AI Orchestration Flow
-1. Root task enters orchestrator.
-2. Task is decomposed into atomic tasks with dependencies.
-3. Model selector and scheduler pick route and execution profile.
-4. Agent executes task; quality analyzer verifies output.
-5. Feedback loop triggers fix tasks if quality thresholds are not met.
-6. Result merger combines outputs into final response.
+## 4. Observability & Maintenance
+- **Logging**: Centralized logs via Loki/Promtail.
+- **Metrics**: Exported to Prometheus/Grafana.
+- **Health**: Standard `/api/health` probes for all services.
 
-## Cross-Cutting Concerns
+## 5. Memory Architecture Vision
+The system is evolving toward a persistent cognitive layer:
+- **Vector Storage**: Using `pgvector` for long-term memory.
+- **Advanced RAG**: Hybrid search (BM25 + Vector) and cross-encoder reranking.
+- **Context Optimization**: Adaptive injection to minimize token bloat.
+- **Self-Healing**: Autonomous pruning of stale or contradictory memories.
 
-### Security
-- Strict RBAC separation between regular and administrative surfaces.
-- Session/token protection and security middleware.
-- Email domain allow/block policies for registration hardening.
-
-### Auditability
-- Structured audit trails for administrative actions.
-- Request-level telemetry for diagnosis and traceability.
-
-### Reliability
-- Health checks for app and infra services.
-- Container-level restart policies.
-- CI checks for docs/API consistency.
-
-## Source of Truth
-
-- API runtime behavior: `backend/api/routes/*`, `backend/api/middleware/*`
-- RBAC rules: `backend/api/security/*`, migrations `005+`
-- DB schema history: `backend/database/migrations/*`
-- AI runtime behavior: `ai_bridge/core/*`, `ai_bridge/agents/*`
-- Infrastructure routing/logging: `docker-compose.yml`, `infra/*`
-
+## 6. Test Coverage
+- **Backend**: API smoke paths and endpoint behavior checks.
+- **AI Bridge**: Orchestrator flows, routing logic, and protocol reassembly.
+- **System**: Integration-level assertions and deployment validations.

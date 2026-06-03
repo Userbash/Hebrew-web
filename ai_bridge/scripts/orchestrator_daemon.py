@@ -19,6 +19,7 @@ from ai_bridge.agents.reviewer_agent import ReviewerAgent
 from ai_bridge.agents.tester_agent import TesterAgent
 from ai_bridge.agents.frontend_dev_agent import FrontendDevAgent
 from ai_bridge.agents.frontend_design_agent import FrontendDesignAgent
+from ai_bridge.agents.local_llm_agent import LocalLLMAgent
 from ai_bridge.core.orchestration_config import OrchestrationConfig
 from ai_bridge.core.security import SecurityManager, SecurityPolicy
 
@@ -58,7 +59,8 @@ async def main():
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", model_name="gpt-test-standard", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", model_name="gpt-review-large", provider="openai")
     orchestrator.attach_local_agent("frontend-dev-1", FrontendDevAgent("frontend-dev-1"), agent_type="codex", model_name=codex_model, provider=codex_provider)
-    orchestrator.attach_local_agent("frontend-design-1", FrontendDesignAgent("frontend-design-1"), agent_type="docs", model_name="design-spec", provider="local")
+    orchestrator.attach_local_agent("frontend-design-1", LocalLLMAgent("frontend-design-1", "qwen2.5:32b-instruct-q4_k_m"), agent_type="docs", model_name="qwen2.5:32b-instruct-q4_k_m", provider="local")
+    orchestrator.attach_local_agent("local-agent-1", LocalLLMAgent("local-agent-1"), agent_type="custom", model_name="qwen2.5:32b-instruct-q4_k_m", provider="local")
 
     logger.info(f"System Ready. Agents bound: {len(orchestrator.registry.list_agents())}")
     await orchestrator.listen_for_tasks()

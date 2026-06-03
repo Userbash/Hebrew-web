@@ -45,6 +45,9 @@ from .ui_design_system_module import UIDesignSystemModule
 from .ui_anti_template_module import UIAntiTemplateModule
 from .frontend_engineering_bridge_module import FrontendEngineeringBridgeModule
 from .autodev_pipeline_module import AutodevPipelineModule
+from .testing_module import TestingModule
+from .vision_design_audit_module import VisionDesignAuditModule
+from .design_learning_module import DesignLearningModule
 from .local_llm_bridge import LocalLLMBridge
 from .local_llm_module import LocalLLMModule
 
@@ -104,6 +107,13 @@ class Orchestrator:
 
         if ready:
             self.log("info", f"[LOCAL_LLM] Autostart complete for {module.model_name}.")
+            if os.getenv("AI_BRIDGE_AUTORUN_TEST_SUITE", "true").strip().lower() in {"1", "true", "yes", "on"}:
+                try:
+                    suite = self.run_test_suite(project_root=os.getenv("AI_BRIDGE_PROJECT_ROOT", "."))
+                except RuntimeError as exc:
+                    self.log("warning", f"[TESTING] Autostart suite skipped: {exc}")
+                else:
+                    self.log("info", f"[TESTING] Autostart suite completed ok={suite.get('ok')}")
         else:
             self.log("warning", f"[LOCAL_LLM] Autostart could not confirm readiness for {module.model_name}.")
 
@@ -158,6 +168,9 @@ class Orchestrator:
         self.module_manager.register(UIAntiTemplateModule())
         self.module_manager.register(FrontendEngineeringBridgeModule())
         self.module_manager.register(AutodevPipelineModule())
+        self.module_manager.register(TestingModule())
+        self.module_manager.register(VisionDesignAuditModule())
+        self.module_manager.register(DesignLearningModule())
         self.module_manager.register(LocalLLMModule())
         
         self.module_manager.load("ai_activity")
@@ -176,6 +189,9 @@ class Orchestrator:
         self.module_manager.load("ui_anti_template")
         self.module_manager.load("frontend_engineering_bridge")
         self.module_manager.load("autodev_pipeline")
+        self.module_manager.load("testing")
+        self.module_manager.load("vision_design_audit")
+        self.module_manager.load("design_learning")
         self._autostart_local_llm()
         
         # Load local_llm only if not in testing environment
@@ -293,6 +309,45 @@ class Orchestrator:
         if not isinstance(module, AutodevPipelineModule):
             raise RuntimeError("autodev_pipeline module is not loaded")
         return module.run_pipeline(specs=specs, project_root=project_root, figma_api_available=figma_api_available)
+
+    def run_test_suite(self, project_root: str = ".") -> dict[str, object]:
+        module = self.module_manager.get_module("testing")
+        if not isinstance(module, TestingModule):
+            raise RuntimeError("testing module is not loaded")
+        return module.run_suite(project_root=project_root)
+
+    def run_design_audit(self, url: str | None = None, output_dir: str = "test-results") -> dict[str, object]:
+        module = self.module_manager.get_module("vision_design_audit")
+        if not isinstance(module, VisionDesignAuditModule):
+            raise RuntimeError("vision_design_audit module is not loaded")
+        result = module.run_audit(url=url, output_dir=output_dir)
+        learning = self.learn_design_from_audit(result)
+        result["learning"] = learning
+        return result
+
+    def learn_design_from_audit(self, audit_report: dict[str, object], session_id: str = "design-learning") -> dict[str, object]:
+        module = self.module_manager.get_module("design_learning")
+        if not isinstance(module, DesignLearningModule):
+            raise RuntimeError("design_learning module is not loaded")
+        return module.learn_from_audit(audit_report, session_id=session_id)
+
+    def design_learning_status(self) -> dict[str, object]:
+        module = self.module_manager.get_module("design_learning")
+        if isinstance(module, DesignLearningModule):
+            return module.finalize()
+        return {"status": "inactive", "episodes": 0, "patterns": {}, "last_plan": {}}
+
+    def local_llm_status(self) -> dict[str, object]:
+        module = self.module_manager.get_module("local_llm")
+        if isinstance(module, LocalLLMModule):
+            return {"module": module.finalize(), "profile": module.task_profile()}
+        return {"module": None, "profile": None}
+
+    def testing_status(self) -> dict[str, object]:
+        module = self.module_manager.get_module("testing")
+        if isinstance(module, TestingModule):
+            return {"module": module.status(), "final": module.finalize()}
+        return {"module": None, "final": None}
 
     def monitoring_snapshot(self) -> dict[str, object]:
         control = self._control_module()

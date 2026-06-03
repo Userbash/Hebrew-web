@@ -31,6 +31,11 @@ class RegistrationRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class DesignAuditRequest(BaseModel):
+    url: Optional[str] = None
+    output_dir: Optional[str] = None
+
+
 @dataclass
 class APIBridgeModule:
     name: str = "api_bridge"
@@ -54,7 +59,6 @@ class APIBridgeModule:
             self._api.log("info", "[API] api_bridge disabled by AI_BRIDGE_API_ENABLED")
             return
 
-        # We run the FastAPI server in a separate thread to not block the Orchestrator
         self._server_thread = threading.Thread(target=self._run_server, daemon=True)
         self._server_thread.start()
         self._api.log("info", f"[API] {self.name} server started on {self.host}:{self.port}")
@@ -70,12 +74,70 @@ class APIBridgeModule:
         async def api_health_endpoint():
             return {"status": "ok"}
 
+        @app.get("/status")
+        async def status_endpoint():
+            if not self._api:
+                return {"status": "error", "message": "Kernel API not available"}
+
+            module_manager = self._api.get_context("module_manager")
+            registry = self._api.get_context("registry")
+            local_llm_module = module_manager.get_module("local_llm") if hasattr(module_manager, "get_module") else None
+            testing_module = module_manager.get_module("testing") if hasattr(module_manager, "get_module") else None
+            vision_module = module_manager.get_module("vision_design_audit") if hasattr(module_manager, "get_module") else None
+            design_learning_module = module_manager.get_module("design_learning") if hasattr(module_manager, "get_module") else None
+
+            local_llm = local_llm_module.finalize() if local_llm_module and hasattr(local_llm_module, "finalize") else {}
+            local_llm_profile = local_llm_module.task_profile() if local_llm_module and hasattr(local_llm_module, "task_profile") else {}
+            testing = testing_module.status() if testing_module and hasattr(testing_module, "status") else {}
+            testing_final = testing_module.finalize() if testing_module and hasattr(testing_module, "finalize") else {}
+            design_audit = vision_module.finalize() if vision_module and hasattr(vision_module, "finalize") else {}
+            design_learning = design_learning_module.finalize() if design_learning_module and hasattr(design_learning_module, "finalize") else {}
+
+            agents: list[dict[str, Any]] = []
+            if registry and hasattr(registry, "list_agents"):
+                for agent in registry.list_agents():
+                    if getattr(agent, "provider", None) == "local" or "local" in str(getattr(agent, "model_name", "")).lower():
+                        agents.append(
+                            {
+                                "id": agent.id,
+                                "type": agent.agent_type,
+                                "provider": agent.provider,
+                                "model_name": agent.model_name,
+                                "capabilities": list(agent.capabilities),
+                                "critical": agent.critical,
+                            }
+                        )
+
+            return {
+                "status": "ok",
+                "local_llm": local_llm,
+                "local_llm_profile": local_llm_profile,
+                "testing": testing,
+                "testing_final": testing_final,
+                "vision_design_audit": design_audit,
+                "design_learning": design_learning,
+                "local_agents": agents,
+            }
+
+        @app.post("/design-audit")
+        async def design_audit_endpoint(request: DesignAuditRequest):
+            if not self._api:
+                return {"status": "error", "message": "Kernel API not available"}
+            try:
+                result = await run_in_threadpool(
+                    self._api.run_design_audit,
+                    request.url,
+                    request.output_dir or "test-results",
+                )  # type: ignore
+                return {"status": "ok", "result": result}
+            except Exception as exc:
+                return {"status": "error", "message": str(exc)}
+
         @app.post("/register_chat")
         async def register_endpoint(request: RegistrationRequest):
             if not self._api:
                 return {"status": "error", "message": "Kernel API not available"}
 
-            # Access the Chat Bus module via the Orchestrator
             bus = self._api.get_context("module_manager").get_module("chat_bus")
             if not bus:
                 return {"status": "error", "message": "Chat Bus module not loaded"}
@@ -105,35 +167,12 @@ class APIBridgeModule:
 
             try:
                 result = await run_in_threadpool(self._api.submit_user_task, payload, source=source_label)  # type: ignore
-                
-                agents_used = []
-                for r in result.get("results", []):
-                    agent_id = r.get("agent_id", "unknown")
-                    provider = r.get("provider") or "unknown"
-                    model = r.get("model") or "unknown"
-                    agents_used.append(f"{agent_id} [{provider} :: {model}]")
-
-                meta_header = "\n".join([
-                    "╔══════════════════════════════════════════════════════════════════════╗",
-                    "║ 🤖 AI ORCHESTRATOR EXECUTION REPORT                                  ║",
-                    "╠══════════════════════════════════════════════════════════════════════╣",
-                    f"║ ► Tasks routed to: {', '.join(agents_used)}",
-                    "╚══════════════════════════════════════════════════════════════════════╝",
-                    ""
-                ])
-
-                merged = result.get("merged", {})
-                if isinstance(merged, dict) and "summary" in merged:
-                    merged["summary"] = meta_header + "\n" + str(merged["summary"])
-                elif isinstance(merged, str):
-                    merged = meta_header + "\n" + merged
-
                 return {
                     "task_id": result.get("task_id", "unknown"),
                     "status": "completed",
                     "source": source_label,
                     "provider": provider_label,
-                    "result": merged if merged else result.get("results", []),
+                    "result": result.get("merged", result.get("results", [])),
                 }
             except Exception as e:
                 logger.exception("Error in API Bridge endpoint: %s", e)
@@ -143,31 +182,23 @@ class APIBridgeModule:
         async def dump_memory_endpoint():
             if not self._api:
                 return {"status": "error", "message": "Kernel API not available"}
-            
             memory = self._api.get_memory()
             if not memory:
                 return {"status": "error", "message": "Memory module not found"}
-            
             all_keys = memory.list_keys()
             dump = {}
             for key in all_keys:
-                # Key format is scope:identifier:actual_key
                 parts = key.split(":")
                 if len(parts) >= 3:
                     scope, identifier, k = parts[0], parts[1], ":".join(parts[2:])
                     val = memory.get(scope, identifier, k)
                     dump[key] = val
-            
             return {"status": "success", "data": dump}
 
         @app.get("/stats")
         async def stats_endpoint():
             if not self._api:
                 return {"status": "error", "message": "Kernel API not available"}
-            
-            # The API allows us to fetch a module directly if we have access to the orchestrator.
-            # But the KernelAPI abstraction might not expose `module_manager`.
-            # Let's assume we can get the orchestrator state or the module directly.
             if hasattr(self._api, "get_module"):
                 usage_module = self._api.get_module("model_usage")
                 if usage_module:
@@ -180,11 +211,9 @@ class APIBridgeModule:
         async def manage_module(action: str, request: dict):
             if not self._api:
                 return {"status": "error", "message": "Kernel API not available"}
-            
             module_name = request.get("module_name")
             if not module_name:
                 return {"status": "error", "message": "module_name is required"}
-                
             if hasattr(self._api, "load_module") and hasattr(self._api, "unload_module"):
                 try:
                     if action == "load":
@@ -206,8 +235,6 @@ class APIBridgeModule:
     def on_unload(self) -> None:
         if self._api:
             self._api.log("info", f"[API] {self.name} unloading...")
-        # Uvicorn doesn't have a trivial way to stop from a thread without more ceremony
-        # but since it's a daemon thread, it will exit with the process.
 
     def before_task(self, task: Any, context: dict[str, Any]) -> None:
         pass

@@ -1,1 +1,5 @@
-export function App(){ return <div>Language School UI</div>; }
+import PublicHomePage from './pages/PublicHomePage';
+
+export function App() {
+  return <PublicHomePage />;
+}

@@ -1,57 +1,21 @@
-# Documentation Index
+# Project Documentation
 
-## Core
+## Core Reference
+- [Architecture](./ARCHITECTURE.md) - System overview, AI Bridge components, and runtime flows.
+- [API Guide](./API/GUIDE.md) - API standards, error models, and versioning policy.
+- [Frontend Guidelines](./FRONTEND_GUIDELINES.md) - Design system, UI standards, and audit procedures.
 
-- `ARCHITECTURE.md` - system architecture and runtime flows
-- `PROJECT_FULL_DOCUMENTATION_EN.md` - full project deep-dive
-- `AI_BRIDGE_RUNTIME_ROUTING.md` - current AI Bridge model/provider routing rules
-- `AI_BRIDGE_ARCHITECTURE.md` - AI Bridge component overview and wiring
-- `AI_ORCHESTRATOR_CORE.md` - deeper technical reference, kept for legacy detail
+## Operations & Plans
+- [Governance & Policies](./GOVERNANCE.md) - Documentation rules, release process, and RBAC matrix.
+- [AI Bridge Roadmap](./AI_BRIDGE_ROADMAP.md) - Hardening phases, memory upgrades, and execution backlogs.
+- [Operational Runbooks](./RUNBOOKS.md) - Startup, deployment, and incident response procedures.
 
-## Governance and Process
+## Change Logs
+- [Security Changelog](./SECURITY_CHANGELOG.md) - Security-relevant changes independent of features.
+- [General Changelog](../CHANGELOG.md) - Version history and feature updates.
 
-- `DOCUMENTATION_GOVERNANCE.md` - required documentation update rules and CI enforcement
-- `VERSIONING_POLICY.md` - semantic versioning and release rules
-- `TRACEABILITY_POLICY.md` - required issue-to-release traceability chain
-- `ENVIRONMENT_VERSIONING.md` - environment reproducibility/version controls
-- `RELEASE_MANIFEST_TEMPLATE.md` - release metadata template
-- `DB_MIGRATION_PLAYBOOK.md` - migration and rollback standards
+## Technical Decisions
+- [ADR Index](./ADR/README.md) - Architecture Decision Records.
 
-## Security and Access
-
-- `RBAC_MATRIX.md` - role/permission governance map
-- `SECURITY_CHANGELOG.md` - security-impact change history
-
-## Operations
-
-- `RUNBOOKS/OPERATIONS_RUNBOOK.md` - startup/deploy operations
-- `RUNBOOKS/INCIDENT_RESPONSE_RUNBOOK.md` - incident handling flow
-
-## API Contracts
-
-- `API/README.md` - API documentation structure and rules
-- `API/ERRORS.md` - standard error model
-- `API/VERSIONING.md` - API compatibility/versioning approach
-- `API/routes/*` - route module coverage
-
-## Architecture Decisions
-
-- `ADR/README.md` - ADR process and index
-- `ADR/0000-template.md` - ADR template
-- `ADR/0001-documentation-governance-and-versioning-baseline.md` - accepted baseline ADR
-
-## Quality and Coverage
-
-- `TEST_COVERAGE_MAP.md` - current test coverage map and risk gaps
-
-## Orchestrator Hardening
-
-- `AI_BRIDGE_HARDENING_BACKLOG.md` - micro-task backlog with owners, dependencies, and DoD
-- `AI_BRIDGE_EXECUTION_PLAN_R1_R4.md` - encapsulated by-agent plan and decapsulated release execution model
-- `GEMINI_AUTO_ROUTING_MODULE_PLAN.md` - earlier Gemini routing plan, now superseded by the shared runtime routing doc
-
-## Session Memory
-
-- `AI_BRIDGE_SESSION_MEMORY.md` - architecture and security model for temporary session memory
-- `AI_BRIDGE_SESSION_MEMORY_BACKLOG.md` - micro-task decomposition and ownership map
-- `AI_BRIDGE_SESSION_MEMORY_RELEASE_PLAN.md` - decapsulated R1-R4 rollout plan
+## API Route Details
+- [Detailed Route Docs](./API/routes/) - Documentation for individual API modules.
