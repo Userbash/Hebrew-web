@@ -329,9 +329,42 @@ class Orchestrator:
                     return record.id
         return None
 
+    def _build_decomposition_advisory(self, task: Task) -> dict[str, object]:
+        advisory_context: dict[str, object] = {}
+
+        sourcecraft_module = self.module_manager.get_module("sourcecraft") if hasattr(self.module_manager, "get_module") else None
+        if sourcecraft_module and hasattr(sourcecraft_module, "build_delegation_profile"):
+            try:
+                advisory_context["sourcecraft"] = sourcecraft_module.build_delegation_profile(
+                    task,
+                    {
+                        "description": task.input.description,
+                        "repo_path": task.context.repo_path,
+                        "branch": task.context.branch,
+                    },
+                )
+            except Exception:
+                advisory_context["sourcecraft"] = {"enabled": False, "should_delegate": False}
+
+        local_llm_module = self.module_manager.get_module("local_llm") if hasattr(self.module_manager, "get_module") else None
+        if local_llm_module and hasattr(local_llm_module, "build_decomposition_draft"):
+            try:
+                advisory_context["local_llm"] = local_llm_module.build_decomposition_draft(
+                    task,
+                    {
+                        "description": task.input.description,
+                        "repo_path": task.context.repo_path,
+                        "branch": task.context.branch,
+                    },
+                )
+            except Exception:
+                advisory_context["local_llm"] = {"enabled": False, "ready": False, "should_delegate": False}
+
+        return advisory_context
 
     def create_execution_plan(self, task: Task) -> ExecutionPlan:
         self.console.emit("PLAN", "Задача проанализирована")
+        advisory_context = self._build_decomposition_advisory(task)
 
         # Try smart decomposition first
         smart_decomp = self.module_manager.get_module("smart_decomposer")
@@ -341,7 +374,7 @@ class Orchestrator:
                 self.console.emit("PLAN", f"Умная декомпозиция: создано {len(plan.atomic_tasks)} задач")
                 return plan
 
-        plan = self.decomposer.decompose(task)
+        plan = self.decomposer.decompose(task, advisory_context=advisory_context)
         self.console.emit("PLAN", f"Создано атомарных задач: {len(plan.atomic_tasks)}")
         return plan
 
@@ -396,7 +429,9 @@ class Orchestrator:
         started_perf = time.perf_counter()
         self.log("info", f"[PRE-FLIGHT] Verifying readiness for task {task.task_id}")
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
-        choice = self.model_selector.select(task)
+        advisory_context = self._build_decomposition_advisory(task)
+
+        choice = self.model_selector.select(task, advisory_context=advisory_context)
 
         self.console.emit(
             "MODEL_SELECTION",
@@ -411,6 +446,7 @@ class Orchestrator:
             "selected_provider": choice.provider,
             "selected_model": choice.model_name,
             "reason": choice.reason,
+            **advisory_context,
         }
         self.module_manager.before_task(task, module_context)
 

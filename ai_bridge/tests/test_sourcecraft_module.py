@@ -43,6 +43,9 @@ def test_sourcecraft_module_reports_ready_and_exposes_context(tmp_path, monkeypa
     assert context["sourcecraft"]["enabled"] is True
     assert context["sourcecraft"]["likely_repo_work"] is True
     assert context["sourcecraft"]["role"]["name"] == "sourcecraft"
+    assert context["sourcecraft"]["delegation"]["recommended_owner"] == "sourcecraft"
+    assert context["sourcecraft"]["delegation"]["should_delegate"] is True
+    assert context["sourcecraft"]["automation"]["owner"] == "sourcecraft"
     assert any("SOURCECRAFT" in message for _, message in api.messages)
 
 
@@ -57,6 +60,21 @@ def test_sourcecraft_module_gracefully_degrades_when_binary_missing(monkeypatch)
     assert final["status"] == "error"
     assert final["binary"] is None
     assert "not found" in str(final["last_error"])
+
+
+def test_sourcecraft_module_builds_delegation_profile():
+    from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskType
+
+    module = SourceCraftModule()
+    module._status = "ready"
+    task = Task(TaskType.PLAN, TaskInput("Prepare repo status, PR draft, and release notes"), TaskContext("demo", ".", "main"), required_capability="sourcecraft")
+
+    profile = module.build_delegation_profile(task, {"description": task.input.description})
+
+    assert profile["should_delegate"] is True
+    assert profile["recommended_owner"] == "sourcecraft"
+    assert profile["task_family"] == "repo_ops"
+    assert "summarize repository state" in profile["sourcecraft_actions"]
 
 
 def test_orchestrator_registers_sourcecraft_module():
@@ -112,6 +130,8 @@ def test_api_bridge_sourcecraft_delegate_preview():
 
     assert response["status"] == "ok"
     assert response["sourcecraft"]["role"]["name"] == "sourcecraft"
+    assert response["delegation"]["recommended_owner"] == "sourcecraft"
+    assert response["delegation"]["should_delegate"] is True
     assert response["route"]["assigned_agent"] == "orchestrator"
     assert response["schedule"]["route_mode"] == "orchestrator"
 
@@ -141,6 +161,54 @@ def test_task_decomposer_marks_sourcecraft_dag_nodes_in_context():
     assert graph.nodes
     assert all(node.payload.context.get("sourcecraft_role") is True for node in graph.nodes.values())
     assert all(node.payload.context.get("sourcecraft_role_name") == "sourcecraft" for node in graph.nodes.values())
+
+
+def test_task_decomposer_uses_local_llm_layered_draft():
+    from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskType
+    from ai_bridge.core.task_decomposer import TaskDecomposer
+
+    task = Task(TaskType.PLAN, TaskInput("Add Telegram authorization with backend, frontend, tests, and docs"), TaskContext("demo", ".", "main"))
+    advisory_context = {
+        "local_llm": {
+            "decomposition": {
+                "status": "model",
+                "layers": [
+                    {"name": "intake", "objective": "Normalize the request", "capability": "plan", "task_type": "plan", "dependencies": []},
+                    {"name": "implementation", "objective": "Implement backend and frontend changes", "capability": "code", "task_type": "code", "dependencies": ["intake"]},
+                    {"name": "verification", "objective": "Prepare tests and checks", "capability": "test", "task_type": "test", "dependencies": ["implementation"]},
+                ],
+            }
+        }
+    }
+
+    plan = TaskDecomposer().decompose(task, advisory_context=advisory_context)
+
+    assert [atomic.draft_layer for atomic in plan.atomic_tasks] == ["intake", "implementation", "verification"]
+    assert plan.draft_layers[0]["name"] == "intake"
+    assert plan.atomic_tasks[1].dependencies == [plan.atomic_tasks[0].task_id]
+
+
+def test_orchestrator_create_execution_plan_uses_local_llm_advisory(monkeypatch):
+    from ai_bridge.core.models import ExecutionPlan, Task, TaskContext, TaskInput, TaskType
+
+    orchestrator = Orchestrator()
+    task = Task(TaskType.PLAN, TaskInput("Add Telegram authorization with backend, frontend, tests, and docs"), TaskContext("demo", ".", "main"))
+
+    captured: dict[str, object] = {}
+
+    def fake_decompose(task_obj, advisory_context=None):
+        captured["advisory_context"] = advisory_context
+        return ExecutionPlan(root_task_id=task_obj.task_id, atomic_tasks=[task_obj], draft_layers=[])
+
+    monkeypatch.setattr(orchestrator.decomposer, "decompose", fake_decompose)
+    orchestrator.module_manager = SimpleNamespace(get_module=lambda name: None)
+    monkeypatch.setattr(orchestrator, "_build_decomposition_advisory", lambda task_obj: {"local_llm": {"decomposition": {"layers": [{"name": "intake", "objective": "Normalize request", "capability": "plan", "task_type": "plan", "dependencies": []}]}}})
+
+    plan = orchestrator.create_execution_plan(task)
+
+    assert len(plan.atomic_tasks) == 1
+    assert "local_llm" in captured["advisory_context"]
+    assert captured["advisory_context"]["local_llm"]["decomposition"]["layers"][0]["name"] == "intake"
 
 
 

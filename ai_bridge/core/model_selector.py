@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from typing import Any
 
 from .models import Complexity, Priority, Task, TaskType
 from .openai_runtime_router import OpenAIRuntimeRouter
@@ -54,6 +55,33 @@ class ModelSelector:
             return Complexity.MEDIUM
         return Complexity.LOW
 
+    @staticmethod
+    def _local_llm_advisory(advisory_context: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(advisory_context, dict):
+            return None
+        local = advisory_context.get("local_llm")
+        return local if isinstance(local, dict) else None
+
+    def _local_llm_choice(self, task: Task, complexity: Complexity, advisory_context: dict[str, Any] | None) -> ModelChoice | None:
+        local = self._local_llm_advisory(advisory_context)
+        if not local or not local.get("ready"):
+            return None
+        if task.priority == Priority.CRITICAL or complexity == Complexity.CRITICAL:
+            return None
+
+        task_family = str(local.get("task_family") or "general")
+        should_delegate = bool(local.get("should_delegate"))
+        if not should_delegate and task.type not in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
+            return None
+
+        if task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW} and complexity in {Complexity.LOW, Complexity.MEDIUM}:
+            return ModelChoice("local-small", "local", complexity, False, reason=f"local_llm_advisory_{task_family}")
+
+        if task.type == TaskType.PLAN and should_delegate and complexity in {Complexity.LOW, Complexity.MEDIUM}:
+            return ModelChoice("local-small", "local", complexity, True, reason=f"local_llm_plan_hand_off_{task_family}")
+
+        return None
+
     def _openai_choice(self, task: Task, complexity: Complexity, secondary_review: bool, reason: str, fallback_model: str) -> ModelChoice:
         if not OpenAIRuntimeRouter.enabled():
             return ModelChoice(fallback_model, "openai", complexity, secondary_review, reason=reason)
@@ -64,7 +92,10 @@ class ModelSelector:
         plan = self.openai_router.build_plan(task, task.input.description)
         return ModelChoice(plan.models[0], "openai", complexity, secondary_review, reason=f"openai_auto_{plan.reason}:{reason}")
 
-    def _select_legacy(self, task: Task, complexity: Complexity) -> ModelChoice:
+    def _select_legacy(self, task: Task, complexity: Complexity, advisory_context: dict[str, Any] | None = None) -> ModelChoice:
+        local_choice = self._local_llm_choice(task, complexity, advisory_context)
+        if local_choice is not None:
+            return local_choice
         if complexity == Complexity.CRITICAL:
             return self._openai_choice(task, complexity, True, "critical_risk_openai_escalation", "gpt-senior-secure")
         if complexity == Complexity.HIGH:
@@ -80,8 +111,11 @@ class ModelSelector:
             return ModelChoice("gemini-cli", "google", complexity, False, reason="medium_docs_research_review_routing")
         return ModelChoice("local-small", "local", complexity, False, reason="policy_default")
 
-    def _select_strict(self, task: Task, complexity: Complexity) -> ModelChoice:
+    def _select_strict(self, task: Task, complexity: Complexity, advisory_context: dict[str, Any] | None = None) -> ModelChoice:
         # strict minimizes OpenAI except explicit critical/high-risk.
+        local_choice = self._local_llm_choice(task, complexity, advisory_context)
+        if local_choice is not None and task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
+            return local_choice
         if complexity == Complexity.CRITICAL:
             return self._openai_choice(task, complexity, True, "critical_openai_only", "gpt-senior-secure")
         if complexity == Complexity.HIGH:
@@ -92,12 +126,12 @@ class ModelSelector:
             return ModelChoice("mistral-small-or-medium", "mistral", complexity, False, reason="strict_code_mistral")
         return ModelChoice("gemini-2.5-flash-lite", "google", complexity, False, reason="strict_docs_research_gemini")
 
-    def select(self, task: Task) -> ModelChoice:
+    def select(self, task: Task, advisory_context: dict[str, Any] | None = None) -> ModelChoice:
         complexity = self.classify(task)
         if self.policy_mode == "strict":
-            choice = self._select_strict(task, complexity)
+            choice = self._select_strict(task, complexity, advisory_context)
         else:
-            choice = self._select_legacy(task, complexity)
+            choice = self._select_legacy(task, complexity, advisory_context)
 
         logger.info("[MODEL_SELECTOR] complexity=%s task_type=%s preferred_provider=%s assigned_model=%s policy_mode=%s", choice.complexity.value, task.type.value, choice.provider, choice.model_name, self.policy_mode)
         return choice

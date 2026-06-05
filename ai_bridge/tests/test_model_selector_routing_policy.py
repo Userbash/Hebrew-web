@@ -367,3 +367,14 @@ def test_permission_docs_cleanup_low_local_route():
     assert not choice.requires_secondary_review
     assert agent is not None
     assert agent.provider == "local"
+
+
+def test_model_selector_prefers_local_llm_when_advisory_is_available():
+    selector = ModelSelector()
+    task = _task(TaskType.DOCS, "write docs summary for release notes", Complexity.MEDIUM)
+
+    choice = selector.select(task, advisory_context={"local_llm": {"ready": True, "should_delegate": True, "task_family": "docs_workflow"}})
+
+    assert choice.provider == "local"
+    assert choice.model_name == "local-small"
+    assert choice.reason.startswith("local_llm_advisory_")
