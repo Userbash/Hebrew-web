@@ -162,7 +162,7 @@ class APIBridgeModule:
             TaskContext("sourcecraft", request.repo_path, request.branch),
             priority=priority,
         )
-        task.required_capability = request.required_capability
+        task.required_capability = request.required_capability or "sourcecraft"
         return task
 
     def _chat_trace_payload(self, request: ChatRequest, *, source_label: str, provider_label: str) -> dict[str, Any]:
@@ -236,11 +236,22 @@ class APIBridgeModule:
         task = self._build_sourcecraft_task(request)
         router = self._api.get_context("router")
         scheduler = self._api.get_context("scheduler")
+        sourcecraft_module = self._sourcecraft_module()
+        delegation = None
+        if sourcecraft_module and hasattr(sourcecraft_module, "build_delegation_profile"):
+            delegation = sourcecraft_module.build_delegation_profile(task, {
+                "description": request.description,
+                "repo_path": request.repo_path,
+                "branch": request.branch,
+                "task_type": request.task_type,
+                "priority": request.priority,
+            })
         route_acceptance = router.route(task) if router else None
         schedule_decision = scheduler.schedule(task) if scheduler else None
         return {
             "status": "ok",
             "sourcecraft": self._sourcecraft_snapshot(),
+            "delegation": delegation,
             "task": {
                 "task_id": task.task_id,
                 "type": task.type.value,

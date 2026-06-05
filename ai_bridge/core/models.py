@@ -296,6 +296,8 @@ class Task:
     complexity: Complexity | None = None
     assigned_model: str | None = None
     expected_output: str | None = None
+    draft_layer: str | None = None
+    routing_hints: dict[str, Any] = field(default_factory=dict)
     session_id: str | None = None
     memory_scope: str = "task"
     memory_keys: list[str] = field(default_factory=list)
@@ -406,6 +408,7 @@ class RoutingTrace:
 class ExecutionPlan:
     root_task_id: str
     atomic_tasks: list[Task]
+    draft_layers: list[dict[str, Any]] = field(default_factory=list)
 
     def ready_tasks(self, completed: set[str]) -> list[Task]:
         return [task for task in self.atomic_tasks if all(dep in completed for dep in task.dependencies)]
