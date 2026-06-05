@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 
 from .gemini_model_registry import GeminiModelRegistry
-from .models import Complexity, Task
+from .models import Complexity, Task, TaskType
 
 
 class GeminiBudgetExhaustedError(RuntimeError):
@@ -17,6 +17,7 @@ class GeminiRoutingPlan:
     estimated_tokens: int
     remaining_tokens: int
     complexity: Complexity
+    strategy: str = "balanced"
 
 
 class GeminiRuntimeRouter:
@@ -73,16 +74,38 @@ class GeminiRuntimeRouter:
             return []
         return [item.strip() for item in raw.split(",") if item.strip()]
 
+    @staticmethod
+    def strategy_profiles() -> dict[str, list[str]]:
+        return {
+            "low_cost": ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
+            "docs_research": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
+            "code_fix": ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"],
+            "high_reasoning": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+        }
+
+    def _strategy_for(self, complexity: Complexity, task: Task) -> str:
+        if complexity == Complexity.LOW:
+            return "low_cost"
+        if complexity == Complexity.MEDIUM and task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
+            return "docs_research"
+        if complexity in {Complexity.HIGH, Complexity.CRITICAL}:
+            return "high_reasoning"
+        if task.type in {TaskType.CODE, TaskType.FIX, TaskType.TEST}:
+            return "code_fix"
+        return "balanced"
+
     def build_plan(self, task: Task, prompt: str) -> GeminiRoutingPlan:
         complexity = task.complexity or Complexity.MEDIUM
         estimated = self._estimate_prompt_tokens(prompt) + self._estimate_completion_tokens(complexity)
         session_id = task.session_id or "default"
         used = self._session_token_usage.get(session_id, 0)
         remaining = max(0, self.session_budget - used)
+        strategy = self._strategy_for(complexity, task)
 
         if remaining <= 0 or estimated > remaining * 2:
             # If budget is almost depleted, use only lightweight model.
             models = ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+            strategy = "low_cost"
         else:
             # Before first model call in session, force-refresh catalog from API.
             first_call = used <= 0
@@ -103,7 +126,7 @@ class GeminiRuntimeRouter:
         if not deduped:
             raise GeminiBudgetExhaustedError("no models available for runtime routing")
 
-        return GeminiRoutingPlan(deduped, estimated, remaining, complexity)
+        return GeminiRoutingPlan(deduped, estimated, remaining, complexity, strategy=strategy)
 
     def register_usage(self, task: Task, consumed_tokens: int) -> None:
         session_id = task.session_id or "default"

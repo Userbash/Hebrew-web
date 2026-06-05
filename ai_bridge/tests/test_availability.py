@@ -27,9 +27,10 @@ def test_availability_init() -> None:
     assert avail is not None
 
 
+@patch.object(ModelAvailability, "_resolve_gemini_cli_command", return_value=["/usr/bin/gemini"])
 @patch("socket.create_connection", side_effect=_ok_socket)
 @patch("subprocess.run")
-def test_check_gemini_success(mock_run: MagicMock, _mock_socket: MagicMock) -> None:
+def test_check_gemini_success(mock_run: MagicMock, _mock_socket: MagicMock, _mock_cli: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
     avail = ModelAvailability()
     health = avail.check_gemini()
@@ -39,9 +40,10 @@ def test_check_gemini_success(mock_run: MagicMock, _mock_socket: MagicMock) -> N
     assert health.latency_ms >= 0
 
 
+@patch.object(ModelAvailability, "_resolve_gemini_cli_command", return_value=["/usr/bin/gemini"])
 @patch("socket.create_connection", side_effect=_ok_socket)
 @patch("subprocess.run")
-def test_check_gemini_auth_fail(mock_run: MagicMock, _mock_socket: MagicMock) -> None:
+def test_check_gemini_auth_fail(mock_run: MagicMock, _mock_socket: MagicMock, _mock_cli: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="API key invalid")
     avail = ModelAvailability()
     health = avail.check_gemini()
@@ -50,9 +52,10 @@ def test_check_gemini_auth_fail(mock_run: MagicMock, _mock_socket: MagicMock) ->
     assert "API key invalid" in health.error
 
 
+@patch.object(ModelAvailability, "_resolve_gemini_cli_command", return_value=["/usr/bin/gemini"])
 @patch("socket.create_connection", side_effect=_ok_socket)
 @patch("subprocess.run")
-def test_check_gemini_quota_fail(mock_run: MagicMock, _mock_socket: MagicMock) -> None:
+def test_check_gemini_quota_fail(mock_run: MagicMock, _mock_socket: MagicMock, _mock_cli: MagicMock) -> None:
     mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Resource exhausted (429)")
     avail = ModelAvailability()
     health = avail.check_gemini()

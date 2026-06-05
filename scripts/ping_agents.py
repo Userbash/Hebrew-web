@@ -12,7 +12,7 @@ from ai_bridge.core.security import SecurityManager, SecurityPolicy
 logging.basicConfig(level=logging.ERROR)
 
 def main():
-    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["npx @google/gemini-cli --prompt"]))
+    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"]))
     
     agents = [
         PlannerAgent("planner-1"),

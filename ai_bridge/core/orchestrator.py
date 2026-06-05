@@ -47,6 +47,7 @@ from .frontend_engineering_bridge_module import FrontendEngineeringBridgeModule
 from .autodev_pipeline_module import AutodevPipelineModule
 from .local_llm_bridge import LocalLLMBridge
 from .local_llm_module import LocalLLMModule
+from .sourcecraft_module import SourceCraftModule
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -85,7 +86,7 @@ class Orchestrator:
 
     @staticmethod
     def _local_llm_autostart_enabled() -> bool:
-        return os.getenv("AI_BRIDGE_AUTOSTART_LOCAL_LLM", "false").strip().lower() in {"1", "true", "yes", "on"}
+        return os.getenv("AI_BRIDGE_AUTOSTART_LOCAL_LLM", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     def _autostart_local_llm(self) -> None:
         if os.getenv("TESTING") == "true" or not self._local_llm_autostart_enabled():
@@ -159,6 +160,7 @@ class Orchestrator:
         self.module_manager.register(FrontendEngineeringBridgeModule())
         self.module_manager.register(AutodevPipelineModule())
         self.module_manager.register(LocalLLMModule())
+        self.module_manager.register(SourceCraftModule())
         
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
@@ -176,6 +178,7 @@ class Orchestrator:
         self.module_manager.load("ui_anti_template")
         self.module_manager.load("frontend_engineering_bridge")
         self.module_manager.load("autodev_pipeline")
+        self.module_manager.load("sourcecraft")
         self._autostart_local_llm()
         
         # Load local_llm only if not in testing environment
@@ -225,6 +228,7 @@ class Orchestrator:
         self.module_manager.register(ChatBusModule())
         self.module_manager.register(TriggerDispatcherModule())
         self.module_manager.register(ColdBootModule())
+        self.module_manager.register(SourceCraftModule())
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
@@ -235,6 +239,7 @@ class Orchestrator:
         self.module_manager.load("chat_bus")
         self.module_manager.load("trigger_dispatcher")
         self.module_manager.load("cold_boot")
+        self.module_manager.load("sourcecraft")
     def attach_local_agent(self, agent_id: str, agent: BaseAgent, agent_type: str = "custom", critical: bool = False, model_name: str = "local-small", provider: str = "local") -> None:
         self.local_agents[agent_id] = agent
         agent.set_host_bridge(self.host_bridge)
@@ -465,7 +470,7 @@ class Orchestrator:
 
         # Pre-flight provider diagnostics: verify DNS/TCP/API/model readiness before spending a task attempt.
         provider = self._normalize_provider(agent_record.provider if agent_record else choice.provider)
-        preflight_live = os.getenv("AI_BRIDGE_PREFLIGHT_LIVE_PROBE", "false").strip().lower() in {"1", "true", "yes", "on"}
+        preflight_live = os.getenv("AI_BRIDGE_PREFLIGHT_LIVE_PROBE", "true").strip().lower() in {"1", "true", "yes", "on"}
         provider_health = self.availability.check_provider(provider, live=preflight_live)
         module_context["availability_preflight"] = provider_health.as_dict()
         provider_ready = provider_health.status in {ProviderStatus.HEALTHY, ProviderStatus.DEGRADED}

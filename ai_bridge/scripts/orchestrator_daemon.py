@@ -32,7 +32,7 @@ async def main():
     orchestrator = Orchestrator()
     orchestrator.orchestration_config = OrchestrationConfig.from_env()
 
-    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["npx @google/gemini-cli --prompt"]))
+    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"]))
 
     # Prefer mistral for codex-main when MISTRAL key exists (cost-saving mode).
     mistral_key = (os.getenv("MISTRAL_API_KEY") or "").strip()

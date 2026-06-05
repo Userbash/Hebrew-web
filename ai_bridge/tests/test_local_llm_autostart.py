@@ -41,3 +41,24 @@ def test_autostart_local_llm_invokes_bridge(monkeypatch):
 
     assert bridge_calls == ["qwen2.5:32b-instruct-q4_k_m"]
     assert any("Autostart complete" in message for _, message in orchestrator.console.messages)
+
+
+def test_local_llm_bridge_auto_provisions_missing_container(monkeypatch):
+    from ai_bridge.core.local_llm_bridge import LocalLLMBridge
+    from types import SimpleNamespace
+
+    bridge = LocalLLMBridge(container_name="ai-kernel-local", ollama_port=11434)
+    calls: list[str] = []
+
+    monkeypatch.setenv("AI_BRIDGE_LOCAL_LLM_AUTO_PROVISION", "true")
+    monkeypatch.setattr(LocalLLMBridge, "container_exists", lambda self: False)
+    monkeypatch.setattr(LocalLLMBridge, "_host_probe", lambda self: {"ok": True})
+    monkeypatch.setattr(LocalLLMBridge, "is_model_downloaded", lambda self, model_name: True)
+    monkeypatch.setattr(LocalLLMBridge, "_run", lambda self, args, check=False: SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+    monkeypatch.setattr("ai_bridge.core.local_llm_bridge.deploy_local_llm.ensure_container", lambda name: calls.append(f"ensure:{name}"))
+    monkeypatch.setattr("ai_bridge.core.local_llm_bridge.deploy_local_llm.install_ollama", lambda name: calls.append(f"install:{name}"))
+    monkeypatch.setattr("ai_bridge.core.local_llm_bridge.deploy_local_llm.start_service", lambda name: calls.append(f"start:{name}"))
+
+    assert bridge.ensure_ready("qwen2.5:32b-instruct-q4_k_m") is True
+    assert calls == ["ensure:ai-kernel-local", "install:ai-kernel-local", "start:ai-kernel-local"]

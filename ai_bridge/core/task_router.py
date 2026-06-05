@@ -11,6 +11,10 @@ from .models import AgentRecord, ExecutionPlan, Priority, Task, TaskAcceptance, 
 
 logger = logging.getLogger(__name__)
 
+SOURCECRAFT_KEYWORDS = ("sourcecraft", "src ", " src", "repo", "repository", "pull request", "pr ", " pr", "issue", "release", "branch", "tag", "changelog", "quota", "status")
+SOURCECRAFT_ROUTABLE_TASK_TYPES = {TaskType.PLAN, TaskType.DOCS, TaskType.RESEARCH}
+
+
 CAPABILITY_BY_TASK_TYPE = {
     TaskType.PLAN: "plan",
     TaskType.CODE: "code",
@@ -27,6 +31,11 @@ class TaskRouter:
         self.load_balancer = load_balancer
         self.codex_economy_mode = os.getenv("AI_BRIDGE_CODEX_ECONOMY_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
 
+    @staticmethod
+    def _is_sourcecraft_work(task: Task) -> bool:
+        text = " ".join([task.input.description, *task.input.constraints, *task.input.files]).lower()
+        return task.required_capability == "sourcecraft" or (task.type in SOURCECRAFT_ROUTABLE_TASK_TYPES and any(keyword in text for keyword in SOURCECRAFT_KEYWORDS))
+
     def decompose(self, task: Task) -> ExecutionPlan:
         from .task_decomposer import TaskDecomposer
         return TaskDecomposer().decompose(task)
@@ -34,9 +43,12 @@ class TaskRouter:
     def route_envelope(self, envelope: TaskEnvelope) -> TaskAcceptance:
         """Route a network-like TaskEnvelope based on policy, QoS, and risk."""
         capability = envelope.target_capability
+        sourcecraft_task = capability == "sourcecraft"
         candidates = [agent for agent in self._candidate_agents(capability) if is_agent_routable(agent, envelope.priority)]
 
         if not candidates:
+            if sourcecraft_task:
+                return TaskAcceptance(envelope.task_id, TaskStatus.ACCEPTED, "orchestrator", "high", "SourceCraft role handled by orchestrator module")
             return TaskAcceptance(envelope.task_id, TaskStatus.REJECTED, None, "high", f"No available agent for capability {capability}")
             
         if envelope.deadline and datetime.now(UTC) > envelope.deadline:
@@ -74,15 +86,23 @@ class TaskRouter:
 
     def route(self, task: Task) -> TaskAcceptance:
         capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
+        sourcecraft_task = self._is_sourcecraft_work(task)
+        if sourcecraft_task and capability != "sourcecraft":
+            capability = "sourcecraft"
+
         candidates = [agent for agent in self._candidate_agents(capability) if is_agent_routable(agent, task.priority)]
 
         if not candidates:
+            if capability == "sourcecraft" or sourcecraft_task:
+                return TaskAcceptance(task.task_id, TaskStatus.ACCEPTED, "orchestrator", self.estimate_complexity(task), "SourceCraft role handled by orchestrator module")
             return TaskAcceptance(task.task_id, TaskStatus.REJECTED, None, self.estimate_complexity(task), f"No available agent for capability {capability}")
 
         chosen_pool = self._apply_economy_policy(task, candidates)
 
         agent = self.load_balancer.choose(chosen_pool, capability, task.priority)
         if not agent:
+            if capability == "sourcecraft" or sourcecraft_task:
+                return TaskAcceptance(task.task_id, TaskStatus.ACCEPTED, "orchestrator", self.estimate_complexity(task), "SourceCraft role handled by orchestrator module")
             return TaskAcceptance(task.task_id, TaskStatus.REJECTED, None, self.estimate_complexity(task), f"No available agent for capability {capability}")
 
         agent.metrics.queue_depth += 1

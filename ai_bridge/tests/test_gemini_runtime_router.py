@@ -34,3 +34,25 @@ def test_router_tracks_session_usage():
     router.register_usage(task, 10_000)
     after = router.build_plan(task, "abc")
     assert after.remaining_tokens < before.remaining_tokens
+
+
+def test_router_exposes_strategy_profiles():
+    profiles = GeminiRuntimeRouter.strategy_profiles()
+
+    assert set(profiles) == {"low_cost", "docs_research", "code_fix", "high_reasoning"}
+    assert profiles["high_reasoning"][0] == "gemini-2.5-pro"
+
+
+def test_router_sets_strategy_by_task_type_and_complexity():
+    router = GeminiRuntimeRouter()
+
+    docs_task = _task(Complexity.MEDIUM, session_id="docs-strategy")
+    docs_task.type = TaskType.DOCS
+    docs_plan = router.build_plan(docs_task, "write docs")
+
+    code_task = _task(Complexity.HIGH, session_id="code-strategy")
+    code_task.type = TaskType.CODE
+    code_plan = router.build_plan(code_task, "deep refactor")
+
+    assert docs_plan.strategy == "docs_research"
+    assert code_plan.strategy == "high_reasoning"
