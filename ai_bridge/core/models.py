@@ -190,6 +190,30 @@ class AgentKPI:
 
 
 @dataclass(slots=True)
+class RoleProfile:
+    name: str
+    title: str
+    summary: str
+    responsibilities: list[str]
+    supported_task_types: list[str]
+    supported_capabilities: list[str]
+    pipeline_stages: list[str]
+    guardrails: list[str]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "title": self.title,
+            "summary": self.summary,
+            "responsibilities": self.responsibilities,
+            "supported_task_types": self.supported_task_types,
+            "supported_capabilities": self.supported_capabilities,
+            "pipeline_stages": self.pipeline_stages,
+            "guardrails": self.guardrails,
+        }
+
+
+@dataclass(slots=True)
 class AgentHealth:
     agent_id: str
     status: AgentStatus

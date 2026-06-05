@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -34,6 +35,44 @@ class ExternalAIBridge:
     def __init__(self, host_bridge: HostBridge | None = None) -> None:
         self.host_bridge = host_bridge
         self.router = GeminiRuntimeRouter()
+
+    @staticmethod
+    def resolve_gemini_cli_command() -> list[str] | None:
+        env_bin = os.getenv("GEMINI_CLI_BIN", "").strip()
+        if env_bin:
+            resolved = shutil.which(env_bin) if not os.path.isabs(env_bin) else env_bin
+            if resolved and os.access(resolved, os.X_OK):
+                return [resolved]
+
+        for candidate in ("gemini", "google-gemini", "gemini-cli"):
+            resolved = shutil.which(candidate)
+            if resolved:
+                return [resolved]
+
+        npx = shutil.which("npx")
+        if npx:
+            return [npx, "@google/gemini-cli"]
+        return None
+
+    @staticmethod
+    def _gemini_runtime_env() -> dict[str, str]:
+        env = os.environ.copy()
+        home_dir = env.get("HOME", "")
+        if home_dir:
+            local_bin = os.path.join(home_dir, ".local", "bin")
+            current_path = env.get("PATH", "")
+            if local_bin and local_bin not in current_path.split(os.pathsep):
+                env["PATH"] = f"{local_bin}{os.pathsep}{current_path}" if current_path else local_bin
+        node_path = shutil.which("node")
+        if node_path:
+            return env
+        npx = shutil.which("npx")
+        if npx:
+            node_dir = os.path.dirname(npx)
+            current_path = env.get("PATH", "")
+            if node_dir and node_dir not in current_path.split(os.pathsep):
+                env["PATH"] = f"{node_dir}{os.pathsep}{current_path}" if current_path else node_dir
+        return env
 
     @staticmethod
     def _retries() -> int:
@@ -84,9 +123,12 @@ class ExternalAIBridge:
         last_error = ""
 
         for model in plan.models:
+            cmd_prefix = self.resolve_gemini_cli_command()
+            if not cmd_prefix:
+                return BridgeExecResult(False, "", "gemini_cli_not_found", "gemini-cli", model, attempts, error_type="unknown")
+
             cmd = [
-                "npx",
-                "@google/gemini-cli",
+                *cmd_prefix,
                 "--prompt",
                 prompt,
                 "--model",
@@ -106,11 +148,11 @@ class ExternalAIBridge:
                             stderr = (res.stderr or "").lower()
                             # Common error markers for missing binary
                             if any(marker in stderr for marker in ["нет такого файла", "no such file", "not found", "failed to start command"]):
-                                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+                                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env())
                         return res
                     except Exception:
-                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
-                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec)
+                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env())
+                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env())
 
             if Retrying is not None:
                 try:

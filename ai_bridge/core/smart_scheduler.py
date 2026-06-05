@@ -20,7 +20,9 @@ from .models import (
 from .task_router import CAPABILITY_BY_TASK_TYPE
 
 ORCHESTRATOR_TASK_TYPES = {TaskType.PLAN}
-ORCHESTRATOR_CAPABILITIES = {"security", "auth", "database", "architecture", "orchestrator"}
+ORCHESTRATOR_CAPABILITIES = {"security", "auth", "database", "architecture", "orchestrator", "sourcecraft"}
+SOURCECRAFT_KEYWORDS = ("sourcecraft", "src ", " src", "repo", "repository", "pull request", "pr ", " pr", "issue", "release", "branch", "tag", "changelog", "quota", "status")
+SOURCECRAFT_ROUTABLE_TASK_TYPES = {TaskType.PLAN, TaskType.DOCS, TaskType.RESEARCH}
 BLOCKED_STATUSES = {
     AgentStatus.OFFLINE,
     AgentStatus.DISABLED,
@@ -46,6 +48,11 @@ class SmartScheduler:
         self.retry_policy = retry_policy or RetryPolicy()
         self.decisions: list[SchedulerDecision] = []
 
+    @staticmethod
+    def _is_sourcecraft_work(text: str) -> bool:
+        normalized = text.lower()
+        return any(keyword in normalized for keyword in SOURCECRAFT_KEYWORDS)
+
     def schedule_envelope(self, envelope: TaskEnvelope, graph: TaskGraph | None = None) -> SchedulerDecision:
         """Schedule a network-like TaskEnvelope, enforcing DAG dependency checks and security policies."""
         if graph and envelope.dependencies:
@@ -60,9 +67,11 @@ class SmartScheduler:
         
         text = str(envelope.payload.objective).lower()
         risky_terms = {"rollback", "migration", "secret", "security", "auth", "database", "billing", "api", "schema"}
+        sourcecraft_task = envelope.target_capability == "sourcecraft"
         requires_orchestrator = (
             envelope.priority in {Priority.CRITICAL, "critical"}
             or envelope.target_capability in ORCHESTRATOR_CAPABILITIES
+            or sourcecraft_task
             or any(term in text for term in risky_terms)
         )
 
@@ -123,6 +132,7 @@ class SmartScheduler:
             or task.type in ORCHESTRATOR_TASK_TYPES
             or task.complexity == Complexity.CRITICAL
             or capability in ORCHESTRATOR_CAPABILITIES
+            or (task.type in SOURCECRAFT_ROUTABLE_TASK_TYPES and self._is_sourcecraft_work(text))
             or any(term in text for term in risky_terms)
         )
 
@@ -179,7 +189,8 @@ class SmartScheduler:
         agent, score, readiness = self.choose_agent(task)
         requires_orchestrator = self.requires_orchestrator(task)
         if not agent:
-            decision = SchedulerDecision(task.task_id, "orchestrator", None, True, "No ready agent for required capability", weight.task_score)
+            reason = "SourceCraft role handled by orchestrator module" if (task.type in SOURCECRAFT_ROUTABLE_TASK_TYPES and self._is_sourcecraft_work(task.input.description)) or (task.required_capability == "sourcecraft") else "No ready agent for required capability"
+            decision = SchedulerDecision(task.task_id, "orchestrator", None, True, reason, weight.task_score)
         elif requires_orchestrator:
             decision = SchedulerDecision(task.task_id, "orchestrator", agent.id, True, "High-risk or strategic task", weight.task_score, score, readiness.readiness if readiness else None)
         else:

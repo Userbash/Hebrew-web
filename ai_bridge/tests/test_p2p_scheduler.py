@@ -55,6 +55,25 @@ def test_scheduler_escalates_critical_security_or_api_task_to_orchestrator():
     assert decision.assigned_agent == "codex-main"
 
 
+def test_scheduler_routes_sourcecraft_work_to_orchestrator():
+    registry = AgentRegistry()
+    registry.register("codex-main", "codex", "local://codex", ["code", "fix"])
+    scheduler = SmartScheduler(registry)
+    task = Task(
+        TaskType.CODE,
+        TaskInput("Prepare SourceCraft release notes, repo status, and PR workflow"),
+        TaskContext("demo", ".", "main"),
+        required_capability="sourcecraft",
+    )
+
+    decision = scheduler.schedule(task)
+
+    assert decision.route_mode == "orchestrator"
+    assert decision.requires_orchestrator is True
+    assert decision.assigned_agent is None or decision.assigned_agent == "codex-main"
+    assert "SourceCraft" in decision.reason or "orchestrator" in decision.reason
+
+
 def test_scheduler_skips_overloaded_agents_and_uses_ready_fallback():
     registry = AgentRegistry()
     overloaded = registry.register("tester-hot", "tester", "local://hot", ["test"], limits={"max_active_tasks": 1})

@@ -17,6 +17,19 @@ def test_register_agent_and_route_by_capability():
     assert accepted.status.value == "accepted"
 
 
+def test_sourcecraft_task_routes_to_orchestrator_when_no_dedicated_agent():
+    registry = AgentRegistry()
+    registry.register("codex-main", "codex", "local://codex", ["code", "fix"])
+    router = TaskRouter(registry, LoadBalancer())
+    task = Task(TaskType.CODE, TaskInput("Prepare SourceCraft release notes and PR flow for repo status"), TaskContext("p", ".", "main"))
+    task.required_capability = "sourcecraft"
+
+    accepted = router.route(task)
+
+    assert accepted.status.value == "accepted"
+    assert accepted.assigned_agent == "orchestrator"
+
+
 def test_balancer_avoids_high_load_agent():
     registry = AgentRegistry()
     busy = registry.register("busy", "tester", "local://busy", ["test"], limits={"max_active_tasks": 1})

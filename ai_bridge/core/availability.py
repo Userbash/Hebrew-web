@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 from dataclasses import dataclass, field
@@ -15,6 +16,8 @@ except Exception:  # pragma: no cover - optional in minimal test envs
 
 from .env_loader import load_env_file
 from .external_ai_bridge import ExternalAIBridge
+from .gemini_runtime_router import GeminiRuntimeRouter
+from .gemini_model_registry import GeminiModelRegistry
 from .kernel_protocol import KernelAPI
 
 
@@ -73,6 +76,44 @@ class ModelAvailability:
         return os.getenv("AI_BRIDGE_LIVE_MODEL_PROBE", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
+    def _resolve_gemini_cli_command() -> list[str] | None:
+        env_bin = os.getenv("GEMINI_CLI_BIN", "").strip()
+        if env_bin:
+            resolved = shutil.which(env_bin) if not os.path.isabs(env_bin) else env_bin
+            if resolved and os.access(resolved, os.X_OK):
+                return [resolved]
+
+        for candidate in ("gemini", "google-gemini", "gemini-cli"):
+            resolved = shutil.which(candidate)
+            if resolved:
+                return [resolved]
+
+        npx = shutil.which("npx")
+        if npx:
+            return [npx, "@google/gemini-cli"]
+        return None
+
+    @staticmethod
+    def _gemini_runtime_env() -> dict[str, str]:
+        env = os.environ.copy()
+        home_dir = env.get("HOME", "")
+        if home_dir:
+            local_bin = os.path.join(home_dir, ".local", "bin")
+            current_path = env.get("PATH", "")
+            if local_bin and local_bin not in current_path.split(os.pathsep):
+                env["PATH"] = f"{local_bin}{os.pathsep}{current_path}" if current_path else local_bin
+        node_path = shutil.which("node")
+        if node_path:
+            return env
+        npx = shutil.which("npx")
+        if npx:
+            node_dir = os.path.dirname(npx)
+            current_path = env.get("PATH", "")
+            if node_dir and node_dir not in current_path.split(os.pathsep):
+                env["PATH"] = f"{node_dir}{os.pathsep}{current_path}" if current_path else node_dir
+        return env
+
+    @staticmethod
     def _tcp_targets(provider: str) -> list[tuple[str, int]]:
         if provider == "gemini":
             raw = os.getenv("GEMINI_TCP_PROBE_HOSTS", "generativelanguage.googleapis.com:443,www.googleapis.com:443")
@@ -129,6 +170,10 @@ class ModelAvailability:
         return default
 
     @staticmethod
+    def _gemini_strategy_profiles() -> dict[str, list[str]]:
+        return GeminiRuntimeRouter.strategy_profiles()
+
+    @staticmethod
     def _remediation(provider: str, status: ProviderStatus, diagnostics: dict[str, Any]) -> list[str]:
         steps: list[str] = []
         tcp = diagnostics.get("tcp", {}) if isinstance(diagnostics.get("tcp"), dict) else {}
@@ -141,7 +186,7 @@ class ModelAvailability:
             steps.append("Проверь DNS и TCP egress из среды выполнения до provider API на 443/tcp.")
             steps.append("Проверь proxy/firewall/VPN: соединение должно открываться до host из tcp diagnostics.")
             if provider == "gemini":
-                steps.append("Проверь, что npx @google/gemini-cli установлен/доступен и может выполнить минимальный prompt.")
+                steps.append("Проверь, что gemini CLI или npx @google/gemini-cli установлен/доступен и может выполнить минимальный prompt.")
         if tcp and not tcp.get("ok"):
             steps.append("TCP probe не открыл ни одного соединения; fallback до другого провайдера корректен до восстановления сети.")
         return steps
@@ -174,10 +219,21 @@ class ModelAvailability:
             return self._cache(health)
 
         model = os.getenv("GEMINI_PROBE_MODEL", "gemini-2.5-flash-lite")
-        cmd = ["npx", "@google/gemini-cli", "--prompt", "healthcheck: respond with ok", "--model", model, "--output-format", "text", "--skip-trust"]
-        diagnostics["model_probe"] = {"command": "npx @google/gemini-cli", "model": model}
+        cli = self._resolve_gemini_cli_command()
+        diagnostics["strategy_profiles"] = self._gemini_strategy_profiles()
+        catalog = GeminiModelRegistry().get_catalog(force_refresh=False)
+        diagnostics["model_catalog"] = {"all_models": catalog.all_models, "lite": catalog.lite, "flash": catalog.flash, "pro": catalog.pro}
+        if not cli:
+            latency = (datetime.now(UTC) - start).total_seconds() * 1000
+            diagnostics["model_probe"] = {"command": None, "model": model, "returncode": None, "stdout_preview": "", "stderr_preview": "gemini cli not found"}
+            health = ProviderHealth("gemini", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error="gemini_cli_not_found", diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("gemini", health.status, diagnostics)
+            return self._cache(health)
+
+        cmd = [*cli, "--prompt", "healthcheck: respond with ok", "--model", model, "--output-format", "text", "--skip-trust"]
+        diagnostics["model_probe"] = {"command": " ".join(cli), "model": model}
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._probe_timeout_sec())
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._probe_timeout_sec(), env=self._gemini_runtime_env())
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
             diagnostics["model_probe"].update({"returncode": proc.returncode, "stdout_preview": (proc.stdout or "")[:120], "stderr_preview": (proc.stderr or "")[:240]})
             if proc.returncode == 0:

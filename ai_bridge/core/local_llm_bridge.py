@@ -10,6 +10,7 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from ai_bridge.core.host_bridge import HostBridge
+from ai_bridge.scripts import deploy_local_llm
 
 logger = logging.getLogger("local_llm_bridge")
 
@@ -86,9 +87,22 @@ class LocalLLMBridge:
             return {"ok": False, "error": str(exc), "url": url}
 
     def ensure_ready(self, model_name: str) -> bool:
+        auto_provision = os.getenv("AI_BRIDGE_LOCAL_LLM_AUTO_PROVISION", "true").strip().lower() in {"1", "true", "yes", "on"}
         if not self.container_exists():
-            logger.warning("Local LLM container '%s' does not exist; skipping autostart.", self.container_name)
-            return False
+            if not auto_provision:
+                logger.warning("Local LLM container '%s' does not exist; skipping autostart.", self.container_name)
+                return False
+            try:
+                deploy_local_llm.CONTAINER_NAME = self.container_name
+                deploy_local_llm.MODEL_NAME = model_name
+                deploy_local_llm.OLLAMA_HOST = self.ollama_host
+                deploy_local_llm.OLLAMA_PORT = str(self.ollama_port)
+                deploy_local_llm.ensure_container(self.container_name)
+                deploy_local_llm.install_ollama(self.container_name)
+                deploy_local_llm.start_service(self.container_name)
+            except Exception as exc:
+                logger.warning("Failed to auto-provision local LLM container '%s': %s", self.container_name, exc)
+                return False
 
         quoted_model = shlex.quote(model_name)
         boot_cmd = (

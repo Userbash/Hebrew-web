@@ -15,7 +15,7 @@ from .models import (
     TaskType,
     encapsulate,
 )
-from .task_router import CAPABILITY_BY_TASK_TYPE
+from .task_router import CAPABILITY_BY_TASK_TYPE, SOURCECRAFT_KEYWORDS, SOURCECRAFT_ROUTABLE_TASK_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,17 @@ class TaskDecomposer:
             self._decorate(atomic)
         return ExecutionPlan(root_task_id=task.task_id, atomic_tasks=tasks)
 
+
+    @staticmethod
+    def _is_sourcecraft_task(task: Task) -> bool:
+        text = " ".join([task.input.description, *task.input.constraints, *task.input.files]).lower()
+        return task.required_capability == "sourcecraft" or (task.type in SOURCECRAFT_ROUTABLE_TASK_TYPES and any(keyword in text for keyword in SOURCECRAFT_KEYWORDS))
+
     def _decorate(self, task: Task) -> None:
-        task.required_capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
+        if self._is_sourcecraft_task(task):
+            task.required_capability = "sourcecraft"
+        else:
+            task.required_capability = task.required_capability or CAPABILITY_BY_TASK_TYPE[task.type]
         choice = self.model_selector.select(task)
         task.complexity = choice.complexity
         task.assigned_model = choice.model_name
@@ -54,6 +63,7 @@ class TaskDecomposer:
         """Decompose a high-level task into a DAG of TaskEnvelopes."""
         logger.info(f"Decomposing task {envelope.task_id} into a DAG")
         graph = TaskGraph(root_task_id=envelope.task_id)
+        sourcecraft_role = envelope.target_capability == "sourcecraft" or any(keyword in envelope.payload.objective.lower() for keyword in SOURCECRAFT_KEYWORDS)
         
         base_meta: dict[str, Any] = {
             "trace_id": envelope.trace_id,
@@ -62,14 +72,16 @@ class TaskDecomposer:
             "ttl": envelope.ttl,
             "max_hops": envelope.max_hops,
             "security_policy": envelope.security_policy,
-            "parent_task_id": envelope.task_id
+            "parent_task_id": envelope.task_id,
+            "sourcecraft_role": sourcecraft_role,
+            "sourcecraft_role_name": "sourcecraft" if sourcecraft_role else None,
         }
         
         def create_node(name: str, objective: str, capability: str, dependencies: list[str]) -> TaskEnvelope:
             payload = TaskPayload(
                 objective=objective,
                 input_data=envelope.payload.input_data,
-                context=envelope.payload.context,
+                context={**envelope.payload.context, "sourcecraft_role": base_meta["sourcecraft_role"], "sourcecraft_role_name": base_meta["sourcecraft_role_name"]},
                 acceptance_criteria=[f"{name} completed successfully"],
                 expected_output_format="json",
                 artifacts=envelope.payload.artifacts
@@ -77,6 +89,8 @@ class TaskDecomposer:
             meta = base_meta.copy()
             meta["target_capability"] = capability
             meta["dependencies"] = dependencies
+            meta["sourcecraft_role"] = base_meta["sourcecraft_role"]
+            meta["sourcecraft_role_name"] = base_meta["sourcecraft_role_name"]
             node = encapsulate(payload, meta)
             graph.nodes[node.task_id] = node
             for dep in dependencies:

@@ -27,7 +27,7 @@ class GeminiCLIAgent(BaseAgent):
         prompt = "\n".join(prompt_parts)
         
         # Validate command intent before executing external CLI.
-        intent_cmd = "npx @google/gemini-cli --prompt"
+        intent_cmd = "gemini --prompt"
         if not self.security.validate_shell_command(intent_cmd):
             return self.result(task, "Security violation: CLI command not allowed", TaskStatus.FAILED)
 

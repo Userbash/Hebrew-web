@@ -44,7 +44,7 @@ def test_provider_budget_router_prefers_primary_provider_for_normal_code():
 
 def test_orchestrator_exposes_model_usage_snapshot():
     orchestrator = Orchestrator()
-    sec = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["npx @google/gemini-cli --prompt"]))
+    sec = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"]))
 
     orchestrator.attach_local_agent("planner-1", PlannerAgent("planner-1"), agent_type="planner", provider="openai")
     orchestrator.attach_local_agent("codex-main", CodexAgent("codex-main"), agent_type="codex", provider="openai")

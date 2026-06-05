@@ -100,21 +100,32 @@ def _check_ai_provider_access() -> CheckResult:
     load_env_file()
     mistral_key = bool(os.getenv("MISTRAL_API_KEY"))
 
-    npx_ok = shutil.which("npx") is not None
-    if not npx_ok:
-        return CheckResult("ai_provider_access", False, "npx not found for gemini-cli")
+    from ai_bridge.core.availability import ModelAvailability
 
-    try:
-        probe = subprocess.run(["npx", "@google/gemini-cli", "--version"], capture_output=True, text=True, timeout=25, check=False)
-        gemini_cli_ok = probe.returncode == 0
-    except Exception:
+    gemini_cmd = ModelAvailability._resolve_gemini_cli_command()
+    if gemini_cmd is not None:
+        try:
+            env = os.environ.copy()
+            node_path = shutil.which("node")
+            if not node_path:
+                npx = shutil.which("npx")
+                if npx:
+                    node_dir = os.path.dirname(npx)
+                    current_path = env.get("PATH", "")
+                    if node_dir and node_dir not in current_path.split(os.pathsep):
+                        env["PATH"] = f"{node_dir}{os.pathsep}{current_path}" if current_path else node_dir
+            probe = subprocess.run([*gemini_cmd, "--version"], capture_output=True, text=True, timeout=25, check=False, env=env)
+            gemini_cli_ok = probe.returncode == 0
+        except Exception:
+            gemini_cli_ok = False
+    else:
         gemini_cli_ok = False
 
     if gemini_cli_ok or mistral_key:
         details = f"gemini_cli={gemini_cli_ok}, mistral_key={mistral_key}"
         return CheckResult("ai_provider_access", True, details)
 
-    return CheckResult("ai_provider_access", False, "no external AI provider ready (gemini-cli unavailable and MISTRAL_API_KEY missing)")
+    return CheckResult("ai_provider_access", False, "no external AI provider ready (gemini executable unavailable and MISTRAL_API_KEY missing)")
 
 
 def run_healthcheck() -> tuple[bool, list[CheckResult]]:

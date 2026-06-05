@@ -4,6 +4,7 @@ import subprocess
 from types import SimpleNamespace
 
 from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
+from ai_bridge.core.external_ai_bridge import ExternalAIBridge
 from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskStatus, TaskType
 from ai_bridge.core.security import SecurityManager, SecurityPolicy
 
@@ -17,7 +18,7 @@ def _task() -> Task:
 
 
 def _agent() -> GeminiCLIAgent:
-    policy = SecurityPolicy(allow_shell=True, shell_allowlist=["npx @google/gemini-cli --prompt"])
+    policy = SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"])
     return GeminiCLIAgent("gemini-cli-1", SecurityManager(policy))
 
 
@@ -30,12 +31,13 @@ def test_gemini_cli_success_uses_non_interactive(monkeypatch):
         captured["timeout"] = timeout
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
+    monkeypatch.setattr(ExternalAIBridge, "resolve_gemini_cli_command", staticmethod(lambda: ["gemini"]))
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     result = agent.run(_task())
 
     assert result.status == TaskStatus.DONE
-    assert captured["cmd"][:4] == ["npx", "@google/gemini-cli", "--prompt", "Implement feature"]
+    assert captured["cmd"][:3] == ["gemini", "--prompt", "Implement feature"]
     assert captured["timeout"] == 120
 
 
