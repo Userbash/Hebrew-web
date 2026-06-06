@@ -7,7 +7,7 @@ control token use, fallback order, and per-task model selection.
 ## What this doc covers
 
 - task complexity classification;
-- provider selection across OpenAI, Gemini, Mistral, and local fallback;
+- provider selection across OpenAI, Antigravity CLI, Mistral, and local fallback;
 - session token budgeting for OpenAI use;
 - live model discovery through `GET /v1/models`;
 - the runtime cache used when OpenAI is enabled;
@@ -35,9 +35,20 @@ OpenAI access.
 | Complexity | Default direction | Notes |
 | --- | --- | --- |
 | Low | local or lightweight provider | Used for short docs, formatting, and small fixes. |
-| Medium | Mistral first, then Gemini or lightweight OpenAI if enabled | Keeps the common path cheap. |
+| Medium | Mistral first, then Antigravity CLI or lightweight OpenAI if enabled | Keeps the common path cheap. |
 | High | stronger provider selection, OpenAI only when the key and budget allow it | Used for architecture, larger refactors, and hard debugging. |
 | Critical | strongest available route, with fallback if OpenAI is not configured | Used for security, production, migrations, and other risky work. |
+
+
+## Antigravity CLI routing
+
+Google-provider CLI work now routes through Antigravity CLI (`agy`) instead of
+Gemini CLI. The logical provider remains `google` inside the orchestrator for
+compatibility, while execution traces use `antigravity-cli` as the model/runner.
+The bridge runs one-shot prompts with `agy -p <prompt>` with the subprocess working directory set to the target repo, prepends
+`~/.local/bin` to `PATH`, and maps `GEMINI_API_KEY` to `GOOGLE_API_KEY` when
+only the older key name is present. `AI_BRIDGE_FORCE_ANTIGRAVITY` is the primary
+force-routing flag; `AI_BRIDGE_FORCE_GEMINI` is accepted only as a legacy alias.
 
 ## OpenAI auto-routing
 

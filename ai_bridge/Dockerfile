@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nodejs npm \
+    && apt-get install -y --no-install-recommends build-essential gcc nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ai_bridge/requirements-ai.txt /app/ai_bridge/requirements-ai.txt

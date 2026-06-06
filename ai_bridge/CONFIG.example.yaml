@@ -46,16 +46,16 @@ agents:
     provider: "mistral"
     critical: false
 
-  - id: "gemini-cli-main"
+  - id: "antigravity-cli-main"
     type: "custom"
-    endpoint: "local://gemini-cli"
+    endpoint: "local://antigravity-cli"
     capabilities:
       - "code"
       - "docs"
       - "research"
       - "review"
       - "test"
-    model_name: "gemini-cli"
+    model_name: "antigravity-cli"
     provider: "google"
     critical: false
 
@@ -100,8 +100,8 @@ models:
 
   medium_complexity: "mistral-small-or-medium"
   medium_code: "mistral-small-or-medium"
-  medium_docs: "gemini-cli"
-  medium_research: "gemini-cli"
+  medium_docs: "antigravity-cli"
+  medium_research: "antigravity-cli"
   medium_test: "mistral-small-or-medium"
 
   high_complexity: "gpt-coding-large"
@@ -113,7 +113,7 @@ routing_policy:
   prefer_non_openai_for_low_medium: true
   prefer_local_for_low: true
   prefer_mistral_for_medium_code: true
-  prefer_gemini_for_docs_research: true
+  prefer_antigravity_for_docs_research: true
   openai_only_for_high_risk: true
   fallback_to_openai_on_failure: true
 

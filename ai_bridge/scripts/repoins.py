@@ -47,7 +47,7 @@ async def run_repoins():
         ("reviewer-1", ReviewerAgent("reviewer-1")),
         ("tester-1", TesterAgent("tester-1")),
         ("mistral-1", MistralAgent("mistral-1", security_manager)),
-        ("gemini-cli-1", GeminiCLIAgent("gemini-cli-1", security_manager))
+        ("antigravity-cli-1", GeminiCLIAgent("antigravity-cli-1", security_manager))
     ]
 
     for aid, agent_obj in agents_to_run:
@@ -59,7 +59,7 @@ async def run_repoins():
                 "reviewer-1": "reviewer",
                 "tester-1": "tester",
                 "mistral-1": "external_ai",
-                "gemini-cli-1": "external_ai"
+                "antigravity-cli-1": "external_ai"
             }
             orchestrator.attach_local_agent(aid, agent_obj, agent_type=atype_map[aid])
 

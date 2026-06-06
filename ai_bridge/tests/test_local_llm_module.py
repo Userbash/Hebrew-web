@@ -39,7 +39,7 @@ class _Api:
 
 def test_local_llm_module_reports_ready_when_model_is_available(monkeypatch):
     def fake_get(url: str, timeout: float):
-        assert url == "http://127.0.0.1:11434/api/tags"
+        assert url == "http://host.containers.internal:11434/api/tags"
         assert timeout == 1.0
         return _Response(payload={"models": [{"name": "qwen2.5:32b-instruct-q4_k_m"}]})
 
@@ -55,6 +55,22 @@ def test_local_llm_module_reports_ready_when_model_is_available(monkeypatch):
     assert any("reachable and ready" in msg for _, msg in api.messages)
 
 
+
+
+def test_local_llm_module_can_use_model_reports_readiness(monkeypatch):
+    def fake_get(url: str, timeout: float):
+        assert url == "http://host.containers.internal:11434/api/tags"
+        return _Response(payload={"models": [{"name": "qwen2.5:32b-instruct-q4_k_m"}]})
+
+    monkeypatch.setattr("ai_bridge.core.local_llm_module.requests.get", fake_get)
+
+    module = LocalLLMModule()
+    probe = module.can_use_model()
+
+    assert probe["ok"] is True
+    assert probe["service_reachable"] is True
+    assert probe["model_present"] is True
+    assert probe["model_name"] == "qwen2.5:32b-instruct-q4_k_m"
 def test_local_llm_module_reports_degraded_when_model_missing(monkeypatch):
     monkeypatch.setattr(
         "ai_bridge.core.local_llm_module.requests.get",
@@ -73,11 +89,11 @@ def test_local_llm_module_builds_advisory_and_uses_query(monkeypatch):
     from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskType
 
     def fake_get(url: str, timeout: float):
-        assert url == "http://127.0.0.1:11434/api/tags"
+        assert url == "http://host.containers.internal:11434/api/tags"
         return _Response(payload={"models": [{"name": "qwen2.5:32b-instruct-q4_k_m"}]})
 
     def fake_post(url: str, json: dict[str, object], timeout: float):
-        assert url == "http://127.0.0.1:11434/api/generate"
+        assert url == "http://host.containers.internal:11434/api/generate"
         assert json["model"] == "qwen2.5:32b-instruct-q4_k_m"
         return _Response(payload={"response": '{"summary": "condensed", "context_digest": "short", "next_steps": ["step 1"], "model_hint": "local-small"}'})
 
@@ -101,11 +117,11 @@ def test_local_llm_module_builds_layered_decomposition_draft(monkeypatch):
     from ai_bridge.core.models import Task, TaskContext, TaskInput, TaskType
 
     def fake_get(url: str, timeout: float):
-        assert url == "http://127.0.0.1:11434/api/tags"
+        assert url == "http://host.containers.internal:11434/api/tags"
         return _Response(payload={"models": [{"name": "qwen2.5:32b-instruct-q4_k_m"}]})
 
     def fake_post(url: str, json: dict[str, object], timeout: float):
-        assert url == "http://127.0.0.1:11434/api/generate"
+        assert url == "http://host.containers.internal:11434/api/generate"
         return _Response(payload={"response": '{"summary": "layered", "context_digest": "layered short", "next_steps": ["intake", "analysis"], "model_hint": "local-small", "layers": [{"name": "intake", "objective": "Normalize the request", "capability": "plan", "task_type": "plan", "dependencies": []}, {"name": "analysis", "objective": "Map implementation surfaces", "capability": "research", "task_type": "research", "dependencies": ["intake"]}], "agent_map": {"planner": ["intake"], "research": ["analysis"]}, "sub_agents": ["planner", "research"]}'})
 
     monkeypatch.setattr("ai_bridge.core.local_llm_module.requests.get", fake_get)

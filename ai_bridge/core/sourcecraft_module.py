@@ -158,7 +158,7 @@ class SourceCraftModule(KernelModule):
             {"task_family": "feature code implementation", "handler": "codex-main or frontend-dev-1"},
             {"task_family": "tests / CI verification", "handler": "tester-1 or codex-main"},
             {"task_family": "review / security review", "handler": "reviewer-1"},
-            {"task_family": "docs / UI design", "handler": "frontend-design-1 or gemini-cli-1"},
+            {"task_family": "docs / UI design", "handler": "frontend-design-1 or antigravity-cli-1"},
         ]
 
     @staticmethod

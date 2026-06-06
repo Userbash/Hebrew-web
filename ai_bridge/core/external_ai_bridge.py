@@ -37,25 +37,25 @@ class ExternalAIBridge:
         self.router = GeminiRuntimeRouter()
 
     @staticmethod
-    def resolve_gemini_cli_command() -> list[str] | None:
-        env_bin = os.getenv("GEMINI_CLI_BIN", "").strip()
+    def resolve_antigravity_cli_command() -> list[str] | None:
+        env_bin = os.getenv("ANTIGRAVITY_CLI_BIN", "").strip()
         if env_bin:
             resolved = shutil.which(env_bin) if not os.path.isabs(env_bin) else env_bin
             if resolved and os.access(resolved, os.X_OK):
                 return [resolved]
 
-        for candidate in ("gemini", "google-gemini", "gemini-cli"):
+        for candidate in ("agy", "antigravity"):
             resolved = shutil.which(candidate)
             if resolved:
                 return [resolved]
-
-        npx = shutil.which("npx")
-        if npx:
-            return [npx, "@google/gemini-cli"]
         return None
 
     @staticmethod
-    def _gemini_runtime_env() -> dict[str, str]:
+    def resolve_gemini_cli_command() -> list[str] | None:
+        return ExternalAIBridge.resolve_antigravity_cli_command()
+
+    @staticmethod
+    def _antigravity_runtime_env() -> dict[str, str]:
         env = os.environ.copy()
         home_dir = env.get("HOME", "")
         if home_dir:
@@ -63,16 +63,14 @@ class ExternalAIBridge:
             current_path = env.get("PATH", "")
             if local_bin and local_bin not in current_path.split(os.pathsep):
                 env["PATH"] = f"{local_bin}{os.pathsep}{current_path}" if current_path else local_bin
-        node_path = shutil.which("node")
-        if node_path:
-            return env
-        npx = shutil.which("npx")
-        if npx:
-            node_dir = os.path.dirname(npx)
-            current_path = env.get("PATH", "")
-            if node_dir and node_dir not in current_path.split(os.pathsep):
-                env["PATH"] = f"{node_dir}{os.pathsep}{current_path}" if current_path else node_dir
+        gemini_key = env.get("GEMINI_API_KEY", "").strip()
+        if gemini_key and not env.get("GOOGLE_API_KEY", "").strip():
+            env["GOOGLE_API_KEY"] = gemini_key
         return env
+
+    @staticmethod
+    def _gemini_runtime_env() -> dict[str, str]:
+        return ExternalAIBridge._antigravity_runtime_env()
 
     @staticmethod
     def _retries() -> int:
@@ -102,6 +100,32 @@ class ExternalAIBridge:
         return max(8, (len(prompt) + len(output)) // 4)
 
     @staticmethod
+    def antigravity_auth_diagnostics() -> dict[str, object]:
+        home = os.getenv("HOME", "")
+        app_dir = os.path.join(home, ".gemini", "antigravity-cli") if home else ""
+        settings = os.path.join(app_dir, "settings.json") if app_dir else ""
+        return {
+            "app_data_dir_present": bool(app_dir and os.path.isdir(app_dir)),
+            "settings_present": bool(settings and os.path.isfile(settings)),
+            "live_probe_required": True,
+            "note": "Antigravity stores OAuth outside repo-managed config; live agy probe is authoritative.",
+        }
+
+    @staticmethod
+    def _cli_output_error(stdout: str, stderr: str = "") -> str:
+        combined = f"{stdout or ''}\n{stderr or ''}".strip()
+        text = combined.lower()
+        markers = [
+            "authentication required",
+            "authentication timed out",
+            "paste the authorization code",
+            "please sign in",
+            "error: authentication",
+            "error: please sign in",
+        ]
+        return combined if any(marker in text for marker in markers) else ""
+
+    @staticmethod
     def classify_error(raw_error: str) -> str:
         text = (raw_error or "").lower()
         if "resource_exhausted" in text or "quota" in text or "429" in text:
@@ -116,27 +140,19 @@ class ExternalAIBridge:
             return "sdk_hang"
         return "unknown"
 
-    def run_gemini_cli(self, task: Task, prompt: str, timeout_sec: int = 120) -> BridgeExecResult:
+    def run_antigravity_cli(self, task: Task, prompt: str, timeout_sec: int = 120) -> BridgeExecResult:
         retries = self._retries()
         plan = self.router.build_plan(task, prompt)
         attempts = 0
         last_error = ""
 
         for model in plan.models:
-            cmd_prefix = self.resolve_gemini_cli_command()
+            cmd_prefix = self.resolve_antigravity_cli_command()
             if not cmd_prefix:
-                return BridgeExecResult(False, "", "gemini_cli_not_found", "gemini-cli", model, attempts, error_type="unknown")
+                return BridgeExecResult(False, "", "antigravity_cli_not_found", "antigravity-cli", model, attempts, error_type="unknown")
 
-            cmd = [
-                *cmd_prefix,
-                "--prompt",
-                prompt,
-                "--model",
-                model,
-                "--output-format",
-                "text",
-                "--skip-trust",
-            ]
+            repo_path = getattr(getattr(task, "context", None), "repo_path", "") or os.getcwd()
+            cmd = [*cmd_prefix, "-p", prompt]
 
             def _run_once() -> subprocess.CompletedProcess[str]:
                 if self.host_bridge is not None:
@@ -148,11 +164,11 @@ class ExternalAIBridge:
                             stderr = (res.stderr or "").lower()
                             # Common error markers for missing binary
                             if any(marker in stderr for marker in ["нет такого файла", "no such file", "not found", "failed to start command"]):
-                                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env())
+                                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env(), cwd=repo_path)
                         return res
                     except Exception:
-                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env())
-                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env())
+                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env(), cwd=repo_path)
+                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env(), cwd=repo_path)
 
             if Retrying is not None:
                 try:
@@ -171,20 +187,23 @@ class ExternalAIBridge:
                                 err = stderr or f"non-zero exit code: {proc.returncode}"
                                 if self._is_capacity_error(err) or self._is_token_error(err):
                                     raise RuntimeError(err)
-                                return BridgeExecResult(False, "", err, "gemini-cli", model, attempts, error_type=self.classify_error(err))
+                                return BridgeExecResult(False, "", err, "antigravity-cli", model, attempts, error_type=self.classify_error(err))
                             output = proc.stdout.strip()
+                            output_error = self._cli_output_error(output, proc.stderr or "")
+                            if output_error:
+                                return BridgeExecResult(False, "", output_error, "antigravity-cli", model, attempts, error_type=self.classify_error(output_error))
                             self.router.register_usage(task, self._estimate_consumed_tokens(prompt, output))
-                            return BridgeExecResult(True, output, "", "gemini-cli", model, attempts, error_type="none")
+                            return BridgeExecResult(True, output, "", "antigravity-cli", model, attempts, error_type="none")
                 except RetryError as exc:
                     last_error = str(exc)
                 except subprocess.TimeoutExpired as exc:
-                    return BridgeExecResult(False, "", f"timeout: {exc}", "gemini-cli", model, attempts, error_type="sdk_hang")
+                    return BridgeExecResult(False, "", f"timeout: {exc}", "antigravity-cli", model, attempts, error_type="sdk_hang")
                 except RuntimeError as exc:
                     last_error = str(exc)
                     if model and (self._is_capacity_error(last_error) or self._is_token_error(last_error) or self.classify_error(last_error) in {"quota_exhaustion", "auth_fail"}):
                         self.router.block_model(task, model)
                 except Exception as exc:
-                    return BridgeExecResult(False, "", f"execution_error: {exc}", "gemini-cli", model, attempts, error_type=self.classify_error(str(exc)))
+                    return BridgeExecResult(False, "", f"execution_error: {exc}", "antigravity-cli", model, attempts, error_type=self.classify_error(str(exc)))
                 continue
 
             for attempt in range(1, retries + 1):
@@ -192,14 +211,17 @@ class ExternalAIBridge:
                 try:
                     proc = _run_once()
                 except subprocess.TimeoutExpired as exc:
-                    return BridgeExecResult(False, "", f"timeout: {exc}", "gemini-cli", model, attempts, error_type="sdk_hang")
+                    return BridgeExecResult(False, "", f"timeout: {exc}", "antigravity-cli", model, attempts, error_type="sdk_hang")
                 except Exception as exc:
-                    return BridgeExecResult(False, "", f"execution_error: {exc}", "gemini-cli", model, attempts, error_type=self.classify_error(str(exc)))
+                    return BridgeExecResult(False, "", f"execution_error: {exc}", "antigravity-cli", model, attempts, error_type=self.classify_error(str(exc)))
 
                 if proc.returncode == 0:
                     output = proc.stdout.strip()
+                    output_error = self._cli_output_error(output, proc.stderr or "")
+                    if output_error:
+                        return BridgeExecResult(False, "", output_error, "antigravity-cli", model, attempts, error_type=self.classify_error(output_error))
                     self.router.register_usage(task, self._estimate_consumed_tokens(prompt, output))
-                    return BridgeExecResult(True, output, "", "gemini-cli", model, attempts, error_type="none")
+                    return BridgeExecResult(True, output, "", "antigravity-cli", model, attempts, error_type="none")
 
                 stderr = (proc.stderr or "").strip()
                 last_error = stderr or f"non-zero exit code: {proc.returncode}"
@@ -211,6 +233,9 @@ class ExternalAIBridge:
                 if retryable:
                     self.router.block_model(task, model)
                     break
-                return BridgeExecResult(False, "", last_error, "gemini-cli", model, attempts, error_type=classified)
+                return BridgeExecResult(False, "", last_error, "antigravity-cli", model, attempts, error_type=classified)
 
-        return BridgeExecResult(False, "", f"routing_exhausted: {last_error}", "gemini-cli", plan.models[-1], attempts, error_type=self.classify_error(last_error))
+        return BridgeExecResult(False, "", f"routing_exhausted: {last_error}", "antigravity-cli", plan.models[-1], attempts, error_type=self.classify_error(last_error))
+
+    def run_gemini_cli(self, task: Task, prompt: str, timeout_sec: int = 120) -> BridgeExecResult:
+        return self.run_antigravity_cli(task, prompt, timeout_sec=timeout_sec)

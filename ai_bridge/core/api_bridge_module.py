@@ -8,12 +8,13 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from .kernel_protocol import KernelAPI, KernelModule
 from .task_submission_api import create_standard_task, normalize_user_payload
+from .dev_toolkit_module import DevToolkitModule, DevToolkitRequest
 
 logger = logging.getLogger("api_bridge_module")
 
@@ -79,6 +80,15 @@ class APIBridgeModule:
             return self._api.get_module("sourcecraft")
         except Exception:
             return None
+
+    def _dev_toolkit_module(self):
+        if not self._api:
+            return None
+        try:
+            module = self._api.get_module("dev_toolkit")
+        except Exception:
+            return None
+        return module if isinstance(module, DevToolkitModule) else None
 
     def _sourcecraft_snapshot(self) -> dict[str, Any]:
         module = self._sourcecraft_module()
@@ -165,9 +175,100 @@ class APIBridgeModule:
         task.required_capability = request.required_capability or "sourcecraft"
         return task
 
-    def _chat_trace_payload(self, request: ChatRequest, *, source_label: str, provider_label: str) -> dict[str, Any]:
+    @staticmethod
+    def _meaningful_chat_text(text: str) -> bool:
+        cleaned = " ".join((text or "").split()).strip()
+        if len(cleaned) < 4:
+            return False
+        if not any(ch.isalnum() for ch in cleaned):
+            return False
+        lowered = cleaned.lower()
+        if lowered in {"n/a", "na", "none", "null", "undefined", "test", "asdf", "qwerty", "lol"}:
+            return False
+        return True
+
+    def _validate_chat_request(self, request: ChatRequest) -> tuple[bool, list[str]]:
+        issues: list[str] = []
+        if not self._meaningful_chat_text(request.message):
+            issues.append("empty_or_garbage_message")
+        if not str(request.session_id or "").strip():
+            issues.append("empty_session_id")
+        if not str(request.user_id or "").strip():
+            issues.append("empty_user_id")
+        return len(issues) == 0, issues
+
+    async def _chat_payload(self, request: ChatRequest, *, source_label: str, provider_label: str) -> dict[str, Any]:
         if not self._api:
             return {"status": "error", "message": "Kernel API not available"}
+
+        ok, issues = self._validate_chat_request(request)
+        if not ok:
+            return {
+                "task_id": "rejected",
+                "status": "rejected",
+                "source": source_label,
+                "provider": provider_label,
+                "issues": issues,
+                "message": "invalid or empty chat payload",
+            }
+
+        raw_payload = {
+            "user_id": request.user_id,
+            "message": request.message,
+            "session_id": request.session_id,
+            "source": source_label,
+            "provider": provider_label,
+        }
+
+        try:
+            result = await run_in_threadpool(self._api.submit_user_task, raw_payload, source=source_label)  # type: ignore[arg-type]
+
+            agents_used = []
+            for r in result.get("results", []):
+                agent_id = r.get("agent_id", "unknown")
+                provider = r.get("provider") or "unknown"
+                model = r.get("model") or "unknown"
+                agents_used.append(f"{agent_id} [{provider} :: {model}]")
+
+            meta_header = "\n".join([
+                "╔══════════════════════════════════════════════════════════════════════╗",
+                "║ 🤖 AI ORCHESTRATOR EXECUTION REPORT                                  ║",
+                "╠══════════════════════════════════════════════════════════════════════╣",
+                f"║ ► Tasks routed to: {', '.join(agents_used)}",
+                "╚══════════════════════════════════════════════════════════════════════╝",
+                ""
+            ])
+
+            merged = result.get("merged", {})
+            if isinstance(merged, dict) and "summary" in merged:
+                merged["summary"] = meta_header + "\n" + str(merged["summary"])
+            elif isinstance(merged, str):
+                merged = meta_header + "\n" + merged
+
+            return {
+                "task_id": result.get("task_id", "unknown"),
+                "status": "completed",
+                "source": source_label,
+                "provider": provider_label,
+                "result": merged if merged else result.get("results", []),
+            }
+        except Exception as e:
+            logger.exception("Error in API Bridge endpoint: %s", e)
+            return {"status": "error", "message": str(e)}
+
+    async def _chat_trace_payload(self, request: ChatRequest, *, source_label: str, provider_label: str) -> dict[str, Any]:
+        if not self._api:
+            return {"status": "error", "message": "Kernel API not available"}
+
+        ok, issues = self._validate_chat_request(request)
+        if not ok:
+            return {
+                "status": "rejected",
+                "source": source_label,
+                "provider": provider_label,
+                "issues": issues,
+                "message": "invalid or empty chat payload",
+            }
 
         raw_payload = {
             "user_id": request.user_id,
@@ -287,6 +388,61 @@ class APIBridgeModule:
         async def sourcecraft_delegate_endpoint(request: SourceCraftDelegateRequest):
             return self._sourcecraft_delegate(request)
 
+        @app.post("/devtoolkit/sessions")
+        async def devtoolkit_create_session_endpoint(payload: dict[str, Any]):
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            session = module.load_or_create_session(
+                str(payload.get("session_id") or "").strip() or None,
+                mode=str(payload.get("mode") or "plan"),
+                repo_context=bool(payload.get("repo_context") or False),
+            )
+            return {"status": "ok", "session": session.model_dump()}
+
+        @app.get("/devtoolkit/sessions")
+        async def devtoolkit_list_sessions_endpoint():
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            return {"status": "ok", "sessions": [session.model_dump() for session in module.list_sessions()]}
+
+        @app.get("/devtoolkit/sessions/{session_id}/messages")
+        async def devtoolkit_session_messages_endpoint(session_id: str):
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            return {"status": "ok", "session_id": session_id, "messages": [message.model_dump() for message in module.get_messages(session_id)]}
+
+        @app.get("/devtoolkit/sessions/{session_id}/diff")
+        async def devtoolkit_session_diff_endpoint(session_id: str):
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            return module.get_diff(session_id)
+
+        @app.post("/devtoolkit/chat")
+        async def devtoolkit_chat_endpoint(request: DevToolkitRequest):
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            result = await run_in_threadpool(module.handle_devtoolkit_chat, request)
+            return result.model_dump() if hasattr(result, "model_dump") else result
+
+        @app.post("/devtoolkit/execute")
+        async def devtoolkit_execute_endpoint(request: DevToolkitRequest):
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            return module.handle_execute(request)
+
+        @app.post("/devtoolkit/clipboard")
+        async def devtoolkit_clipboard_endpoint(payload: dict[str, Any]):
+            module = self._dev_toolkit_module()
+            if not module:
+                return {"status": "error", "message": "Dev Toolkit module not available"}
+            return module.handle_clipboard(payload)
+
         @app.get("/health/full")
         async def health_full_endpoint():
             return self._health_full_snapshot()
@@ -310,61 +466,35 @@ class APIBridgeModule:
 
         @app.post("/chat")
         async def chat_endpoint(request: ChatRequest):
-            if not self._api:
-                return {"status": "error", "message": "Kernel API not available"}
-
             source_label = request.source or "http_api"
             provider_label = request.provider or "auto"
+            return await self._chat_payload(request, source_label=source_label, provider_label=provider_label)
 
-            payload = {
-                "user_id": request.user_id,
-                "message": request.message,
-                "session_id": request.session_id,
-                "source": source_label,
-                "provider": provider_label,
-            }
-
+        async def _chat_websocket_handler(websocket: WebSocket):
+            await websocket.accept(subprotocol="chat.json")
             try:
-                result = await run_in_threadpool(self._api.submit_user_task, payload, source=source_label)  # type: ignore
-                
-                agents_used = []
-                for r in result.get("results", []):
-                    agent_id = r.get("agent_id", "unknown")
-                    provider = r.get("provider") or "unknown"
-                    model = r.get("model") or "unknown"
-                    agents_used.append(f"{agent_id} [{provider} :: {model}]")
+                while True:
+                    data = await websocket.receive_json()
+                    request = ChatRequest(**data)
+                    source_label = request.source or "ws_api"
+                    provider_label = request.provider or "auto"
+                    response = await self._chat_payload(request, source_label=source_label, provider_label=provider_label)
+                    await websocket.send_json(response)
+            except WebSocketDisconnect:
+                return
+            except Exception as exc:
+                try:
+                    await websocket.send_json({"status": "error", "message": str(exc)})
+                finally:
+                    return
 
-                meta_header = "\n".join([
-                    "╔══════════════════════════════════════════════════════════════════════╗",
-                    "║ 🤖 AI ORCHESTRATOR EXECUTION REPORT                                  ║",
-                    "╠══════════════════════════════════════════════════════════════════════╣",
-                    f"║ ► Tasks routed to: {', '.join(agents_used)}",
-                    "╚══════════════════════════════════════════════════════════════════════╝",
-                    ""
-                ])
-
-                merged = result.get("merged", {})
-                if isinstance(merged, dict) and "summary" in merged:
-                    merged["summary"] = meta_header + "\n" + str(merged["summary"])
-                elif isinstance(merged, str):
-                    merged = meta_header + "\n" + merged
-
-                return {
-                    "task_id": result.get("task_id", "unknown"),
-                    "status": "completed",
-                    "source": source_label,
-                    "provider": provider_label,
-                    "result": merged if merged else result.get("results", []),
-                }
-            except Exception as e:
-                logger.exception("Error in API Bridge endpoint: %s", e)
-                return {"status": "error", "message": str(e)}
+        app.add_api_websocket_route("/chat/ws", _chat_websocket_handler)
 
         @app.post("/chat/fulltrace")
         async def chat_fulltrace_endpoint(request: ChatRequest):
             source_label = request.source or "http_api"
             provider_label = request.provider or "auto"
-            return self._chat_trace_payload(request, source_label=source_label, provider_label=provider_label)
+            return await self._chat_trace_payload(request, source_label=source_label, provider_label=provider_label)
 
         @app.get("/dump_memory")
         async def dump_memory_endpoint():
@@ -426,7 +556,7 @@ class APIBridgeModule:
                     return {"status": "error", "message": f"Operation failed: {str(e)}"}
             return {"status": "error", "message": "Kernel API does not support dynamic module loading."}
 
-        config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info")
+        config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info", ws="wsproto")
         server = uvicorn.Server(config)
         server.run()
 

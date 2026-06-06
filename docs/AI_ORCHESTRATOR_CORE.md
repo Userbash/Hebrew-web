@@ -47,14 +47,14 @@ Specialized modules own the details so the core flow stays predictable.
 
 - validates shell commands against a safe allowlist;
 - redacts secrets before data leaves the local runtime;
-- keeps external AI providers away from raw credentials.
+- keeps external AI providers away from raw credentials except approved runtime variables passed through controlled adapters.
 
 ## Execution pipeline
 
 1. Normalize the incoming request into a `Task`.
 2. Classify the risk and complexity of the task.
 3. Split the work into `PLAN`, `CODE`, `TEST`, and `REVIEW` steps where needed.
-4. Choose the provider model and the target agent.
+4. Choose the provider model and the target agent; Google CLI routes resolve to `antigravity-cli`/`agy`.
 5. Inject safe context into the task prompt.
 6. Execute the task and collect the result.
 7. Run quality checks against the acceptance criteria.
@@ -79,3 +79,17 @@ Specialized modules own the details so the core flow stays predictable.
 
 New agents should be registered with their capabilities first. The router then
 adds them to the pool when the declared capability matches the task.
+
+## Standalone compose stack
+
+For a self-contained runtime that launches the orchestrator and local Ollama together, use:
+
+```bash
+./scripts/start_ai_bridge_stack.sh
+```
+
+This stack uses `docker-compose.ai.yml` and starts:
+- `ollama` with the default local model pulled on boot;
+- `orchestrator` with `AI_BRIDGE_LOCAL_LLM_ENDPOINT=http://ollama:11434`;
+- separate named volumes for Ollama data and AI Bridge memory.
+

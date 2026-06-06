@@ -40,11 +40,13 @@ from .orchestrator_control_module import OrchestratorControlModule
 from .model_usage_module import ModelUsageModule
 from .provider_budget_router import ProviderBudgetRouter
 from .cold_boot_module import ColdBootModule
+from .voice_listener_module import VoiceListenerModule
 from .kpi_event_logger import KPIEventLogger
 from .ui_design_system_module import UIDesignSystemModule
 from .ui_anti_template_module import UIAntiTemplateModule
 from .frontend_engineering_bridge_module import FrontendEngineeringBridgeModule
 from .autodev_pipeline_module import AutodevPipelineModule
+from .dev_toolkit_module import DevToolkitModule
 from .local_llm_bridge import LocalLLMBridge
 from .local_llm_module import LocalLLMModule
 from .sourcecraft_module import SourceCraftModule
@@ -159,8 +161,10 @@ class Orchestrator:
         self.module_manager.register(UIAntiTemplateModule())
         self.module_manager.register(FrontendEngineeringBridgeModule())
         self.module_manager.register(AutodevPipelineModule())
+        self.module_manager.register(DevToolkitModule())
         self.module_manager.register(LocalLLMModule())
         self.module_manager.register(SourceCraftModule())
+        self.module_manager.register(VoiceListenerModule())
         
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
@@ -178,12 +182,15 @@ class Orchestrator:
         self.module_manager.load("ui_anti_template")
         self.module_manager.load("frontend_engineering_bridge")
         self.module_manager.load("autodev_pipeline")
+        self.module_manager.load("dev_toolkit")
         self.module_manager.load("sourcecraft")
-        self._autostart_local_llm()
-        
-        # Load local_llm only if not in testing environment
+        self.module_manager.load("voice_listener")
+
+        # Load local_llm before autostart so the module is available for
+        # advisory context and readiness checks during kernel boot.
         if os.getenv("TESTING") != "true":
             self.module_manager.load("local_llm")
+        self._autostart_local_llm()
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents = {}
@@ -229,6 +236,7 @@ class Orchestrator:
         self.module_manager.register(TriggerDispatcherModule())
         self.module_manager.register(ColdBootModule())
         self.module_manager.register(SourceCraftModule())
+        self.module_manager.register(VoiceListenerModule())
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
@@ -240,6 +248,8 @@ class Orchestrator:
         self.module_manager.load("trigger_dispatcher")
         self.module_manager.load("cold_boot")
         self.module_manager.load("sourcecraft")
+        self.module_manager.load("voice_listener")
+        
     def attach_local_agent(self, agent_id: str, agent: BaseAgent, agent_type: str = "custom", critical: bool = False, model_name: str = "local-small", provider: str = "local") -> None:
         self.local_agents[agent_id] = agent
         agent.set_host_bridge(self.host_bridge)
@@ -263,9 +273,20 @@ class Orchestrator:
         return None
 
     def submit_user_task(self, payload: object, source: str = "user_input") -> dict[str, object]:
-        from .task_submission_api import create_standard_task, normalize_user_payload
+        from .task_submission_api import create_standard_task, normalize_user_payload, validate_normalized_payload
 
         normalized = normalize_user_payload(payload)
+        ok, issues = validate_normalized_payload(normalized)
+        if not ok:
+            message = "; ".join(issues) or "invalid_input"
+            self.console.emit("INPUT_REJECTED", f"source={source} issues={message}")
+            return {
+                "status": "rejected",
+                "message": "invalid or empty task payload",
+                "issues": issues,
+                "source": source,
+            }
+
         session_id = str(normalized.get("session_id") or "default")
         idem_raw = json.dumps(normalized, sort_keys=True, ensure_ascii=True)
         idempotency_key = hashlib.sha256(idem_raw.encode("utf-8")).hexdigest()
@@ -275,14 +296,12 @@ class Orchestrator:
             self.console.emit("IDEMPOTENCY", f"cache hit for session={session_id} key={idempotency_key[:12]}")
             return cached
 
-        # Try to use trigger dispatcher for semantic routing if message is provided
         message = normalized.get("message") or normalized.get("description")
-        if isinstance(message, str) and message:
+        if isinstance(message, str) and message.strip():
             trigger_mod = self.module_manager.get_module("trigger_dispatcher")
             if isinstance(trigger_mod, TriggerDispatcherModule):
                 triggered = trigger_mod.process_chat_input(message)
                 if triggered:
-                    # Merge triggered data into normalized payload
                     normalized.update(triggered)
 
         task = create_standard_task(normalized)
@@ -308,7 +327,7 @@ class Orchestrator:
     @staticmethod
     def _normalize_provider(provider: str) -> str:
         p = provider.strip().lower()
-        if p in {"google", "gemini", "gemini-cli"}:
+        if p in {"google", "antigravity", "antigravity-cli", "agy", "gemini", "gemini-cli"}:
             return "google"
         return p
 
@@ -349,7 +368,7 @@ class Orchestrator:
         local_llm_module = self.module_manager.get_module("local_llm") if hasattr(self.module_manager, "get_module") else None
         if local_llm_module and hasattr(local_llm_module, "build_decomposition_draft"):
             try:
-                advisory_context["local_llm"] = local_llm_module.build_decomposition_draft(
+                advisory_context["local_llm"] = local_llm_module.build_offload_profile(
                     task,
                     {
                         "description": task.input.description,
@@ -369,10 +388,13 @@ class Orchestrator:
         # Try smart decomposition first
         smart_decomp = self.module_manager.get_module("smart_decomposer")
         if isinstance(smart_decomp, SmartDecomposerModule):
-            plan = smart_decomp.decompose_task(task)
-            if plan:
-                self.console.emit("PLAN", f"Умная декомпозиция: создано {len(plan.atomic_tasks)} задач")
-                return plan
+            try:
+                plan = smart_decomp.decompose_task(task)
+                if plan:
+                    self.console.emit("PLAN", f"Умная декомпозиция: создано {len(plan.atomic_tasks)} задач")
+                    return plan
+            except Exception as e:
+                self.console.emit("PLAN", f"Ошибка умной декомпозиции, используем fallback: {e}")
 
         plan = self.decomposer.decompose(task, advisory_context=advisory_context)
         self.console.emit("PLAN", f"Создано атомарных задач: {len(plan.atomic_tasks)}")
@@ -593,7 +615,7 @@ class Orchestrator:
             memory_context = self._load_memory_context(task, agent_id)
             result = agent.run(task, memory_context=memory_context)
 
-            is_gemini = bool(agent_record and agent_record.provider in {"google", "gemini", "gemini-cli"})
+            is_google_cli = bool(agent_record and agent_record.provider in {"google", "antigravity", "antigravity-cli", "agy", "gemini", "gemini-cli"})
             result_errors = " ".join(result.errors or [])
             classified = ""
             if result_errors:
@@ -612,7 +634,7 @@ class Orchestrator:
                 # Proactive Soft Fallback for all critical/high failures or quota issues
                 should_fallback = (
                     classified in {"quota_exhaustion", "auth_fail", "api_timeout", "tcp_timeout"}
-                    or (is_gemini and classified in TIMEOUT_ERROR_TYPES)
+                    or (is_google_cli and classified in TIMEOUT_ERROR_TYPES)
                     or (task.priority in {Priority.HIGH, Priority.CRITICAL} and result.status == TaskStatus.FAILED)
                 )
 

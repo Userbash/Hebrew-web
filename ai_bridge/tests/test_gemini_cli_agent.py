@@ -18,7 +18,7 @@ def _task() -> Task:
 
 
 def _agent() -> GeminiCLIAgent:
-    policy = SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"])
+    policy = SecurityPolicy(allow_shell=True, shell_allowlist=["agy -p", "antigravity -p"])
     return GeminiCLIAgent("gemini-cli-1", SecurityManager(policy))
 
 
@@ -26,25 +26,25 @@ def test_gemini_cli_success_uses_non_interactive(monkeypatch):
     agent = _agent()
     captured = {}
 
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, capture_output, text, timeout, env=None, cwd=None):
         captured["cmd"] = cmd
         captured["timeout"] = timeout
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(ExternalAIBridge, "resolve_gemini_cli_command", staticmethod(lambda: ["gemini"]))
+    monkeypatch.setattr(ExternalAIBridge, "resolve_antigravity_cli_command", staticmethod(lambda: ["agy"]))
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     result = agent.run(_task())
 
     assert result.status == TaskStatus.DONE
-    assert captured["cmd"][:3] == ["gemini", "--prompt", "Implement feature"]
+    assert captured["cmd"][:3] == ["agy", "-p", "Implement feature"]
     assert captured["timeout"] == 120
 
 
 def test_gemini_cli_timeout_returns_failed(monkeypatch):
     agent = _agent()
 
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, capture_output, text, timeout, env=None, cwd=None):
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout)
 
     monkeypatch.setattr(subprocess, "run", fake_run)

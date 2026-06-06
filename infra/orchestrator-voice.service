@@ -1,0 +1,16 @@
+[Unit]
+Description=AI Orchestrator Voice Assistant
+After=network.target sound.target
+
+[Service]
+Type=simple
+# Replace /path/to/Hebrew-web with the actual path to the repository
+WorkingDirectory=/var/home/sanya/Hebrew-web
+ExecStart=/bin/bash /var/home/sanya/Hebrew-web/scripts/start_voice_orchestrator.sh
+Restart=on-failure
+RestartSec=5
+# Ensure the service has access to the audio hardware
+Environment="PULSE_SERVER=unix:/run/user/1000/pulse/native"
+
+[Install]
+WantedBy=default.target

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from typing import Any
 
 import requests
@@ -38,7 +39,7 @@ class LocalLLMModule(KernelModule):
         timeout_sec: float | None = None,
     ) -> None:
         self.name = "local_llm"
-        self.endpoint = (endpoint or os.getenv("AI_BRIDGE_LOCAL_LLM_ENDPOINT") or "http://127.0.0.1:11434").rstrip("/")
+        self.endpoint = (endpoint or os.getenv("AI_BRIDGE_LOCAL_LLM_ENDPOINT") or "http://host.containers.internal:11434").rstrip("/")
         self.model_name = model_name or os.getenv("AI_BRIDGE_LOCAL_LLM_MODEL") or "qwen2.5:32b-instruct-q4_k_m"
         raw_timeout = os.getenv("AI_BRIDGE_LOCAL_LLM_HEALTH_TIMEOUT_SEC")
         if timeout_sec is not None:
@@ -52,6 +53,20 @@ class LocalLLMModule(KernelModule):
             self.timeout_sec = 1.0
         self.last_probe: dict[str, Any] = {}
         self.last_advisory: dict[str, Any] = {}
+
+    def can_use_model(self, model_name: str | None = None) -> dict[str, Any]:
+        target_model = (model_name or self.model_name).strip()
+        probe = self._probe()
+        model_present = bool(probe.get("model_present"))
+        return {
+            "ok": bool(probe.get("ok")) and model_present,
+            "service_reachable": bool(probe.get("ok")),
+            "model_present": model_present,
+            "model_name": target_model,
+            "status_code": probe.get("status_code"),
+            "available_models": probe.get("available_models", []),
+            "error": probe.get("error"),
+        }
 
     @staticmethod
     def _model_matches(expected: str, candidate: str) -> bool:
@@ -137,35 +152,93 @@ class LocalLLMModule(KernelModule):
             "failover and retries",
         ]
 
-    def _probe(self) -> dict[str, Any]:
-        response = requests.get(f"{self.endpoint}/api/tags", timeout=self.timeout_sec)
-        response.raise_for_status()
-        payload = response.json() if response.content else {}
-        models = payload.get("models", []) if isinstance(payload, dict) else []
-        available_models: list[str] = []
-        if isinstance(models, list):
-            for item in models:
-                if isinstance(item, dict):
-                    name = item.get("name")
-                    if isinstance(name, str) and name.strip():
-                        available_models.append(name.strip())
-        model_present = any(self._model_matches(self.model_name, candidate) for candidate in available_models)
+    @staticmethod
+    def _safe_offload_actions() -> dict[str, list[str]]:
         return {
-            "ok": True,
-            "status_code": response.status_code,
-            "available_models": available_models,
-            "model_present": model_present,
-            "error": None,
+            "full_offload": ["docs_workflow", "analysis"],
+            "partial_offload": ["planning", "verification", "review"],
+            "core_only": ["security", "auth", "destructive", "migration", "sourcecraft"],
         }
 
+    def build_offload_profile(self, task: Any, context: dict[str, Any] | None = None) -> dict[str, Any]:
+        advisory = self._advisory_base(task, context)
+        family = str(advisory.get("task_family") or "general")
+        should_delegate = bool(advisory.get("should_delegate"))
+        offload = self._safe_offload_actions()
+        can_offload_fully = should_delegate and family in set(offload["full_offload"])
+        can_offload_partially = should_delegate or family in set(offload["partial_offload"])
+        return {
+            **advisory,
+            "offload": {
+                "can_offload_fully": can_offload_fully,
+                "can_offload_partially": can_offload_partially,
+                "full_offload": offload["full_offload"],
+                "partial_offload": offload["partial_offload"],
+                "core_only": offload["core_only"],
+                "recommended_boundary": "local_llm" if can_offload_partially else "core",
+            },
+        }
+
+    def _probe(self) -> dict[str, Any]:
+        try:
+            response = requests.get(f"{self.endpoint}/api/tags", timeout=self.timeout_sec)
+            response.raise_for_status()
+            payload = response.json() if response.content else {}
+            models = payload.get("models", []) if isinstance(payload, dict) else []
+            available_models: list[str] = []
+            if isinstance(models, list):
+                for item in models:
+                    if isinstance(item, dict):
+                        name = item.get("name")
+                        if isinstance(name, str) and name.strip():
+                            available_models.append(name.strip())
+            model_present = any(self._model_matches(self.model_name, candidate) for candidate in available_models)
+            return {
+                "ok": True,
+                "status_code": response.status_code,
+                "available_models": available_models,
+                "model_present": model_present,
+                "error": None,
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "status_code": None,
+                "available_models": [],
+                "model_present": False,
+                "error": str(exc),
+            }
+
     def query(self, prompt: str, model_name: str | None = None) -> str:
-        model = model_name or self.model_name
-        response = requests.post(
-            f"{self.endpoint}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=max(2.0, self.timeout_sec * 10),
-        )
-        response.raise_for_status()
+        target_model = (model_name or self.model_name).strip()
+        readiness = self.can_use_model(target_model)
+        if not readiness["ok"]:
+            raise RuntimeError(
+                f"local LLM is not ready: service_reachable={readiness['service_reachable']}, model_present={readiness['model_present']}"
+            )
+
+        start_time = time.perf_counter()
+        try:
+            response = requests.post(
+                f"{self.endpoint}/api/generate",
+                json={
+                    "model": target_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.2,
+                        "top_p": 0.9,
+                    },
+                },
+                timeout=max(2.0, self.timeout_sec * 10),
+            )
+            response.raise_for_status()
+            duration = time.perf_counter() - start_time
+            logger.info(f"[LLM_TELEMETRY] Query to {target_model} took {duration:.3f}s")
+        except Exception as exc:
+            logger.error(f"[LLM_ERROR] Query to {target_model} failed: {exc}")
+            raise
+
         payload = response.json() if response.content else {}
         if isinstance(payload, dict):
             text = payload.get("response")
@@ -174,8 +247,8 @@ class LocalLLMModule(KernelModule):
         return ""
 
     def _advisory_base(self, task: Any, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        probe = self.check_health()
-        ready = bool(probe.get("ok")) and bool(probe.get("model_present"))
+        probe = self.can_use_model(self.model_name)
+        ready = bool(probe.get("ok"))
         task_text = self._task_text(task, context)
         task_family = self._task_family(task_text)
         task_type = str(getattr(getattr(task, "type", None), "value", getattr(task, "type", ""))).lower() or None
@@ -204,6 +277,7 @@ class LocalLLMModule(KernelModule):
             },
             "actions": self._recommended_actions(task_family),
             "core_retained_actions": self._core_retained_actions(),
+            "safe_offload": self._safe_offload_actions(),
             "summary": None,
             "task_text": task_text,
         }
@@ -396,7 +470,7 @@ class LocalLLMModule(KernelModule):
         self.last_advisory = {}
 
     def before_task(self, task: Any, context: dict[str, Any]) -> None:
-        advisory = self.build_decomposition_draft(task, context)
+        advisory = self.build_offload_profile(task, context)
         context["local_llm"] = advisory
         if advisory.get("should_delegate"):
             context["local_llm"]["automation"] = {

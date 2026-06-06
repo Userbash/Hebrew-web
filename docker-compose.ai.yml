@@ -1,0 +1,60 @@
+version: "3.9"
+
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILES:-5}"
+    labels: "com.hebrew.service,com.hebrew.component,com.hebrew.log_pipeline"
+
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: ./ai_bridge/Dockerfile
+    container_name: hebrew_ai_orchestrator
+    environment:
+      PYTHONPATH: /app
+      TESTING: "false"
+      AI_BRIDGE_AUTOSTART_LOCAL_LLM: "false"
+      AI_BRIDGE_LOCAL_LLM_AUTO_PROVISION: "false"
+      AI_BRIDGE_LOCAL_LLM_ENDPOINT: http://host.containers.internal:11434
+      AI_BRIDGE_LOCAL_LLM_PORT: "11434"
+      AI_BRIDGE_LOCAL_LLM_MODEL: ${AI_BRIDGE_LOCAL_LLM_MODEL:-qwen2.5:32b-instruct-q4_k_m}
+      AI_BRIDGE_MEMORY_ENABLED: ${AI_BRIDGE_MEMORY_ENABLED:-false}
+      AI_BRIDGE_MEMORY_STORE_DIR: /app/memory_store
+      AI_BRIDGE_LIVE_MODEL_PROBE: ${AI_BRIDGE_LIVE_MODEL_PROBE:-false}
+      AI_BRIDGE_REQUIRE_EXTERNAL_SCANNERS: ${AI_BRIDGE_REQUIRE_EXTERNAL_SCANNERS:-false}
+      AI_BRIDGE_OPENAI_AUTO_MODEL: ${AI_BRIDGE_OPENAI_AUTO_MODEL:-true}
+      OPENAI_SESSION_TOKEN_BUDGET: ${OPENAI_SESSION_TOKEN_BUDGET:-120000}
+    command:
+      - sh
+      - -lc
+      - |
+        export PYTHONPATH=/app
+        export TESTING=false
+        export AI_BRIDGE_AUTOSTART_LOCAL_LLM=false
+        export AI_BRIDGE_LOCAL_LLM_AUTO_PROVISION=false
+        export AI_BRIDGE_LOCAL_LLM_ENDPOINT=http://host.containers.internal:11434
+        export AI_BRIDGE_LOCAL_LLM_PORT=11434
+        export AI_BRIDGE_LOCAL_LLM_MODEL=${AI_BRIDGE_LOCAL_LLM_MODEL:-qwen2.5:32b-instruct-q4_k_m}
+        exec python -m ai_bridge.scripts.orchestrator_daemon
+    ports:
+      - "${ORCHESTRATOR_PORT:-8000}:8000"
+    volumes:
+      - ai_bridge_memory:/app/memory_store
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+    restart: unless-stopped
+    labels:
+      com.hebrew.service: "orchestrator"
+      com.hebrew.component: "ai-bridge"
+      com.hebrew.log_pipeline: "loki"
+    logging: *default-logging
+
+volumes:
+  ai_bridge_memory:
+    name: ${AI_BRIDGE_MEMORY_VOLUME_NAME:-hebrew_ai_bridge_memory}
