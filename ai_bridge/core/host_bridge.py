@@ -38,6 +38,8 @@ class HostBridge:
         "cat",
         "bash",
         "curl",
+        "agy",
+        "antigravity",
         "netstat",
         "ss",
         "ip",

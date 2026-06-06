@@ -52,11 +52,11 @@ def _build_registry(*, mistral_offline: bool = False) -> AgentRegistry:
         provider="mistral",
     )
     registry.register(
-        "gemini-cli-orchestrator",
+        "antigravity-cli-orchestrator",
         "custom",
-        "local://gemini-cli",
+        "local://antigravity-cli",
         ["docs", "research", "review"],
-        model_name="gemini-cli",
+        model_name="antigravity-cli",
         provider="google",
     )
     registry.register(
@@ -102,7 +102,7 @@ def _reason(choice_provider: str, choice_complexity: Complexity, fallback_used: 
     if choice_provider == "mistral":
         return "medium_code_fix_test_routing"
     if choice_provider == "google":
-        return "medium_docs_research_review_routing"
+        return "medium_docs_research_review_antigravity_routing"
     return "policy_default"
 
 
@@ -198,12 +198,12 @@ CASES = [
         forced_complexity=Complexity.MEDIUM,
         mistral_offline=False,
         expected_complexity=Complexity.MEDIUM,
-        expected_orchestrator="gemini-cli-orchestrator",
+        expected_orchestrator="antigravity-cli-orchestrator",
         expected_provider="google",
-        expected_model="gemini-cli",
+        expected_model="antigravity-cli",
         expected_fallback=False,
         expected_secondary_review=False,
-        expected_reason="medium_docs_research_review_routing",
+        expected_reason="medium_docs_research_review_antigravity_routing",
     ),
     RoutingCase(
         name="medium research task",
@@ -212,12 +212,12 @@ CASES = [
         forced_complexity=Complexity.MEDIUM,
         mistral_offline=False,
         expected_complexity=Complexity.MEDIUM,
-        expected_orchestrator="gemini-cli-orchestrator",
+        expected_orchestrator="antigravity-cli-orchestrator",
         expected_provider="google",
-        expected_model="gemini-cli",
+        expected_model="antigravity-cli",
         expected_fallback=False,
         expected_secondary_review=False,
-        expected_reason="medium_docs_research_review_routing",
+        expected_reason="medium_docs_research_review_antigravity_routing",
     ),
     RoutingCase(
         name="high architecture redesign",

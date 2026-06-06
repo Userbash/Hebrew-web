@@ -12,12 +12,12 @@ from ai_bridge.core.security import SecurityManager, SecurityPolicy
 logging.basicConfig(level=logging.ERROR)
 
 def main():
-    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"]))
+    security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["agy -p", "antigravity -p"]))
     
     agents = [
         PlannerAgent("planner-1"),
         CodexAgent("codex-main"),
-        GeminiCLIAgent("gemini-cli-1", security_manager),
+        GeminiCLIAgent("antigravity-cli-1", security_manager),
         MistralAgent("mistral-1", security_manager),
         TesterAgent("tester-1"),
         ReviewerAgent("reviewer-1")

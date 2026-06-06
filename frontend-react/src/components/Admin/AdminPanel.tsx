@@ -27,6 +27,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Lock,
+  MessageSquareCode,
   LogOut,
   Settings,
   Shield,
@@ -51,6 +52,7 @@ import { canEditUserPermissions } from '../../security/canEditUserPermissions';
 import { hasPermission } from '../../security/rbac';
 import './AdminPanel.css';
 import UiPreferencesControls from '../Layout/UiPreferencesControls';
+import DevToolkitPage from '../DevToolkit/DevToolkitPage';
 
 const ADMIN_ROLES: RoleKey[] = ['root', 'platform_admin'];
 const SEARCHABLE_RBAC_ROLES = [
@@ -94,9 +96,10 @@ type SectionId =
   | 'group-assignments'
   | 'publications-review'
   | 'audit-trail'
-  | 'audit-logs';
+  | 'audit-logs'
+  | 'dev-toolkit';
 
-type NavGroupId = 'dashboard' | 'users' | 'groups' | 'content' | 'audit';
+type NavGroupId = 'dashboard' | 'users' | 'groups' | 'content' | 'audit' | 'ai-bridge';
 
 const NAV_GROUPS_BASE: Array<{
   id: NavGroupId;
@@ -145,6 +148,14 @@ const NAV_GROUPS_BASE: Array<{
     items: [
       { id: 'audit-trail', label: 'Change audit trail' },
       { id: 'audit-logs', label: 'API activity logs' },
+    ],
+  },
+  {
+    id: 'ai-bridge',
+    title: 'AI Bridge',
+    icon: <MessageSquareCode size={16} />,
+    items: [
+      { id: 'dev-toolkit', label: 'Dev Toolkit chat' },
     ],
   },
 ];
@@ -200,6 +211,11 @@ const SECTION_GUIDE_BASE: Record<SectionId, { title: string; description: string
     title: 'Audit logs',
     description: 'Filter API activity by method, path and status for incident review.',
     nextStep: 'Use status and path filters to isolate a specific operation.'
+  },
+  'dev-toolkit': {
+    title: 'Dev Toolkit chat',
+    description: 'Plan repository tasks through AI Bridge Orchestrator from inside the admin panel.',
+    nextStep: 'Describe a task and send it to the orchestrator. Stage 1 returns a plan, agents, diff placeholder, clipboard payload and full trace.'
   }
 };
 
@@ -366,6 +382,7 @@ export default function AdminPanel() {
     groups: true,
     content: true,
     audit: true,
+    'ai-bridge': true,
   });
 
   const NAV_GROUPS = NAV_GROUPS_BASE.map((group) => ({
@@ -375,6 +392,7 @@ export default function AdminPanel() {
       group.id === 'users' ? t.adminNavUsers :
       group.id === 'groups' ? t.adminNavGroupsAccess :
       group.id === 'content' ? t.adminNavContentModeration :
+      group.id === 'ai-bridge' ? 'AI Bridge' :
       t.adminNavAuditLogs,
     items: group.items.map((item) => ({
       ...item,
@@ -388,7 +406,8 @@ export default function AdminPanel() {
         item.id === 'group-assignments' ? t.adminSectionUserAssignments :
         item.id === 'publications-review' ? t.adminSectionPublicationsQueue :
         item.id === 'audit-trail' ? t.adminSectionAuditTrail :
-        t.adminSectionApiLogs,
+        item.id === 'audit-logs' ? t.adminSectionApiLogs :
+        'Dev Toolkit chat',
     })),
   }));
 
@@ -1191,6 +1210,18 @@ export default function AdminPanel() {
     return items.slice(0, 3);
   }, [systemMetrics, visibleUsersSummary.blocked, logsSummary.server_errors]);
 
+  const workspaceSignals = [
+    { label: 'Users', value: String(usersTotal), detail: `${visibleUsersSummary.active} active` },
+    { label: 'Access', value: String(groups.length), detail: `${catalogPermissions.length} permissions` },
+    { label: 'Content', value: String(publications.length), detail: `${publicationSummary.review} in review` },
+    { label: 'Audit', value: String(auditSummary.total), detail: `${logsSummary.server_errors} server errors` },
+  ];
+
+  const heroSummary = [
+    { label: 'Active section', value: sectionMeta.sectionLabel },
+    { label: 'Operational signals', value: attentionItems.length === 0 ? 'Stable' : `${attentionItems.length} flagged` },
+    { label: 'Next action', value: activeSection === 'overview' ? 'Review system state' : sectionGuide.nextStep },
+  ];
 
   const handleLogout = async () => {
     await api.post('/auth/logout').catch(() => undefined);
@@ -1202,112 +1233,21 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className={'admin-shell admin-shell-' + theme}>
-      <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <div className="admin-brand-main">
-            <div className="admin-brand-mark">A</div>
-            <div>
-              <strong>{t.adminConsole}</strong>
-              <span>{t.adminSecureGovernance}</span>
-            </div>
-          </div>
-
-          <div className="admin-brand-user-shell" ref={userMenuRef}>
-            <button
-              type="button"
-              className="admin-user-trigger admin-user-trigger-sidebar"
-              onClick={() => setIsUserMenuOpen((prev) => !prev)}
-              aria-expanded={isUserMenuOpen}
-              aria-haspopup="menu"
-            >
-              <div className="admin-user-avatar" aria-hidden="true">
-                {hasAvatarImage ? <img src={avatarUrl || undefined} alt="" onError={() => setAvatarLoadFailed(true)} /> : <span>{avatarInitials}</span>}
-              </div>
-
-              <div className="admin-user-meta">
-                <div className="admin-sidebar-meta-title">{t.adminOperatorLabel}</div>
-                <div className="admin-sidebar-meta-value">{currentUserDisplayName}</div>
-                <div className="admin-user-meta-sub">{currentUserRole} • {currentUserStatus}</div>
-              </div>
-
-              <ChevronDown size={16} className={isUserMenuOpen ? "admin-user-chevron open" : "admin-user-chevron"} />
-            </button>
-
-            {isUserMenuOpen && (
-              <div className="admin-user-menu" role="menu">
-                <button type="button" className="admin-user-menu-item" onClick={openUserSettingsModal}>
-                  <Settings size={15} />
-                  Settings
-                </button>
-                <button type="button" className="admin-user-menu-item" onClick={jumpToMyPublications}>
-                  <FileText size={15} />
-                  My publications ({currentUserPosts})
-                </button>
-                <button type="button" className="admin-user-menu-item" onClick={openMySessions}>
-                  <CircleUserRound size={15} />
-                  My sessions
-                </button>
-
-                <div className="admin-user-menu-roles" aria-hidden="true">
-                  {activeRoles.length === 0 && <Badge bg="secondary">{t.adminNoRoles}</Badge>}
-                  {activeRoles.map((role) => (
-                    <Badge key={role} bg="primary">{role}</Badge>
-                  ))}
-                </div>
-
-                <button type="button" className="admin-user-menu-item danger" onClick={() => void handleLogout()}>
-                  <LogOut size={15} />
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
+    <>
+        <div className="bg-white p-4 mb-4 border-b flex items-center space-x-4">
+            <select className="border p-2">
+                <option>Base Outline</option>
+            </select>
+            <nav className="flex space-x-1">
+                {['Styles', 'Settings', 'Page Settings', 'Layout'].map((tab) => (
+                    <button key={tab} className={`px-4 py-2 ${tab === 'Styles' ? 'bg-gray-100 font-bold border-b-2 border-teal-700' : 'hover:bg-gray-50'}`}>
+                        {tab}
+                    </button>
+                ))}
+            </nav>
         </div>
-
-        <div className="admin-nav-groups">
-          {NAV_GROUPS.map((group) => {
-            const isOpen = openNavGroups[group.id];
-
-            return (
-              <div className="admin-nav-group" key={group.id}>
-                <button type="button" className="admin-nav-group-toggle" onClick={() => toggleNavGroup(group.id)}>
-                  <span className="admin-nav-group-title">
-                    {group.icon}
-                    {group.title}
-                  </span>
-                  {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-
-                {isOpen && (
-                  <div className="admin-nav-items">
-                    {group.items.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`admin-nav-item ${activeSection === item.id ? 'active' : ''}`}
-                        onClick={() => setActiveSection(item.id)}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <Button variant="outline-light" className="admin-sidebar-logout" onClick={() => void handleLogout()}>
-          <LogOut size={15} className="me-2" />
-          {t.adminExit}
-        </Button>
-
-      </aside>
-
-      <main className="admin-main">
-        <header className="admin-topbar">
-          <div className="admin-header-row admin-header-row-main">
+        <div className="admin-topbar">
+          <div className="admin-command-bar">
             <div className="admin-topbar-title-block">
               <div className="admin-topbar-path">{sectionMeta.groupTitle} / {sectionMeta.sectionLabel}</div>
               <h1>{sectionGuide.title}</h1>
@@ -1316,11 +1256,43 @@ export default function AdminPanel() {
 
             <div className="admin-topbar-actions" aria-label="Page actions">
               <UiPreferencesControls className="admin-prefs" />
-              <Badge className="badge-soft">Users: {usersTotal}</Badge>
-              <Badge className="badge-soft">Groups: {groups.length}</Badge>
-              <Badge className="badge-soft">Publications: {publications.length}</Badge>
-              <Badge className="badge-soft">Changes: {auditSummary.total}</Badge>
+              <button type="button" className="admin-top-link" onClick={() => setActiveSection('dev-toolkit')}>Dev Toolkit</button>
             </div>
+          </div>
+
+          <div className="admin-hero-grid">
+            <div className="admin-hero-panel">
+              <div className="admin-hero-kicker">Admin workspace</div>
+              <div className="admin-hero-title">Operational control, user governance, audit visibility.</div>
+              <div className="admin-hero-copy">
+                Keep every admin surface in one place without losing the existing forms, tables, and backend contracts.
+              </div>
+              <div className="admin-hero-actions">
+                <Button variant="primary" onClick={() => setActiveSection('overview')}>Overview</Button>
+                <Button variant="outline-light" onClick={() => setActiveSection('user-directory')}>Users</Button>
+                <Button variant="outline-light" onClick={() => setActiveSection('groups-catalog')}>Access</Button>
+                <Button variant="outline-light" onClick={() => setActiveSection('audit-trail')}>Audit</Button>
+              </div>
+            </div>
+
+            <div className="admin-hero-side">
+              {heroSummary.map((item) => (
+                <div key={item.label} className="admin-status-pill">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="admin-workspace-grid">
+            {workspaceSignals.map((item) => (
+              <div key={item.label} className="admin-workspace-card">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.detail}</small>
+              </div>
+            ))}
           </div>
 
           <div className="admin-header-row admin-top-tabs" role="tablist" aria-label="Quick sections">
@@ -1369,32 +1341,60 @@ export default function AdminPanel() {
           </div>
         )}
 
-        <Card className="admin-surface admin-section-helper mb-3">
-          <Card.Body>
-            <div className="admin-section-helper-title">{t.adminSectionPurpose}</div>
-            <div className="admin-section-helper-text">{sectionGuide.nextStep}</div>
-          </Card.Body>
-        </Card>
+        {activeSection !== 'dev-toolkit' && (
+          <>
+            <div className="admin-helper-grid mb-3">
+              <Card className="admin-surface admin-section-helper">
+                <Card.Body>
+                  <div className="admin-section-helper-title">{t.adminSectionPurpose}</div>
+                  <div className="admin-section-helper-text">{sectionGuide.nextStep}</div>
+                </Card.Body>
+              </Card>
 
-        <Card className="admin-surface admin-user-map mb-3">
-          <Card.Body>
-            <div className="admin-section-helper-title">{t.adminProfileQuickMap}</div>
-            <div className="admin-user-map-grid">
-              <button type="button" className="admin-user-map-step" onClick={openUserSettingsModal}>
-                <strong>1. Open Settings</strong>
-                <span>Open your profile menu in the left top Admin Console block, then choose Settings.</span>
-              </button>
-              <button type="button" className="admin-user-map-step" onClick={jumpToMyPublications}>
-                <strong>2. Manage my publications</strong>
-                <span>Jump directly to your own publications and update moderation status.</span>
-              </button>
-              <button type="button" className="admin-user-map-step" onClick={openMySessions}>
-                <strong>3. Check my sessions</strong>
-                <span>Open active/revoked sessions to review security access.</span>
-              </button>
+              <Card className="admin-surface admin-quick-actions-panel">
+                <Card.Body>
+                  <div className="admin-section-helper-title">Priority lanes</div>
+                  <div className="admin-quick-nav-row">
+                    <button type="button" className="admin-user-map-step" onClick={() => setActiveSection('system-monitoring')}>
+                      <strong>Infra</strong>
+                      <span>CPU, memory, DB, storage</span>
+                    </button>
+                    <button type="button" className="admin-user-map-step" onClick={() => setActiveSection('user-directory')}>
+                      <strong>Users</strong>
+                      <span>Directory and sessions</span>
+                    </button>
+                    <button type="button" className="admin-user-map-step" onClick={() => setActiveSection('publications-review')}>
+                      <strong>Content</strong>
+                      <span>Queue and moderation</span>
+                    </button>
+                  </div>
+                </Card.Body>
+              </Card>
             </div>
-          </Card.Body>
-        </Card>
+
+            <Card className="admin-surface admin-user-map mb-3">
+              <Card.Body>
+                <div className="admin-section-helper-title">{t.adminProfileQuickMap}</div>
+                <div className="admin-user-map-grid">
+                  <button type="button" className="admin-user-map-step" onClick={openUserSettingsModal}>
+                    <strong>1. Open Settings</strong>
+                    <span>Open your profile menu in the left top Admin Console block, then choose Settings.</span>
+                  </button>
+                  <button type="button" className="admin-user-map-step" onClick={jumpToMyPublications}>
+                    <strong>2. Manage my publications</strong>
+                    <span>Jump directly to your own publications and update moderation status.</span>
+                  </button>
+                  <button type="button" className="admin-user-map-step" onClick={openMySessions}>
+                    <strong>3. Check my sessions</strong>
+                    <span>Open active/revoked sessions to review security access.</span>
+                  </button>
+                </div>
+              </Card.Body>
+            </Card>
+          </>
+        )}
+
+        {activeSection === 'dev-toolkit' && <DevToolkitPage embedded />}
 
         {activeSection === 'overview' && (
           <>
@@ -2578,7 +2578,5 @@ export default function AdminPanel() {
             </Table>
           </Modal.Body>
         </Modal>
-      </main>
-    </div>
   );
 }

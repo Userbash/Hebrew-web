@@ -1,0 +1,593 @@
+.devtoolkit-page {
+  min-height: 100vh;
+  padding: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
+    radial-gradient(circle at 92% 12%, rgba(14, 165, 140, 0.10), transparent 24%),
+    linear-gradient(180deg, #eef4f8 0%, #e7eef5 100%);
+  color: #172235;
+}
+
+.devtoolkit-page.dark {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 30%),
+    radial-gradient(circle at 88% 12%, rgba(20, 184, 166, 0.14), transparent 28%),
+    linear-gradient(180deg, #08111f 0%, #0a1524 100%);
+  color: #e8eefb;
+}
+
+.devtoolkit-page.embedded {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.devtoolkit-page.embedded .devtoolkit-panel {
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.devtoolkit-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.devtoolkit-page.dark .devtoolkit-kicker {
+  color: #8eb8ff;
+}
+
+.devtoolkit-hero,
+.devtoolkit-embedded-status,
+.devtoolkit-panel,
+.devtoolkit-error,
+.devtoolkit-empty-state,
+.devtoolkit-muted {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.06);
+}
+
+.devtoolkit-page.dark .devtoolkit-hero,
+.devtoolkit-page.dark .devtoolkit-embedded-status,
+.devtoolkit-page.dark .devtoolkit-panel,
+.devtoolkit-page.dark .devtoolkit-error,
+.devtoolkit-page.dark .devtoolkit-empty-state,
+.devtoolkit-page.dark .devtoolkit-muted {
+  background: rgba(8, 17, 31, 0.82);
+  border-color: rgba(144, 171, 215, 0.22);
+  box-shadow: 0 16px 38px rgba(1, 7, 18, 0.22);
+}
+
+.devtoolkit-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 24px 26px;
+  border-radius: 24px;
+}
+
+.devtoolkit-hero h1 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 52px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  max-width: 12ch;
+}
+
+.devtoolkit-hero p,
+.devtoolkit-embedded-status p,
+.devtoolkit-summary,
+.devtoolkit-task-item p,
+.devtoolkit-message-meta span,
+.devtoolkit-session-meta,
+.devtoolkit-notice-panel p,
+.devtoolkit-hero-copy,
+.devtoolkit-muted {
+  color: #607086;
+}
+
+.devtoolkit-page.dark .devtoolkit-hero p,
+.devtoolkit-page.dark .devtoolkit-embedded-status p,
+.devtoolkit-page.dark .devtoolkit-summary,
+.devtoolkit-page.dark .devtoolkit-task-item p,
+.devtoolkit-page.dark .devtoolkit-message-meta span,
+.devtoolkit-page.dark .devtoolkit-session-meta,
+.devtoolkit-page.dark .devtoolkit-notice-panel p,
+.devtoolkit-page.dark .devtoolkit-muted {
+  color: #9fb4d4;
+}
+
+.devtoolkit-hero-stats,
+.devtoolkit-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 320px;
+}
+
+.devtoolkit-result-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  margin-top: 18px;
+}
+
+.devtoolkit-hero-stats > div,
+.devtoolkit-result-card,
+.devtoolkit-status-strip > div,
+.devtoolkit-task-item,
+.devtoolkit-session-item,
+.devtoolkit-explainer-card,
+.devtoolkit-roadmap-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(248, 251, 255, 0.96);
+}
+
+.devtoolkit-page.dark .devtoolkit-hero-stats > div,
+.devtoolkit-page.dark .devtoolkit-result-card,
+.devtoolkit-page.dark .devtoolkit-status-strip > div,
+.devtoolkit-page.dark .devtoolkit-task-item,
+.devtoolkit-page.dark .devtoolkit-session-item,
+.devtoolkit-page.dark .devtoolkit-explainer-card,
+.devtoolkit-page.dark .devtoolkit-roadmap-item {
+  background: rgba(11, 20, 34, 0.58);
+  border-color: rgba(130, 154, 192, 0.2);
+}
+
+.devtoolkit-hero-stats strong,
+.devtoolkit-result-card strong,
+.devtoolkit-status-strip strong,
+.devtoolkit-workspace-value {
+  display: block;
+  font-size: 22px;
+  line-height: 1.05;
+}
+
+.devtoolkit-hero-stats span,
+.devtoolkit-result-card span,
+.devtoolkit-status-strip span {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.devtoolkit-page.dark .devtoolkit-hero-stats span,
+.devtoolkit-page.dark .devtoolkit-result-card span,
+.devtoolkit-page.dark .devtoolkit-status-strip span {
+  color: #9fb4d4;
+}
+
+.devtoolkit-result-card small,
+.devtoolkit-status-strip small,
+.devtoolkit-task-item small,
+.devtoolkit-roadmap-item,
+.devtoolkit-explainer-card p {
+  display: block;
+  margin-top: 8px;
+  color: #64748b;
+}
+
+.devtoolkit-page.dark .devtoolkit-result-card small,
+.devtoolkit-page.dark .devtoolkit-status-strip small,
+.devtoolkit-page.dark .devtoolkit-task-item small,
+.devtoolkit-page.dark .devtoolkit-roadmap-item,
+.devtoolkit-page.dark .devtoolkit-explainer-card p {
+  color: #9fb4d4;
+}
+
+.devtoolkit-result-card.success {
+  border-color: rgba(16, 185, 129, 0.24);
+}
+
+.devtoolkit-result-card.warning {
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.devtoolkit-result-card.neutral {
+  border-color: rgba(59, 130, 246, 0.18);
+}
+
+.devtoolkit-embedded-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.devtoolkit-embedded-status h2,
+.devtoolkit-panel h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.devtoolkit-embedded-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.devtoolkit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.devtoolkit-toolbar-btn,
+.devtoolkit-ghost-btn,
+.devtoolkit-send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.devtoolkit-toolbar-btn,
+.devtoolkit-ghost-btn,
+.devtoolkit-send-btn,
+.devtoolkit-mode-chip {
+  border-radius: 14px;
+}
+
+.devtoolkit-panel {
+  border-radius: 22px;
+}
+
+.devtoolkit-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.devtoolkit-panel-head-stack {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.devtoolkit-sidebar-panel {
+  position: sticky;
+  top: 24px;
+}
+
+.devtoolkit-session-list,
+.devtoolkit-task-list,
+.devtoolkit-main-grid,
+.devtoolkit-roadmap-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.devtoolkit-session-item {
+  text-align: left;
+  color: inherit;
+}
+
+.devtoolkit-session-item.active {
+  border-color: rgba(37, 99, 235, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
+.devtoolkit-session-item-top,
+.devtoolkit-task-item-top,
+.devtoolkit-message-meta,
+.devtoolkit-composer-footer,
+.devtoolkit-composer-head,
+.devtoolkit-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.devtoolkit-session-item p,
+.devtoolkit-summary,
+.devtoolkit-notice-panel p,
+.devtoolkit-message-body {
+  margin-top: 10px;
+}
+
+.devtoolkit-session-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.devtoolkit-chat-panel,
+.devtoolkit-notice-panel {
+  margin-bottom: 18px;
+}
+
+.devtoolkit-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.devtoolkit-mode-chip {
+  min-width: 132px;
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(248, 251, 255, 0.9);
+  color: inherit;
+  padding: 10px 12px;
+}
+
+.devtoolkit-page.dark .devtoolkit-mode-chip {
+  background: rgba(11, 20, 35, 0.68);
+  border-color: rgba(130, 154, 192, 0.24);
+}
+
+.devtoolkit-mode-chip.active {
+  border-color: rgba(37, 99, 235, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14);
+}
+
+.devtoolkit-mode-chip span {
+  display: block;
+  font-weight: 800;
+}
+
+.devtoolkit-mode-chip small {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+}
+
+.devtoolkit-page.dark .devtoolkit-mode-chip small {
+  color: #8ea7c9;
+}
+
+.devtoolkit-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.devtoolkit-chat-scroller {
+  margin-top: 18px;
+  min-height: 360px;
+  max-height: 560px;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.devtoolkit-message {
+  border-radius: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(248, 251, 255, 0.96);
+}
+
+.devtoolkit-page.dark .devtoolkit-message {
+  background: rgba(10, 19, 33, 0.68);
+  border-color: rgba(128, 160, 206, 0.18);
+}
+
+.devtoolkit-message.user {
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.devtoolkit-message.assistant {
+  border-color: rgba(20, 184, 166, 0.28);
+}
+
+.devtoolkit-message-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.devtoolkit-composer-shell {
+  margin-top: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(248, 251, 255, 0.96);
+}
+
+.devtoolkit-page.dark .devtoolkit-composer-shell {
+  background: rgba(10, 19, 33, 0.58);
+  border-color: rgba(128, 160, 206, 0.18);
+}
+
+.devtoolkit-composer-head strong {
+  display: block;
+}
+
+.devtoolkit-composer-head p {
+  margin: 6px 0 0;
+  color: #64748b;
+}
+
+.devtoolkit-page.dark .devtoolkit-composer-head p {
+  color: #9fb4d4;
+}
+
+.devtoolkit-composer-input.form-control {
+  margin-top: 14px;
+  border-radius: 16px;
+  border-color: rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  color: inherit;
+  min-height: 172px;
+  padding: 16px;
+  resize: vertical;
+}
+
+.devtoolkit-page.dark .devtoolkit-composer-input.form-control {
+  background: rgba(6, 12, 20, 0.55);
+  color: inherit;
+  border-color: rgba(128, 160, 206, 0.28);
+}
+
+.devtoolkit-composer-footer {
+  margin-top: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.devtoolkit-send-btn {
+  min-height: 44px;
+  min-width: 196px;
+  justify-content: center;
+}
+
+.devtoolkit-explainer-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.devtoolkit-explainer-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.devtoolkit-explainer-card strong {
+  display: block;
+}
+
+.devtoolkit-explainer-card p {
+  margin: 6px 0 0;
+}
+
+.devtoolkit-disclosure {
+  margin-top: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(248, 251, 255, 0.92);
+  padding: 12px 14px;
+}
+
+.devtoolkit-page.dark .devtoolkit-disclosure {
+  background: rgba(11, 20, 34, 0.58);
+  border-color: rgba(130, 154, 192, 0.20);
+}
+
+.devtoolkit-disclosure summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.devtoolkit-json-block {
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: inherit;
+}
+
+.devtoolkit-fulltrace {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.devtoolkit-empty-state,
+.devtoolkit-error,
+.devtoolkit-muted {
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.devtoolkit-muted.inline {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.devtoolkit-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  border-color: rgba(220, 53, 69, 0.35);
+  color: #b42318;
+}
+
+.devtoolkit-page.dark .devtoolkit-error {
+  color: #ffb8c0;
+}
+
+.devtoolkit-inline-error {
+  margin-top: 16px;
+}
+
+.devtoolkit-grid {
+  align-items: stretch;
+}
+
+@media (max-width: 1200px) {
+  .devtoolkit-hero,
+  .devtoolkit-embedded-status {
+    flex-direction: column;
+  }
+
+  .devtoolkit-result-grid,
+  .devtoolkit-status-strip,
+  .devtoolkit-explainer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .devtoolkit-page {
+    padding: 18px;
+  }
+
+  .devtoolkit-sidebar-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .devtoolkit-hero-stats,
+  .devtoolkit-result-grid,
+  .devtoolkit-status-strip,
+  .devtoolkit-explainer-grid {
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+  .devtoolkit-hero h1 {
+    max-width: none;
+    font-size: 28px;
+  }
+
+  .devtoolkit-composer-footer,
+  .devtoolkit-composer-head,
+  .devtoolkit-title-row,
+  .devtoolkit-panel-head,
+  .devtoolkit-session-item-top,
+  .devtoolkit-task-item-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .devtoolkit-send-btn {
+    width: 100%;
+  }
+}

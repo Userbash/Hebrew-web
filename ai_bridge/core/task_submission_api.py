@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from .models import Priority, Task, TaskContext, TaskInput, TaskType
@@ -29,6 +30,11 @@ _PRIORITY_ALIASES: dict[str, str] = {
     "default": "normal",
 }
 
+_GARBAGE_PATTERNS = (
+    r"^[\W_]+$",
+    r"^(n/?a|none|null|undefined|test|asdf|qwerty|lol)$",
+)
+
 
 def _normalize_task_type(raw: Any) -> TaskType:
     value = str(raw or "code").strip().lower()
@@ -52,13 +58,25 @@ def _as_list(raw: Any) -> list[str]:
     if raw is None:
         return []
     if isinstance(raw, list):
-        return [str(item) for item in raw if str(item).strip()]
+        return [str(item).strip() for item in raw if str(item).strip()]
     if isinstance(raw, str):
         chunks = [item.strip() for item in raw.replace("\r", "\n").split("\n")]
         return [item for item in chunks if item]
-    return [str(raw)]
+    value = str(raw).strip()
+    return [value] if value else []
 
 
+def _is_meaningful_text(text: str) -> bool:
+    cleaned = " ".join(text.split()).strip()
+    if len(cleaned) < 4:
+        return False
+    if not re.search(r"[A-Za-zА-Яа-я0-9]", cleaned):
+        return False
+    lowered = cleaned.lower()
+    for pattern in _GARBAGE_PATTERNS:
+        if re.match(pattern, lowered):
+            return False
+    return True
 
 
 def _is_frontend_oneshot_request(data: dict[str, Any]) -> bool:
@@ -94,12 +112,13 @@ def _inject_frontend_standardization(data: dict[str, Any]) -> dict[str, Any]:
     })
     return out
 
+
 def _extract_description(data: dict[str, Any]) -> str:
     for key in ("description", "message", "text", "prompt", "objective"):
         value = data.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
-    return "No description provided"
+    return ""
 
 
 def normalize_user_payload(payload: Any) -> dict[str, Any]:
@@ -112,20 +131,55 @@ def normalize_user_payload(payload: Any) -> dict[str, Any]:
         try:
             parsed = json.loads(stripped)
             if isinstance(parsed, dict):
-                return parsed
+                return _inject_frontend_standardization(parsed)
         except json.JSONDecodeError:
             pass
         return _inject_frontend_standardization({"description": stripped})
     return {}
 
 
+def validate_normalized_payload(normalized: dict[str, Any]) -> tuple[bool, list[str]]:
+    issues: list[str] = []
+    if not isinstance(normalized, dict) or not normalized:
+        return False, ["empty_payload"]
+
+    description = _extract_description(normalized)
+    if not _is_meaningful_text(description):
+        issues.append("empty_or_garbage_description")
+
+    task_type = str(normalized.get("type") or "").strip().lower()
+    if task_type and task_type not in {t.value for t in TaskType} and task_type not in _TASK_TYPE_ALIASES:
+        issues.append("unknown_task_type")
+
+    files = normalized.get("files")
+    if files is not None and not isinstance(files, (list, tuple, str)):
+        issues.append("invalid_files_field")
+
+    acceptance = normalized.get("acceptance_criteria")
+    if acceptance is not None and not isinstance(acceptance, (list, tuple, str)):
+        issues.append("invalid_acceptance_criteria")
+
+    if normalized.get("session_id") is not None and not str(normalized.get("session_id")).strip():
+        issues.append("empty_session_id")
+
+    return len(issues) == 0, issues
+
+
 def create_standard_task(data: dict[str, Any]) -> Task:
     normalized = normalize_user_payload(data)
+    ok, issues = validate_normalized_payload(normalized)
+    if not ok:
+        raise ValueError(f"Invalid task payload: {', '.join(issues)}")
+
     try:
+        description = _extract_description(normalized)
+        if not description:
+            raise ValueError("missing description")
+
         task = Task(
             type=_normalize_task_type(normalized.get("type")),
             input=TaskInput(
-                description=_extract_description(normalized),
+                description=description,
                 files=_as_list(normalized.get("files")),
                 constraints=_as_list(normalized.get("constraints")),
                 acceptance_criteria=_as_list(normalized.get("acceptance_criteria")) or ["tests pass"],
@@ -141,6 +195,9 @@ def create_standard_task(data: dict[str, Any]) -> Task:
         ext_task_id = normalized.get("task_id")
         if isinstance(ext_task_id, str) and ext_task_id.strip():
             task.task_id = ext_task_id.strip()
+        if not task.routing_hints:
+            task.routing_hints = {}
+        task.routing_hints.setdefault("input_validation", {"status": "ok", "issues": []})
         return task
     except Exception as e:
         raise ValueError(f"Invalid task data format: {e}") from e

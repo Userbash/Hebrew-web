@@ -1,4 +1,5 @@
-# Language School Platform
+#
+ Language School Platform
 
 A full-stack learning platform with one consistent product flow:
 public website -> login -> student workspace -> admin console.
@@ -109,7 +110,7 @@ npm run build
 AI Orchestrator (Integrated API):
 ```bash
 # Start the core and API bridge
-bash ai_bridge/scripts/start_orchestrator.sh
+./scripts/start_ai_bridge_stack.sh
 
 # Run the interactive console (in another terminal)
 python3 ai_bridge/scripts/chat_console.py

@@ -54,8 +54,8 @@ class ModelAvailability:
     @staticmethod
     def _normalize_provider(provider: str) -> str:
         p = provider.strip().lower()
-        if p in {"google", "gemini-cli", "gemini"}:
-            return "gemini"
+        if p in {"google", "antigravity", "antigravity-cli", "agy", "gemini-cli", "gemini"}:
+            return "antigravity"
         return p
 
     def __init__(self) -> None:
@@ -76,47 +76,25 @@ class ModelAvailability:
         return os.getenv("AI_BRIDGE_LIVE_MODEL_PROBE", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
+    def _resolve_antigravity_cli_command() -> list[str] | None:
+        return ExternalAIBridge.resolve_antigravity_cli_command()
+
+    @staticmethod
     def _resolve_gemini_cli_command() -> list[str] | None:
-        env_bin = os.getenv("GEMINI_CLI_BIN", "").strip()
-        if env_bin:
-            resolved = shutil.which(env_bin) if not os.path.isabs(env_bin) else env_bin
-            if resolved and os.access(resolved, os.X_OK):
-                return [resolved]
+        return ModelAvailability._resolve_antigravity_cli_command()
 
-        for candidate in ("gemini", "google-gemini", "gemini-cli"):
-            resolved = shutil.which(candidate)
-            if resolved:
-                return [resolved]
-
-        npx = shutil.which("npx")
-        if npx:
-            return [npx, "@google/gemini-cli"]
-        return None
+    @staticmethod
+    def _antigravity_runtime_env() -> dict[str, str]:
+        return ExternalAIBridge._antigravity_runtime_env()
 
     @staticmethod
     def _gemini_runtime_env() -> dict[str, str]:
-        env = os.environ.copy()
-        home_dir = env.get("HOME", "")
-        if home_dir:
-            local_bin = os.path.join(home_dir, ".local", "bin")
-            current_path = env.get("PATH", "")
-            if local_bin and local_bin not in current_path.split(os.pathsep):
-                env["PATH"] = f"{local_bin}{os.pathsep}{current_path}" if current_path else local_bin
-        node_path = shutil.which("node")
-        if node_path:
-            return env
-        npx = shutil.which("npx")
-        if npx:
-            node_dir = os.path.dirname(npx)
-            current_path = env.get("PATH", "")
-            if node_dir and node_dir not in current_path.split(os.pathsep):
-                env["PATH"] = f"{node_dir}{os.pathsep}{current_path}" if current_path else node_dir
-        return env
+        return ModelAvailability._antigravity_runtime_env()
 
     @staticmethod
     def _tcp_targets(provider: str) -> list[tuple[str, int]]:
-        if provider == "gemini":
-            raw = os.getenv("GEMINI_TCP_PROBE_HOSTS", "generativelanguage.googleapis.com:443,www.googleapis.com:443")
+        if provider == "antigravity":
+            raw = os.getenv("ANTIGRAVITY_TCP_PROBE_HOSTS", os.getenv("GEMINI_TCP_PROBE_HOSTS", "antigravity.google:443,generativelanguage.googleapis.com:443,www.googleapis.com:443"))
         elif provider == "mistral":
             raw = os.getenv("MISTRAL_TCP_PROBE_HOSTS", "api.mistral.ai:443")
         else:
@@ -178,15 +156,15 @@ class ModelAvailability:
         steps: list[str] = []
         tcp = diagnostics.get("tcp", {}) if isinstance(diagnostics.get("tcp"), dict) else {}
         if status == ProviderStatus.AUTH_FAILED:
-            key_name = "GEMINI_API_KEY" if provider == "gemini" else "MISTRAL_API_KEY"
+            key_name = "GEMINI_API_KEY/GOOGLE_API_KEY" if provider == "antigravity" else "MISTRAL_API_KEY"
             steps.append(f"Проверь {key_name}: переменная окружения должна быть задана и не просрочена.")
         if status == ProviderStatus.QUOTA_EXCEEDED:
             steps.append("Проверь quota/rate limit у провайдера и временно снизь приоритет этого провайдера в routing policy.")
         if status in {ProviderStatus.TIMEOUT, ProviderStatus.OFFLINE}:
             steps.append("Проверь DNS и TCP egress из среды выполнения до provider API на 443/tcp.")
             steps.append("Проверь proxy/firewall/VPN: соединение должно открываться до host из tcp diagnostics.")
-            if provider == "gemini":
-                steps.append("Проверь, что gemini CLI или npx @google/gemini-cli установлен/доступен и может выполнить минимальный prompt.")
+            if provider == "antigravity":
+                steps.append("Проверь, что Antigravity CLI (`agy`) установлен/доступен и может выполнить `agy -p`.")
         if tcp and not tcp.get("ok"):
             steps.append("TCP probe не открыл ни одного соединения; fallback до другого провайдера корректен до восстановления сети.")
         return steps
@@ -200,54 +178,62 @@ class ModelAvailability:
             self._failure_cache.pop(provider, None)
         return health
 
-    def check_gemini(self, *, live: bool | None = None) -> ProviderHealth:
+    def check_antigravity(self, *, live: bool | None = None) -> ProviderHealth:
         start = datetime.now(UTC)
-        diagnostics: dict[str, Any] = {"provider": "gemini"}
-        tcp = self._tcp_probe("gemini")
+        diagnostics: dict[str, Any] = {"provider": "antigravity"}
+        tcp = self._tcp_probe("antigravity")
         diagnostics["tcp"] = tcp
+        diagnostics["auth"] = ExternalAIBridge.antigravity_auth_diagnostics()
         if not tcp.get("ok"):
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            health = ProviderHealth("gemini", ProviderStatus.TIMEOUT, latency, datetime.now(UTC), error="tcp_probe_failed", diagnostics=diagnostics)
-            diagnostics["remediation"] = self._remediation("gemini", health.status, diagnostics)
+            health = ProviderHealth("antigravity", ProviderStatus.TIMEOUT, latency, datetime.now(UTC), error="tcp_probe_failed", diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
             return self._cache(health)
 
         should_live_probe = self._live_probe_enabled() if live is None else live
         if not should_live_probe:
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            health = ProviderHealth("gemini", ProviderStatus.DEGRADED, latency, datetime.now(UTC), diagnostics=diagnostics)
-            diagnostics["remediation"] = self._remediation("gemini", health.status, diagnostics)
+            health = ProviderHealth("antigravity", ProviderStatus.DEGRADED, latency, datetime.now(UTC), diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
             return self._cache(health)
 
-        model = os.getenv("GEMINI_PROBE_MODEL", "gemini-2.5-flash-lite")
-        cli = self._resolve_gemini_cli_command()
+        model = os.getenv("ANTIGRAVITY_PROBE_MODEL", os.getenv("GEMINI_PROBE_MODEL", "agy"))
+        cli = self._resolve_antigravity_cli_command()
         diagnostics["strategy_profiles"] = self._gemini_strategy_profiles()
         catalog = GeminiModelRegistry().get_catalog(force_refresh=False)
         diagnostics["model_catalog"] = {"all_models": catalog.all_models, "lite": catalog.lite, "flash": catalog.flash, "pro": catalog.pro}
         if not cli:
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            diagnostics["model_probe"] = {"command": None, "model": model, "returncode": None, "stdout_preview": "", "stderr_preview": "gemini cli not found"}
-            health = ProviderHealth("gemini", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error="gemini_cli_not_found", diagnostics=diagnostics)
-            diagnostics["remediation"] = self._remediation("gemini", health.status, diagnostics)
+            diagnostics["model_probe"] = {"command": None, "model": model, "returncode": None, "stdout_preview": "", "stderr_preview": "antigravity cli not found"}
+            health = ProviderHealth("antigravity", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error="antigravity_cli_not_found", diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
             return self._cache(health)
 
-        cmd = [*cli, "--prompt", "healthcheck: respond with ok", "--model", model, "--output-format", "text", "--skip-trust"]
+        cmd = [*cli, "-p", "healthcheck: respond with ok"]
         diagnostics["model_probe"] = {"command": " ".join(cli), "model": model}
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._probe_timeout_sec(), env=self._gemini_runtime_env())
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._probe_timeout_sec(), env=self._antigravity_runtime_env(), cwd=os.getcwd())
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
             diagnostics["model_probe"].update({"returncode": proc.returncode, "stdout_preview": (proc.stdout or "")[:120], "stderr_preview": (proc.stderr or "")[:240]})
-            if proc.returncode == 0:
-                health = ProviderHealth("gemini", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
+            output_error = ExternalAIBridge._cli_output_error(proc.stdout or "", proc.stderr or "")
+            if proc.returncode == 0 and not output_error:
+                health = ProviderHealth("antigravity", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
+            elif output_error:
+                health = ProviderHealth("antigravity", self._status_from_error(output_error), latency, datetime.now(UTC), error=output_error, diagnostics=diagnostics)
             else:
                 error = (proc.stderr or proc.stdout or f"non-zero exit code: {proc.returncode}").strip()
-                health = ProviderHealth("gemini", self._status_from_error(error), latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
+                health = ProviderHealth("antigravity", self._status_from_error(error), latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
         except subprocess.TimeoutExpired as exc:
-            health = ProviderHealth("gemini", ProviderStatus.TIMEOUT, self._probe_timeout_sec() * 1000, datetime.now(UTC), error=f"model_probe_timeout: {exc}", diagnostics=diagnostics)
+            health = ProviderHealth("antigravity", ProviderStatus.TIMEOUT, self._probe_timeout_sec() * 1000, datetime.now(UTC), error=f"model_probe_timeout: {exc}", diagnostics=diagnostics)
         except Exception as exc:
-            health = ProviderHealth("gemini", self._status_from_error(str(exc), ProviderStatus.DEGRADED), 0.0, datetime.now(UTC), error=str(exc), diagnostics=diagnostics)
+            health = ProviderHealth("antigravity", self._status_from_error(str(exc), ProviderStatus.DEGRADED), 0.0, datetime.now(UTC), error=str(exc), diagnostics=diagnostics)
 
-        health.diagnostics["remediation"] = self._remediation("gemini", health.status, health.diagnostics)
+        health.diagnostics["remediation"] = self._remediation("antigravity", health.status, health.diagnostics)
         return self._cache(health)
+
+
+    def check_gemini(self, *, live: bool | None = None) -> ProviderHealth:
+        return self.check_antigravity(live=live)
 
     def check_mistral(self, *, live: bool | None = None) -> ProviderHealth:
         start = datetime.now(UTC)
@@ -299,8 +285,8 @@ class ModelAvailability:
 
     def check_provider(self, provider: str, *, live: bool | None = None) -> ProviderHealth:
         normalized = self._normalize_provider(provider)
-        if normalized == "gemini":
-            return self.check_gemini(live=live)
+        if normalized == "antigravity":
+            return self.check_antigravity(live=live)
         if normalized == "mistral":
             return self.check_mistral(live=live)
         health = ProviderHealth(normalized, ProviderStatus.HEALTHY, 0.0, datetime.now(UTC), diagnostics={"provider": normalized, "probe": "local_provider_assumed_ready"})
@@ -308,7 +294,7 @@ class ModelAvailability:
 
     def check_all(self) -> dict[str, ProviderHealth]:
         return {
-            "gemini": self.check_gemini(),
+            "antigravity": self.check_antigravity(),
             "mistral": self.check_mistral(),
         }
 

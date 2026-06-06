@@ -26,7 +26,7 @@ class ProviderBudgetRouter:
 
     def __init__(self) -> None:
         self._session_provider_state: dict[str, dict[str, ProviderState]] = defaultdict(dict)
-        self.force_gemini = os.getenv("AI_BRIDGE_FORCE_GEMINI", "false").strip().lower() in {"1", "true", "yes", "on"}
+        self.force_antigravity = os.getenv("AI_BRIDGE_FORCE_ANTIGRAVITY", os.getenv("AI_BRIDGE_FORCE_GEMINI", "false")).strip().lower() in {"1", "true", "yes", "on"}
         self.recovery_timeout_min = int(os.getenv("AI_BRIDGE_RECOVERY_TIMEOUT_MIN", "5"))
         self.policy_mode = os.getenv("AI_BRIDGE_POLICY_MODE", "legacy").strip().lower()
 
@@ -37,7 +37,7 @@ class ProviderBudgetRouter:
     @staticmethod
     def _normalize_provider(provider: str) -> str:
         p = provider.strip().lower()
-        if p in {"google", "gemini", "gemini-cli"}:
+        if p in {"google", "antigravity", "antigravity-cli", "agy", "gemini", "gemini-cli"}:
             return "google"
         return p
 
@@ -80,7 +80,7 @@ class ProviderBudgetRouter:
                 base = [preferred, "mistral", "google", "local", "openai"]
             else:
                 base = [preferred, "google", "mistral", "local", "openai"]
-        elif self.force_gemini and task.type in {TaskType.CODE, TaskType.TEST, TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW, TaskType.FIX}:
+        elif self.force_antigravity and task.type in {TaskType.CODE, TaskType.TEST, TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW, TaskType.FIX}:
             base = ["google", "mistral", "local", "openai"]
         elif task.type in {TaskType.CODE, TaskType.TEST, TaskType.FIX}:
             base = [preferred, "mistral", "google", "local", "openai"]

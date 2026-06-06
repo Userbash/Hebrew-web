@@ -44,13 +44,13 @@ def test_provider_budget_router_prefers_primary_provider_for_normal_code():
 
 def test_orchestrator_exposes_model_usage_snapshot():
     orchestrator = Orchestrator()
-    sec = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["gemini --prompt", "npx @google/gemini-cli --prompt"]))
+    sec = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["agy -p", "antigravity -p"]))
 
     orchestrator.attach_local_agent("planner-1", PlannerAgent("planner-1"), agent_type="planner", provider="openai")
     orchestrator.attach_local_agent("codex-main", CodexAgent("codex-main"), agent_type="codex", provider="openai")
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", provider="openai")
-    orchestrator.attach_local_agent("gemini-cli-1", GeminiCLIAgent("gemini-cli-1", sec), agent_type="external_ai", provider="google")
+    orchestrator.attach_local_agent("antigravity-cli-1", GeminiCLIAgent("antigravity-cli-1", sec), agent_type="external_ai", provider="google")
 
     result = orchestrator.submit_user_task({"type": "plan", "description": "Small feature", "priority": "normal"}, source="test")
 

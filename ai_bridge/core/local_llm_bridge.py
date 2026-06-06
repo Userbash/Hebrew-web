@@ -4,6 +4,8 @@ import logging
 import os
 import shlex
 import subprocess
+
+import requests
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.error import URLError
@@ -76,7 +78,7 @@ class LocalLLMBridge:
             return False
 
     def _host_probe(self) -> dict[str, Any]:
-        url = f"http://127.0.0.1:{self.ollama_port}/api/tags"
+        url = f"http://host.containers.internal:{self.ollama_port}/api/tags"
         try:
             with urlopen(url, timeout=5) as response:
                 payload = response.read().decode("utf-8")
@@ -125,5 +127,21 @@ class LocalLLMBridge:
         return self.is_model_downloaded(model_name)
 
     def query(self, prompt: str, model_name: str) -> str:
-        # Placeholder for integration with Orchestrator
-        return "Not implemented"
+        url = f"http://host.containers.internal:{self.ollama_port}/api/generate"
+        response = requests.post(
+            url,
+            json={
+                "model": model_name,
+                "prompt": prompt,
+                "stream": False,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json() if response.content else {}
+        if not isinstance(payload, dict):
+            raise RuntimeError("invalid local LLM response")
+        text = payload.get("response")
+        if not isinstance(text, str) or not text.strip():
+            raise RuntimeError("empty local LLM response")
+        return text.strip()
