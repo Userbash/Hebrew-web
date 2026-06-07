@@ -35,12 +35,13 @@ class OpenAIModelRegistry:
         return lowered.startswith(("gpt-", "o", "codex")) or "codex" in lowered
 
     def _fetch_live(self) -> list[str]:
-        if not self._api_key():
+        key = self._api_key()
+        if not key:
             return []
         try:
             from openai import OpenAI
 
-            client = OpenAI(api_key=self._api_key())
+            client = OpenAI(api_key=key)
             models = client.models.list()
         except Exception:
             return []

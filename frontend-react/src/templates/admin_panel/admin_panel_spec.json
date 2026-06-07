@@ -1,0 +1,81 @@
+{
+  "project_type": "admin_panel",
+  "framework": "react",
+  "ui_library": "shadcn",
+  "layout": "shell-sidebar",
+  "design_direction": {
+    "palette": {
+      "base": ["#0F172A", "#111827", "#1E293B"],
+      "accent": ["#06B6D4", "#8B5CF6", "#22C55E"],
+      "surface": ["#F8FAFC", "#E2E8F0", "#CBD5E1"],
+      "warning": ["#F59E0B", "#EF4444"]
+    },
+    "font": "sans-modern-neutral",
+    "radius": "12px",
+    "shadow": "lg",
+    "noise_factor": 0.18,
+    "density": "compact",
+    "motion": "subtle"
+  },
+  "page_sections": [
+    {
+      "id": "dashboard",
+      "title": "Dashboard",
+      "intent": "Operational overview and health triage",
+      "backend_routes": ["/api/admin/health", "/api/admin/system/metrics", "/api/admin/logs", "/api/admin/audit/events"]
+    },
+    {
+      "id": "users",
+      "title": "Users",
+      "intent": "User directory, profile editing, and access state",
+      "backend_routes": ["/api/admin/users", "/api/users/profile", "/api/users/preferences"]
+    },
+    {
+      "id": "access",
+      "title": "Groups & Access",
+      "intent": "Role hierarchy, permission matrix, assignment workflows",
+      "backend_routes": ["/api/admin/access/catalog", "/api/admin/access/roles", "/api/admin/access/assignments"]
+    },
+    {
+      "id": "publications",
+      "title": "Publications",
+      "intent": "Content lifecycle, moderation, and publication states",
+      "backend_routes": ["/api/admin/publications", "/api/publications"]
+    },
+    {
+      "id": "logs",
+      "title": "API Logs",
+      "intent": "Request telemetry, status-code histograms, and failures",
+      "backend_routes": ["/api/admin/logs", "/api/admin/logs/codes"]
+    },
+    {
+      "id": "audit",
+      "title": "Audit Trail",
+      "intent": "Mutation history, actor attribution, and change maps",
+      "backend_routes": ["/api/admin/audit/events"]
+    },
+    {
+      "id": "system",
+      "title": "System Health",
+      "intent": "CPU, memory, storage, database, and alert posture",
+      "backend_routes": ["/api/admin/system/metrics"]
+    }
+  ],
+  "ux_flow": {
+    "navigation": "command-sidebar-with-sectioned-cards",
+    "feedback": "inline-status-toasts",
+    "admin_priorities": [
+      "health first",
+      "permissions second",
+      "content moderation third",
+      "telemetry and audit always visible"
+    ]
+  },
+  "design_principles": [
+    "Match each screen to an existing backend resource or action.",
+    "Use one primary action per page and keep destructive actions isolated.",
+    "Surface read-only telemetry as a summary card before tables.",
+    "Mirror role hierarchy in navigation state and empty states.",
+    "Prefer dense layouts for admin tasks, but keep touch targets large enough for keyboard and mobile support."
+  ]
+}

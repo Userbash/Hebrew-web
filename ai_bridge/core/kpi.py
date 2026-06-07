@@ -13,7 +13,10 @@ class KPIEvaluator:
         reuse = min(1.0, total / 10) if total else 0.0
         cost_efficiency = max(0.0, min(1.0, 1.0 / (1.0 + agent.metrics.estimated_cost)))
         delivery = max(0.0, min(1.0, 1000.0 / (1000.0 + agent.metrics.avg_latency_ms)))
+        aggregate = (delivery + agent.metrics.quality_score + stability + cost_efficiency + reuse + agent.metrics.test_pass_rate + agent.metrics.review_score) / 7.0
         agent.kpi = AgentKPI(
+            agent_id=agent.id,
+            agent_kpi=aggregate,
             delivery_score=delivery,
             quality_score=agent.metrics.quality_score,
             stability_score=stability,
@@ -21,6 +24,10 @@ class KPIEvaluator:
             reuse_score=reuse,
             test_success_rate=agent.metrics.test_pass_rate,
             review_pass_rate=agent.metrics.review_score,
+            efficiency=delivery,
+            reliability=stability,
+            efficiency_score=aggregate,
+            error_rate=agent.metrics.error_rate,
         )
         return agent.kpi
 

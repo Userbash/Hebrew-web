@@ -115,7 +115,13 @@ def send_to_orchestrator(message: str, *, bridge_url: str, user_id: str, session
 
     selected_transport = transport
     if selected_transport == "auto":
-        selected_transport = _default_transport()
+        # WebSocket-first with HTTP fallback
+        ws_result = _send_via_websocket(message, bridge_url=bridge_url, user_id=user_id, session_id=session_id, trace=trace)
+        if ws_result:
+            return ws_result
+        
+        # Fallback to HTTP
+        selected_transport = "http"
 
     if selected_transport == "parallel":
         return _send_parallel(message, bridge_url=bridge_url, user_id=user_id, session_id=session_id, trace=trace)
@@ -123,6 +129,7 @@ def send_to_orchestrator(message: str, *, bridge_url: str, user_id: str, session
     if selected_transport == "queue":
         return _send_via_queue(message, user_id=user_id, session_id=session_id)
 
+    # HTTP Transport
     endpoint = "/chat/fulltrace" if trace else "/chat"
     try:
         response = requests.post(f"{bridge_url}{endpoint}", json=payload, timeout=40)

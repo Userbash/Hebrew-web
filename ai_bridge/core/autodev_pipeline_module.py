@@ -75,7 +75,8 @@ class AutodevPipelineModule(KernelModule):
         return self._run_cmd(["ruff", "check", str(root)], root)
 
     def _run_tests(self, root: Path) -> dict[str, Any]:
-        return self._run_cmd(["pytest", "-q"], root)
+        import sys
+        return self._run_cmd([sys.executable, "-m", "pytest", "-q"], root)
 
     def _design(self, specs: str, figma_api_available: bool) -> dict[str, Any]:
         ui_tree = {
@@ -89,6 +90,18 @@ class AutodevPipelineModule(KernelModule):
     def run_pipeline(self, specs: str, project_root: str | Path, figma_api_available: bool = False) -> dict[str, Any]:
         root = Path(project_root).resolve()
         state = ProjectState(specs=specs)
+
+        # 1. TDD Enforcement: Check if tests exist
+        test_files = list(root.glob("**/test_*.py"))
+        if not test_files:
+            state.errors.append({"pipeline": "No failing test found. Strict TDD requires a test file."})
+            return {"status": "failed", "state": state.model_dump()}
+
+        # 2. TDD Enforcement: Verify test is RED (failing)
+        state.tests_result = self._run_tests(root)
+        if state.tests_result["status"] == "ok":
+            state.errors.append({"pipeline": "Tests are already GREEN. Strict TDD requires a RED (failing) test first."})
+            return {"status": "failed", "state": state.model_dump()}
 
         # UX -> UI -> JSON UI TREE -> FIGMA -> FRONTEND SPEC
         design = self._design(specs, figma_api_available)

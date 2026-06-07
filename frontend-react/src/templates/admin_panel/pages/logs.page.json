@@ -1,0 +1,22 @@
+{
+  "page": "admin_logs",
+  "surface": "admin_panel",
+  "goal": "Inspect API telemetry, response codes, and operational noise.",
+  "layout": "observability_table",
+  "components": [
+    "telemetry_summary_cards",
+    "code_histogram",
+    "path_failure_table",
+    "log_filter_bar",
+    "request_detail_drawer"
+  ],
+  "backend_dependencies": [
+    "/api/admin/logs",
+    "/api/admin/logs/codes"
+  ],
+  "ux_rules": [
+    "Always show the filters that produced the view.",
+    "Separate benign traffic from failures.",
+    "Surface 400/401/403/429 and 5xx classes explicitly."
+  ]
+}

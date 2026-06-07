@@ -1,48 +1,53 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from pydantic import BaseModel, Field
 
-class AgentType(str, Enum):
-    CODEX = "codex"
-    REVIEWER = "reviewer"
-    TESTER = "tester"
-    PLANNER = "planner"
-    DOCS = "docs"
-    EXTERNAL_AI = "external_ai"
-    CUSTOM = "custom"
+
+class CompatModel(BaseModel):
+    model_config = {"validate_assignment": True, "extra": "allow", "use_enum_values": False}
+
+    def as_dict(self) -> dict[str, Any]:
+        try:
+            return self.model_dump(mode="json")
+        except AttributeError:  # pragma: no cover - pydantic v1 fallback
+            return self.dict()
+
+
+class ProtocolError(ValueError):
+    pass
 
 
 class AgentStatus(str, Enum):
-    OFFLINE = "offline"
-    STARTING = "starting"
-    WARMING_UP = "warming_up"
-    LOADING_CONTEXT = "loading_context"
-    LOADING_TASK_CONTEXT = "loading_task_context"
     READY = "ready"
     IDLE = "idle"
-    ASSIGNED = "assigned"
     BUSY = "busy"
-    BLOCKED = "blocked"
-    WAITING_DEPENDENCY = "waiting_dependency"
-    WAITING_INPUT = "waiting_input"
-    REVIEWING = "reviewing"
-    TESTING = "testing"
     DEGRADED = "degraded"
+    OFFLINE = "offline"
     OVERLOADED = "overloaded"
-    COOLING_DOWN = "cooling_down"
+    DISABLED = "disabled"
+    FAILED = "failed"
+    STARTING = "starting"
     STANDBY = "standby"
+    WARMING_UP = "warming_up"
     SLEEPING = "sleeping"
     UNREACHABLE = "unreachable"
-    FAILED = "failed"
-    RECOVERING = "recovering"
-    DRAINING = "draining"
     MAINTENANCE = "maintenance"
-    DISABLED = "disabled"
+    DRAINING = "draining"
+
+
+class AgentType(str, Enum):
+    CODEX = "codex"
+    TESTER = "tester"
+    REVIEWER = "reviewer"
+    PLANNER = "planner"
+    DOCS = "docs"
+    RESEARCH = "research"
+    CUSTOM = "custom"
 
 
 class TaskType(str, Enum):
@@ -65,15 +70,10 @@ class Priority(str, Enum):
 class TaskStatus(str, Enum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
-    QUEUED = "queued"
-    RUNNING = "running"
     WAITING_INPUT = "waiting_input"
-    WAITING_DEPENDENCY = "waiting_dependency"
-    BLOCKED = "blocked"
-    RETRYING = "retrying"
+    RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
-    CANCELED = "canceled"
     NEEDS_REVIEW = "needs_review"
 
 
@@ -84,137 +84,143 @@ class Complexity(str, Enum):
     CRITICAL = "critical"
 
 
-@dataclass(slots=True)
-class AgentMetrics:
-    agent_id: str = ""
-    agent_type: str = "custom"
-    model_name: str = "local-small"
-    provider: str = "local"
-    status: AgentStatus = AgentStatus.READY
+class AckStatus(str, Enum):
+    SENT = "sent"
+    RECEIVED = "received"
+    ACCEPTED = "accepted"
+    FAILED = "failed"
+
+
+class P2PMessageType(str, Enum):
+    STATUS_UPDATE = "status_update"
+    TEST_FAILED = "test_failed"
+    CONTEXT_TRANSFER = "context_transfer"
+    RESULT = "result"
+
+
+class ReadinessLevel(str, Enum):
+    HOT = "hot"
+    WARM = "warm"
+    COLD = "cold"
+
+
+class TaskInput(CompatModel):
+    description: str
+    files: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+
+    def __init__(self, description: str | None = None, **data: Any) -> None:
+        if description is not None:
+            data.setdefault("description", description)
+        super().__init__(**data)
+
+
+class TaskContext(CompatModel):
+    project: str
+    repo_path: str | None = None
+    branch: str | None = None
+
+    def __init__(self, project: str | None = None, repo_path: str | None = None, branch: str | None = None, **data: Any) -> None:
+        if project is not None:
+            data.setdefault("project", project)
+        if repo_path is not None:
+            data.setdefault("repo_path", repo_path)
+        if branch is not None:
+            data.setdefault("branch", branch)
+        super().__init__(**data)
+
+
+class ResultOutput(CompatModel):
+    summary: str = ""
+    files_changed: list[str] = Field(default_factory=list)
+    commands_run: list[str] = Field(default_factory=list)
+    test_results: list[dict[str, Any]] = Field(default_factory=list)
+    diff: str | None = None
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+
+class QualityReport(CompatModel):
+    passed: bool
+    score: float = 0.0
+    issues: list[str] = Field(default_factory=list)
+    requires_review: bool = False
+
+
+class RoleProfile(CompatModel):
+    name: str
+    capabilities: list[str] = Field(default_factory=list)
+    responsibilities: list[str] = Field(default_factory=list)
+    escalation_rules: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentMetrics(CompatModel):
     active_tasks: int = 0
-    completed_tasks: int = 0
-    failed_tasks: int = 0
     queue_depth: int = 0
     avg_latency_ms: float = 0.0
     success_rate: float = 1.0
     error_rate: float = 0.0
-    token_input: int = 0
-    token_output: int = 0
-    token_total: int = 0
-    estimated_cost: float = 0.0
-    token_cost: float = 0.0
-    cpu_load: float | None = None
-    memory_load: float | None = None
-    last_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
-    idle_since: datetime | None = None
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    current_task_id: str | None = None
-    current_task_type: str | None = None
+    completed_tasks: int = 0
+    failed_tasks: int = 0
     quality_score: float = 1.0
     review_score: float = 1.0
     test_pass_rate: float = 1.0
+    estimated_cost: float = 0.0
+    token_cost: float = 0.0
     priority_score: float = 1.0
+    status: AgentStatus = AgentStatus.READY
+    model_name: str | None = None
+    last_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    idle_since: datetime | None = None
+    current_task_id: str | None = None
+    current_task_type: str | None = None
 
     @property
     def idle_time_sec(self) -> float:
-        if not self.idle_since:
+        if self.idle_since is None:
             return 0.0
         return max(0.0, (datetime.now(UTC) - self.idle_since).total_seconds())
 
-    @property
-    def uptime_sec(self) -> float:
-        return max(0.0, (datetime.now(UTC) - self.started_at).total_seconds())
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "agent_id": self.agent_id,
-            "agent_type": self.agent_type,
-            "model_name": self.model_name,
-            "provider": self.provider,
-            "status": self.status.value,
-            "active_tasks": self.active_tasks,
-            "completed_tasks": self.completed_tasks,
-            "failed_tasks": self.failed_tasks,
-            "queue_depth": self.queue_depth,
-            "avg_latency_ms": self.avg_latency_ms,
-            "success_rate": self.success_rate,
-            "error_rate": self.error_rate,
-            "token_input": self.token_input,
-            "token_output": self.token_output,
-            "token_total": self.token_total,
-            "estimated_cost": self.estimated_cost,
-            "cpu_load": self.cpu_load,
-            "memory_load": self.memory_load,
-            "last_seen": self.last_seen.isoformat(),
-            "idle_time_sec": self.idle_time_sec,
-            "uptime_sec": self.uptime_sec,
-            "current_task_id": self.current_task_id,
-            "current_task_type": self.current_task_type,
-            "quality_score": self.quality_score,
-            "review_score": self.review_score,
-            "test_pass_rate": self.test_pass_rate,
-        }
-
-
-@dataclass(slots=True)
-class AgentKPI:
+class AgentKPI(CompatModel):
+    agent_kpi: float = 1.0
     delivery_score: float = 1.0
     quality_score: float = 1.0
     stability_score: float = 1.0
     cost_efficiency: float = 1.0
-    reuse_score: float = 0.0
+    reuse_score: float = 1.0
     test_success_rate: float = 1.0
     review_pass_rate: float = 1.0
-
-    @property
-    def agent_kpi(self) -> float:
-        return (
-            self.quality_score * 0.30
-            + self.test_success_rate * 0.25
-            + self.delivery_score * 0.20
-            + self.stability_score * 0.15
-            + self.cost_efficiency * 0.10
-        )
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "delivery_score": self.delivery_score,
-            "quality_score": self.quality_score,
-            "stability_score": self.stability_score,
-            "cost_efficiency": self.cost_efficiency,
-            "reuse_score": self.reuse_score,
-            "test_success_rate": self.test_success_rate,
-            "review_pass_rate": self.review_pass_rate,
-            "agent_kpi": self.agent_kpi,
-        }
+    error_rate: float = 0.0
 
 
-@dataclass(slots=True)
-class RoleProfile:
-    name: str
-    title: str
-    summary: str
-    responsibilities: list[str]
-    supported_task_types: list[str]
-    supported_capabilities: list[str]
-    pipeline_stages: list[str]
-    guardrails: list[str]
+class AgentRecord(CompatModel):
+    id: str
+    type: AgentType = AgentType.CUSTOM
+    endpoint: str
+    capabilities: list[str]
+    limits: dict[str, Any] = Field(default_factory=dict)
+    access_key_ref: str | None = None
+    critical: bool = False
+    model_name: str = "local-small"
+    provider: str = "local"
+    status: AgentStatus = AgentStatus.READY
+    metrics: AgentMetrics = Field(default_factory=AgentMetrics)
+    kpi: AgentKPI = Field(default_factory=AgentKPI)
+    last_seen: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    disabled_reason: str | None = None
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "title": self.title,
-            "summary": self.summary,
-            "responsibilities": self.responsibilities,
-            "supported_task_types": self.supported_task_types,
-            "supported_capabilities": self.supported_capabilities,
-            "pipeline_stages": self.pipeline_stages,
-            "guardrails": self.guardrails,
-        }
+    def has_capability(self, capability: str) -> bool:
+        return capability in self.capabilities
 
 
-@dataclass(slots=True)
-class AgentHealth:
+class AgentHealth(CompatModel):
     agent_id: str
     status: AgentStatus
     capabilities: list[str]
@@ -223,234 +229,239 @@ class AgentHealth:
     avg_latency_ms: float = 0.0
     success_rate: float = 1.0
     last_error: str | None = None
-    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "agent_id": self.agent_id,
-            "status": self.status.value,
-            "capabilities": self.capabilities,
-            "active_tasks": self.active_tasks,
-            "queue_depth": self.queue_depth,
-            "avg_latency_ms": self.avg_latency_ms,
-            "success_rate": self.success_rate,
-            "last_error": self.last_error,
-            "timestamp": self.timestamp,
-        }
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-@dataclass(slots=True)
-class AgentRecord:
-    id: str
-    type: AgentType
-    endpoint: str
-    capabilities: list[str]
-    status: AgentStatus = AgentStatus.READY
-    limits: dict[str, Any] = field(default_factory=dict)
-    access_key_ref: str | None = None
-    metrics: AgentMetrics = field(default_factory=AgentMetrics)
-    kpi: AgentKPI = field(default_factory=AgentKPI)
-    last_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
-    critical: bool = False
-    disabled_reason: str | None = None
-    model_name: str = "local-small"
-    provider: str = "local"
-
-    def __post_init__(self) -> None:
-        self.metrics.agent_id = self.id
-        self.metrics.agent_type = self.type.value
-        self.metrics.status = self.status
-        self.metrics.model_name = self.model_name
-        self.metrics.provider = self.provider
-
-    def has_capability(self, capability: str) -> bool:
-        return capability in self.capabilities
-
-
-@dataclass(slots=True)
-class TaskInput:
-    description: str
-    files: list[str] = field(default_factory=list)
-    constraints: list[str] = field(default_factory=list)
-    acceptance_criteria: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class TaskContext:
-    project: str
-    repo_path: str
-    branch: str
-
-
-@dataclass(slots=True)
-class Task:
+class Task(CompatModel):
+    task_id: str = Field(default_factory=lambda: str(uuid4()))
+    parent_task_id: str | None = None
     type: TaskType
+    priority: Priority = Priority.NORMAL
     input: TaskInput
     context: TaskContext
-    priority: Priority = Priority.NORMAL
-    task_id: str = field(default_factory=lambda: str(uuid4()))
-    parent_task_id: str | None = None
     callback_url: str | None = None
-    required_capability: str | None = None
-    dependencies: list[str] = field(default_factory=list)
     complexity: Complexity | None = None
-    assigned_model: str | None = None
-    expected_output: str | None = None
+    required_capability: str | None = None
+    retry_count: int = 0
+    dependencies: list[str] = Field(default_factory=list)
     draft_layer: str | None = None
-    routing_hints: dict[str, Any] = field(default_factory=dict)
+    routing_hints: dict[str, Any] = Field(default_factory=dict)
+    expected_output: str | None = None
+    assigned_model: str | None = None
     session_id: str | None = None
     memory_scope: str = "task"
-    memory_keys: list[str] = field(default_factory=list)
-    memory_ttl_sec: int | None = None
     cache_policy: str = "read_write"
-    repo_fingerprint: str | None = None
-    retry_count: int = 0
-    hop_count: int = 0
-    max_hops: int = 5
-    review_depth: int = 0
+    memory_keys: list[str] = Field(default_factory=list)
+    memory_ttl_sec: int = 3600
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            merged = dict(kwargs)
+            for name, value in zip(("type", "input", "context", "priority"), args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
 
 
-@dataclass(slots=True)
-class AtomicTask:
-    id: str
-    parent_id: str | None
-    description: str
-    required_capability: str
-    complexity: Complexity
-    assigned_agent: str | None
-    assigned_model: str | None
-    dependencies: list[str]
-    expected_output: str
-    acceptance_criteria: list[str]
-
-
-@dataclass(slots=True)
-class TaskAcceptance:
-    task_id: str
-    status: TaskStatus
-    assigned_agent: str | None
-    estimated_complexity: str
-    message: str
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "status": self.status.value,
-            "assigned_agent": self.assigned_agent,
-            "estimated_complexity": self.estimated_complexity,
-            "message": self.message,
-        }
-
-
-@dataclass(slots=True)
-class AgentResult:
+class AgentResult(CompatModel):
     task_id: str
     agent_id: str
     status: TaskStatus
-    output: dict[str, Any]
-    confidence: float
-    errors: list[str] = field(default_factory=list)
-    next_recommendations: list[str] = field(default_factory=list)
+    output: ResultOutput
+    confidence: float = 0.0
+    errors: list[str] = Field(default_factory=list)
+    next_recommendations: list[str] = Field(default_factory=list)
     provider: str | None = None
     model_name: str | None = None
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "agent_id": self.agent_id,
-            "provider": self.provider,
-            "model": self.model_name,
-            "status": self.status.value,
-            "output": self.output,
-            "confidence": self.confidence,
-            "errors": self.errors,
-            "next_recommendations": self.next_recommendations,
-        }
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["task_id", "agent_id", "status", "output", "confidence", "errors", "next_recommendations", "provider", "model_name"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
 
 
-@dataclass(slots=True)
-class QualityReport:
-    passed: bool
-    score: float
-    issues: list[str] = field(default_factory=list)
-    requires_review: bool = False
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "passed": self.passed,
-            "score": self.score,
-            "issues": self.issues,
-            "requires_review": self.requires_review,
-        }
+class TaskResult(AgentResult):
+    pass
 
 
-@dataclass(slots=True)
-class ScoreBreakdown:
-    capability: float
-    reliability: float
-    latency: float
-    cost: float
-    context: float
-    safety: float
+class TaskAcceptance(CompatModel):
+    task_id: str
+    status: TaskStatus
+    assigned_agent: str | None = None
+    complexity: str = "medium"
+    message: str = ""
 
-    def total(self, weights: dict[str, float]) -> float:
-        return sum(getattr(self, k) * w for k, w in weights.items())
-
-@dataclass(slots=True)
-class RoutingTrace:
-    rule: str
-    category: str
-    delta: float
-    reason: str
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["task_id", "status", "assigned_agent", "complexity", "message"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
 
 
-@dataclass(slots=True)
-class ExecutionPlan:
+class SecurityPolicy(CompatModel):
+    requires_approval: bool = False
+    allow_shell: bool = True
+
+
+class TaskPayload(CompatModel):
+    objective: str
+    input_data: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    expected_output_format: str = "json"
+    artifacts: list[str] = Field(default_factory=list)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["objective", "input_data", "context", "acceptance_criteria", "expected_output_format", "artifacts"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        if "files" in kwargs and "artifacts" not in kwargs:
+            kwargs["artifacts"] = kwargs.pop("files")
+        super().__init__(**kwargs)
+
+    @property
+    def files(self) -> list[str]:
+        return self.artifacts
+
+
+class TaskEnvelope(CompatModel):
+    protocol_version: str = "1.0"
+    task_id: str
+    parent_task_id: str | None = None
+    trace_id: str
+    correlation_id: str | None = None
+    source_agent: str = "orchestrator"
+    target_agent: str | None = None
+    target_capability: str = "any"
+    priority: Priority | str = Priority.NORMAL
+    qos_class: str = "normal"
+    ttl: int = 3600
+    deadline: datetime | None = None
+    hop_count: int = 0
+    max_hops: int = 10
+    retry_count: int = 0
+    max_retries: int = 3
+    security_policy: SecurityPolicy = Field(default_factory=SecurityPolicy)
+    context_scope: str = "global"
+    dependencies: list[str] = Field(default_factory=list)
+    payload: TaskPayload
+    is_dead_letter: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["protocol_version", "task_id", "parent_task_id", "trace_id", "correlation_id", "source_agent", "target_agent", "target_capability", "priority", "qos_class", "ttl", "deadline", "hop_count", "max_hops", "retry_count", "max_retries", "security_policy", "context_scope", "dependencies", "payload"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                if name == "security_policy" and value is None:
+                    value = SecurityPolicy()
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
+
+
+class P2PMessage(CompatModel):
+    message_id: str = Field(default_factory=lambda: str(uuid4()))
+    task_id: str
+    from_agent: str
+    to_agent: str
+    message_type: P2PMessageType
+    priority: Priority | str = Priority.NORMAL
+    payload: dict[str, Any] = Field(default_factory=dict)
+    requires_ack: bool = True
+    route: list[str] = Field(default_factory=list)
+    delivery_mode: str = "direct"
+    is_dead_letter: bool = False
+
+
+class MessageAck(CompatModel):
+    message_id: str
+    ack_status: AckStatus
+    received_by: str
+    reason: str | None = None
+
+
+class ExecutionPlan(CompatModel):
     root_task_id: str
     atomic_tasks: list[Task]
-    draft_layers: list[dict[str, Any]] = field(default_factory=list)
-
-    def ready_tasks(self, completed: set[str]) -> list[Task]:
-        return [task for task in self.atomic_tasks if all(dep in completed for dep in task.dependencies)]
+    draft_layers: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class ReadinessLevel(str, Enum):
-    COLD = "cold"
-    WARM = "warm"
-    HOT = "hot"
+class TaskGraph(CompatModel):
+    root_task_id: str | None = None
+    nodes: dict[str, TaskEnvelope] = Field(default_factory=dict)
+    edges: dict[str, list[str]] = Field(default_factory=dict)
 
 
-class P2PMessageType(str, Enum):
-    STATUS_UPDATE = "status_update"
-    HEARTBEAT = "heartbeat"
-    TASK_HANDOFF = "task_handoff"
-    REQUEST_CONTEXT = "request_context"
-    PROVIDE_CONTEXT = "provide_context"
-    TEST_FAILED = "test_failed"
-    REVIEW_FAILED = "review_failed"
-    FIX_REQUIRED = "fix_required"
-    DEPENDENCY_READY = "dependency_ready"
-    DEPENDENCY_BLOCKED = "dependency_blocked"
-    AGENT_OVERLOADED = "agent_overloaded"
-    AGENT_UNAVAILABLE = "agent_unavailable"
-    FALLBACK_REQUEST = "fallback_request"
-    RESULT_READY = "result_ready"
-    RETRY_REQUEST = "retry_request"
-    APPROVAL_REQUIRED = "approval_required"
+class ResultPayload(CompatModel):
+    task_id: str
+    status: TaskStatus
+    output: dict[str, Any] = Field(default_factory=dict)
+    artifacts: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+    completed_criteria: list[str] = Field(default_factory=list)
+    failed_criteria: list[str] = Field(default_factory=list)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["task_id", "status", "output", "artifacts", "errors", "warnings", "confidence", "completed_criteria", "failed_criteria"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
 
 
-class AckStatus(str, Enum):
-    SENT = "sent"
-    RECEIVED = "received"
-    ACCEPTED = "accepted"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    TIMEOUT = "timeout"
+class ResultEnvelope(CompatModel):
+    protocol_version: str = "1.0"
+    result_id: str
+    task_id: str
+    trace_id: str
+    correlation_id: str | None = None
+    source_agent: str
+    target_agent: str | None = None
+    status: TaskStatus
+    payload: ResultPayload
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["protocol_version", "result_id", "task_id", "trace_id", "correlation_id", "source_agent", "target_agent", "status", "payload"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
 
 
-@dataclass(slots=True)
-class AgentReadiness:
+class TaskWeight(CompatModel):
+    task_id: str
+    priority: int
+    risk: int
+    complexity: int
+    urgency: int
+    business_value: int
+    dependency_count: int
+    estimated_cost: int
+    requires_review: bool
+
+    @property
+    def task_score(self) -> float:
+        return float(self.priority + self.risk + self.complexity + self.urgency + self.business_value + self.dependency_count + self.estimated_cost)
+
+
+class AgentReadiness(CompatModel):
     agent_id: str
     status: AgentStatus
     readiness: ReadinessLevel
@@ -461,290 +472,87 @@ class AgentReadiness:
     latency_ms: float
     last_heartbeat: str
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "agent_id": self.agent_id,
-            "status": self.status.value,
-            "readiness": self.readiness.value,
-            "current_tasks": self.current_tasks,
-            "max_tasks": self.max_tasks,
-            "load": self.load,
-            "capabilities": self.capabilities,
-            "latency_ms": self.latency_ms,
-            "last_heartbeat": self.last_heartbeat,
-        }
 
-
-@dataclass(slots=True)
-class TaskWeight:
-    task_id: str
-    priority: int = 5
-    risk: int = 1
-    complexity: int = 1
-    urgency: int = 5
-    business_value: int = 5
-    dependency_count: int = 0
-    estimated_cost: int = 1
-    requires_review: bool = False
-
-    @property
-    def task_score(self) -> float:
-        return (
-            self.priority * 0.30
-            + self.urgency * 0.20
-            + self.business_value * 0.20
-            + self.risk * 0.15
-            + self.dependency_count * 0.10
-            + self.complexity * 0.05
-        )
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "priority": self.priority,
-            "risk": self.risk,
-            "complexity": self.complexity,
-            "urgency": self.urgency,
-            "business_value": self.business_value,
-            "dependency_count": self.dependency_count,
-            "estimated_cost": self.estimated_cost,
-            "requires_review": self.requires_review,
-            "task_score": self.task_score,
-        }
-
-
-@dataclass(slots=True)
-class P2PMessage:
-    task_id: str
-    from_agent: str
-    to_agent: str
-    message_type: P2PMessageType
-    priority: str = "normal"
-    requires_orchestrator: bool = False
-    payload: dict[str, Any] = field(default_factory=dict)
-    route: list[str] = field(default_factory=list)
-    delivery_mode: str = "p2p_direct"
-    requires_ack: bool = True
-    message_id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
-    correlation_id: str | None = None
-    idempotency_key: str | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "message_id": self.message_id,
-            "task_id": self.task_id,
-            "from_agent": self.from_agent,
-            "to_agent": self.to_agent,
-            "message_type": self.message_type.value,
-            "priority": self.priority,
-            "requires_orchestrator": self.requires_orchestrator,
-            "payload": self.payload,
-            "route": self.route,
-            "delivery_mode": self.delivery_mode,
-            "requires_ack": self.requires_ack,
-            "timestamp": self.timestamp,
-            "correlation_id": self.correlation_id,
-            "idempotency_key": self.idempotency_key,
-        }
-
-@dataclass(slots=True)
-class MessageAck:
-    message_id: str
-    ack_status: AckStatus
-    received_by: str
-    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
-    reason: str | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "message_id": self.message_id,
-            "ack_status": self.ack_status.value,
-            "received_by": self.received_by,
-            "timestamp": self.timestamp,
-            "reason": self.reason,
-        }
-
-
-@dataclass(slots=True)
-class SchedulerDecision:
+class SchedulerDecision(CompatModel):
     task_id: str
     route_mode: str
     assigned_agent: str | None
     requires_orchestrator: bool
     reason: str
     task_score: float
-    agent_score: float = 0.0
+    agent_score: float | None = None
     readiness: ReadinessLevel | None = None
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "task_id": self.task_id,
-            "route_mode": self.route_mode,
-            "assigned_agent": self.assigned_agent,
-            "requires_orchestrator": self.requires_orchestrator,
-            "reason": self.reason,
-            "task_score": self.task_score,
-            "agent_score": self.agent_score,
-            "readiness": self.readiness.value if self.readiness else None,
-        }
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            fields = ["task_id", "route_mode", "assigned_agent", "requires_orchestrator", "reason", "task_score", "agent_score", "readiness"]
+            merged = dict(kwargs)
+            for name, value in zip(fields, args):
+                merged.setdefault(name, value)
+            kwargs = merged
+        super().__init__(**kwargs)
 
-@dataclass(slots=True)
-class SecurityPolicy:
-    requires_approval: bool = False
-    allowed_roles: list[str] = field(default_factory=list)
-    blocked_actions: list[str] = field(default_factory=list)
 
-@dataclass(slots=True)
-class TaskPayload:
-    objective: str
-    input_data: dict[str, Any]
-    context: dict[str, Any]
-    acceptance_criteria: list[str]
-    expected_output_format: str
-    artifacts: list[str] = field(default_factory=list)
+def encapsulate(payload: TaskPayload | Task, metadata: dict[str, Any] | None = None) -> TaskEnvelope:
+    metadata = metadata or {}
+    if isinstance(payload, Task):
+        task_payload = TaskPayload(
+            objective=payload.input.description,
+            input_data={},
+            context=payload.context.as_dict(),
+            acceptance_criteria=list(payload.input.acceptance_criteria),
+            expected_output_format="json",
+            artifacts=list(payload.input.files),
+        )
+        task_id = payload.task_id
+        parent_task_id = payload.parent_task_id
+        priority = payload.priority
+        target_capability = payload.required_capability or payload.type.value
+        retry_count = payload.retry_count
+        dependencies = list(payload.dependencies)
+    else:
+        task_payload = payload
+        task_id = metadata.get("task_id") or str(uuid4())
+        parent_task_id = metadata.get("parent_task_id")
+        priority = metadata.get("priority", Priority.NORMAL)
+        target_capability = metadata.get("target_capability", "any")
+        retry_count = int(metadata.get("retry_count", 0))
+        dependencies = list(metadata.get("dependencies", []))
 
-@dataclass(slots=True)
-class TaskEnvelope:
-    protocol_version: str
-    task_id: str
-    parent_task_id: str | None
-    trace_id: str
-    correlation_id: str | None
-    source_agent: str
-    target_agent: str | None
-    target_capability: str
-    priority: Priority
-    qos_class: str
-    ttl: int
-    deadline: datetime | None = None
-    hop_count: int = 0
-    max_hops: int = 5
-    retry_count: int = 0
-    max_retries: int = 3
-    security_policy: SecurityPolicy = field(default_factory=SecurityPolicy)
-    context_scope: str = "global"
-    dependencies: list[str] = field(default_factory=list)
-    payload: TaskPayload = field(default_factory=lambda: TaskPayload("init", {}, {}, [], "text"))
-    session_id: str | None = None
-    idempotency_key: str | None = None
-    is_dead_letter: bool = False
-    retry_delay_ms: int = 1000
-    memory_scope: str = "task"
-    memory_keys: list[str] = field(default_factory=list)
-    memory_ttl_sec: int | None = None
-    cache_policy: str = "read_write"
-    repo_fingerprint: str | None = None
-    review_depth: int = 0
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-@dataclass(slots=True)
-class ResultPayload:
-    task_id: str
-    status: TaskStatus
-    output: dict[str, Any]
-    artifacts: list[str] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-    confidence: float = 1.0
-    completed_criteria: list[str] = field(default_factory=list)
-    failed_criteria: list[str] = field(default_factory=list)
-
-@dataclass(slots=True)
-class ResultEnvelope:
-    protocol_version: str
-    result_id: str
-    task_id: str
-    trace_id: str
-    correlation_id: str | None
-    source_agent: str
-    target_agent: str | None
-    status: TaskStatus
-    payload: ResultPayload
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-@dataclass(slots=True)
-class TaskGraph:
-    root_task_id: str
-    nodes: dict[str, TaskEnvelope] = field(default_factory=dict)
-    edges: dict[str, list[str]] = field(default_factory=dict)
-    status: str = "pending"
-    merge_strategy: str = "all_required"
-
-class ProtocolError(Exception):
-    pass
-
-def encapsulate(payload: TaskPayload, metadata: dict[str, Any]) -> TaskEnvelope:
-    task_id = metadata.get("task_id") or str(uuid4())
-    trace_id = metadata.get("trace_id") or str(uuid4())
     return TaskEnvelope(
-        protocol_version="1.0",
+        protocol_version=str(metadata.get("protocol_version", "1.0")),
         task_id=task_id,
-        parent_task_id=metadata.get("parent_task_id"),
-        trace_id=trace_id,
+        parent_task_id=parent_task_id,
+        trace_id=str(metadata.get("trace_id") or uuid4()),
         correlation_id=metadata.get("correlation_id"),
-        source_agent=metadata.get("source_agent", "system"),
+        source_agent=metadata.get("source_agent", "orchestrator"),
         target_agent=metadata.get("target_agent"),
-        target_capability=metadata.get("target_capability", "any"),
-        priority=metadata.get("priority", Priority.NORMAL),
-        qos_class=metadata.get("qos_class", "best_effort"),
-        ttl=metadata.get("ttl", 3600),
+        target_capability=target_capability,
+        priority=priority,
+        qos_class=metadata.get("qos_class", "normal"),
+        ttl=int(metadata.get("ttl", 3600)),
         deadline=metadata.get("deadline"),
-        hop_count=0,
-        max_hops=metadata.get("max_hops", 10),
-        retry_count=0,
-        max_retries=metadata.get("max_retries", 3),
-        security_policy=metadata.get("security_policy", SecurityPolicy()),
+        hop_count=int(metadata.get("hop_count", 0)),
+        max_hops=int(metadata.get("max_hops", 10)),
+        retry_count=retry_count,
+        max_retries=int(metadata.get("max_retries", 3)),
+        security_policy=metadata.get("security_policy") or SecurityPolicy(),
         context_scope=metadata.get("context_scope", "global"),
-        session_id=metadata.get("session_id"),
-        memory_scope=metadata.get("memory_scope", "task"),
-        memory_keys=metadata.get("memory_keys", []),
-        memory_ttl_sec=metadata.get("memory_ttl_sec"),
-        cache_policy=metadata.get("cache_policy", "read_write"),
-        repo_fingerprint=metadata.get("repo_fingerprint"),
-        dependencies=metadata.get("dependencies", []),
-        payload=payload
+        dependencies=dependencies,
+        payload=task_payload,
     )
+
 
 def decapsulate(envelope: TaskEnvelope, agent_capabilities: list[str]) -> TaskPayload:
     if envelope.protocol_version != "1.0":
         raise ProtocolError(f"Unsupported protocol version: {envelope.protocol_version}")
-    
     if envelope.deadline and datetime.now(UTC) > envelope.deadline:
-        raise ProtocolError(f"Deadline exceeded for task {envelope.task_id}")
-    
+        raise ProtocolError("Deadline exceeded")
     if envelope.ttl <= 0:
-        raise ProtocolError(f"TTL expired for task {envelope.task_id}")
-        
+        raise ProtocolError("TTL expired")
     if envelope.hop_count >= envelope.max_hops:
-        raise ProtocolError(f"Max hops ({envelope.max_hops}) exceeded for task {envelope.task_id}")
-        
-    if envelope.target_capability != "any" and envelope.target_capability not in agent_capabilities:
-        raise ProtocolError(f"Agent lacks required capability: {envelope.target_capability}")
-        
+        raise ProtocolError(f"Max hops ({envelope.max_hops}) exceeded")
+    required = envelope.target_capability
+    if required not in {"any", "*"} and required not in agent_capabilities:
+        raise ProtocolError(f"Agent lacks required capability: {required}")
     return envelope.payload
-
-def task_to_envelope(task: Task) -> TaskEnvelope:
-    payload = TaskPayload(
-        objective=task.input.description,
-        input_data={"constraints": task.input.constraints},
-        context={"project": task.context.project, "repo_path": task.context.repo_path, "branch": task.context.branch},
-        acceptance_criteria=task.input.acceptance_criteria,
-        expected_output_format="text",
-        artifacts=task.input.files
-    )
-    return encapsulate(payload, {
-        "task_id": task.task_id,
-        "parent_task_id": task.parent_task_id,
-        "priority": task.priority,
-        "target_capability": task.required_capability or "any",
-        "target_agent": task.assigned_model,
-        "session_id": task.session_id,
-        "memory_scope": task.memory_scope,
-        "memory_keys": task.memory_keys,
-        "memory_ttl_sec": task.memory_ttl_sec,
-        "cache_policy": task.cache_policy,
-        "repo_fingerprint": task.repo_fingerprint,
-        "dependencies": task.dependencies
-    })

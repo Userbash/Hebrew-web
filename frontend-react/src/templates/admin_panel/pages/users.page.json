@@ -1,0 +1,24 @@
+{
+  "page": "admin_users",
+  "surface": "admin_panel",
+  "goal": "Manage user search, access state, and profile actions.",
+  "layout": "table_plus_detail_drawer",
+  "components": [
+    "user_search_filters",
+    "user_directory_table",
+    "user_role_badges",
+    "user_status_pills",
+    "user_detail_drawer",
+    "user_preferences_summary"
+  ],
+  "backend_dependencies": [
+    "/api/admin/users",
+    "/api/users/profile",
+    "/api/users/preferences"
+  ],
+  "ux_rules": [
+    "Search and filters must be above the table.",
+    "Prefer a detail drawer to full navigation for quick admin action.",
+    "Block or elevated-state actions need explicit confirmation."
+  ]
+}

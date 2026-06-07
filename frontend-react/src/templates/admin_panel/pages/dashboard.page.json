@@ -1,0 +1,32 @@
+{
+  "page": "admin_dashboard",
+  "surface": "admin_panel",
+  "goal": "Give the operator a live operational map of health, queues, and risk.",
+  "layout": "admin_dashboard_shell",
+  "components": [
+    "command_bar",
+    "health_kpi_strip",
+    "priority_alert_stack",
+    "admin_section_map",
+    "recent_audit_preview",
+    "telemetry_snapshot",
+    "role_visibility_badges"
+  ],
+  "backend_dependencies": [
+    "/api/admin/health",
+    "/api/admin/system/metrics",
+    "/api/admin/logs",
+    "/api/admin/audit/events"
+  ],
+  "role_cues": [
+    "root",
+    "platform_admin",
+    "security_admin",
+    "content_admin"
+  ],
+  "ux_rules": [
+    "Health and risk come first.",
+    "Keep the command bar persistent and compact.",
+    "Show the operator path through the system, not just metrics."
+  ]
+}

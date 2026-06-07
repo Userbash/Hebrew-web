@@ -12,7 +12,7 @@ if Path("/app").exists():
     sys.path.insert(0, "/app")
 
 from ai_bridge.agents.codex_agent import CodexAgent
-from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
+from ai_bridge.agents.antigravity_cli_agent import AntigravityCLIAgent
 from ai_bridge.agents.mistral_agent import MistralAgent
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.reviewer_agent import ReviewerAgent
@@ -68,7 +68,7 @@ async def main(argv: list[str] | None = None) -> None:
 
     orchestrator.attach_local_agent("planner-1", PlannerAgent("planner-1"), agent_type="planner", critical=True, model_name="gpt-planner", provider="openai")
     orchestrator.attach_local_agent("codex-main", CodexAgent("codex-main"), agent_type="codex", critical=True, model_name="gpt-coding-large", provider="openai")
-    orchestrator.attach_local_agent("antigravity-cli-1", GeminiCLIAgent("antigravity-cli-1", security_manager), agent_type="external_ai", critical=False, model_name="antigravity-cli", provider="google")
+    orchestrator.attach_local_agent("antigravity-cli-1", AntigravityCLIAgent("antigravity-cli-1", security_manager), agent_type="external_ai", critical=False, model_name="antigravity-cli", provider="google")
     orchestrator.attach_local_agent("mistral-1", MistralAgent("mistral-1", security_manager), agent_type="external_ai", critical=False, model_name="mistral-large-latest", provider="mistral")
     orchestrator.attach_local_agent("tester-1", TesterAgent("tester-1"), agent_type="tester", model_name="gpt-test-standard", provider="openai")
     orchestrator.attach_local_agent("reviewer-1", ReviewerAgent("reviewer-1"), agent_type="reviewer", model_name="gpt-review-large", provider="openai")

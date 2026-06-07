@@ -90,6 +90,12 @@ class Orchestrator:
     def _local_llm_autostart_enabled() -> bool:
         return os.getenv("AI_BRIDGE_AUTOSTART_LOCAL_LLM", "true").strip().lower() in {"1", "true", "yes", "on"}
 
+    
+    
+    @staticmethod
+    def _easy_diffusion_autostart_enabled() -> bool:
+        return os.getenv("AI_BRIDGE_AUTOSTART_EASY_DIFFUSION", "false").strip().lower() in {"1", "true", "yes", "on"}
+
     def _autostart_local_llm(self) -> None:
         if os.getenv("TESTING") == "true" or not self._local_llm_autostart_enabled():
             return
@@ -109,6 +115,27 @@ class Orchestrator:
             self.log("info", f"[LOCAL_LLM] Autostart complete for {module.model_name}.")
         else:
             self.log("warning", f"[LOCAL_LLM] Autostart could not confirm readiness for {module.model_name}.")
+
+    def _autostart_easy_diffusion(self) -> None:
+        if os.getenv("TESTING") == "true" or not self._easy_diffusion_autostart_enabled():
+            return
+
+        module = self.module_manager.get_module("easy_diffusion")
+        manager = getattr(module, "manager", None)
+        if manager is None:
+            self.log("warning", "[EASY_DIFFUSION] easy_diffusion module is not registered; skipping autostart.")
+            return
+
+        try:
+            ready = manager.boot_autostart()
+        except Exception as exc:
+            self.log("warning", f"[EASY_DIFFUSION] Autostart failed: {exc}")
+            return
+
+        if ready:
+            self.log("info", "[EASY_DIFFUSION] Autostart complete.")
+        else:
+            self.log("warning", "[EASY_DIFFUSION] Autostart could not confirm readiness.")
 
     def __init__(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents: dict[str, BaseAgent] = {}
@@ -166,6 +193,16 @@ class Orchestrator:
         self.module_manager.register(SourceCraftModule())
         self.module_manager.register(VoiceListenerModule())
         
+        # Register DesignConceptAgent
+        from ai_bridge.agents.design_concept_agent import DesignConceptAgent
+        design_agent = DesignConceptAgent()
+        self.attach_local_agent(
+            agent_id="design_concept_agent",
+            agent=design_agent,
+            agent_type="custom"
+        )
+        design_agent.set_host_bridge(self)
+        
         self.module_manager.load("ai_activity")
         self.module_manager.load("orchestrator_control")
         self.module_manager.load("model_usage")
@@ -191,6 +228,7 @@ class Orchestrator:
         if os.getenv("TESTING") != "true":
             self.module_manager.load("local_llm")
         self._autostart_local_llm()
+        self._autostart_easy_diffusion()
 
     def _init_original(self, registry: AgentRegistry | None = None, retry_limit: int = 3, idle_shutdown_sec: int = 900) -> None:
         self.local_agents = {}
@@ -327,8 +365,8 @@ class Orchestrator:
     @staticmethod
     def _normalize_provider(provider: str) -> str:
         p = provider.strip().lower()
-        if p in {"google", "antigravity", "antigravity-cli", "agy", "gemini", "gemini-cli"}:
-            return "google"
+        if p in {"antigravity", "antigravity-cli", "agy"}:
+            return "antigravity"
         return p
 
     def _select_agent_by_provider_preference(self, capability: str, providers: list[str], exclude: set[str] | None = None, priority: Priority | str | None = None) -> str | None:
@@ -615,7 +653,7 @@ class Orchestrator:
             memory_context = self._load_memory_context(task, agent_id)
             result = agent.run(task, memory_context=memory_context)
 
-            is_google_cli = bool(agent_record and agent_record.provider in {"google", "antigravity", "antigravity-cli", "agy", "gemini", "gemini-cli"})
+            is_google_cli = bool(agent_record and agent_record.provider in {"antigravity", "antigravity-cli", "agy"})
             result_errors = " ".join(result.errors or [])
             classified = ""
             if result_errors:

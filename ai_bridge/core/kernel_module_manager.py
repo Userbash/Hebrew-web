@@ -34,7 +34,8 @@ class KernelModuleManager:
         if module is None:
             self._loaded.remove(name)
             return
-        module.on_unload()
+        if hasattr(module, "on_unload"):
+            module.on_unload()
         self._loaded.remove(name)
 
 
@@ -49,14 +50,20 @@ class KernelModuleManager:
 
     def before_task(self, task: Any, context: dict[str, Any]) -> None:
         for name in self.loaded_modules():
-            self._modules[name].before_task(task, context)
+            module = self._modules[name]
+            if hasattr(module, "before_task"):
+                module.before_task(task, context)
 
     def after_task(self, task: Any, result: Any, context: dict[str, Any]) -> None:
         for name in self.loaded_modules():
-            self._modules[name].after_task(task, result, context)
+            module = self._modules[name]
+            if hasattr(module, "after_task"):
+                module.after_task(task, result, context)
 
     def finalize(self) -> dict[str, Any]:
         data: dict[str, Any] = {}
         for name in self.loaded_modules():
-            data[name] = self._modules[name].finalize()
+            module = self._modules[name]
+            if hasattr(module, "finalize"):
+                data[name] = module.finalize()
         return data

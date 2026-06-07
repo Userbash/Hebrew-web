@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlencode
@@ -10,23 +11,33 @@ from urllib.request import urlopen
 
 
 @dataclass(slots=True)
-class GeminiModelCatalog:
+class AntigravityModelCatalog:
     all_models: list[str]
     lite: list[str]
     flash: list[str]
     pro: list[str]
 
 
-class GeminiModelRegistry:
+class AntigravityModelRegistry:
     def __init__(self) -> None:
-        self.api_base = os.getenv("GEMINI_MODELS_API", "https://generativelanguage.googleapis.com/v1beta/models")
-        self.cache_path = Path(os.getenv("GEMINI_MODELS_CACHE_PATH", "ai_bridge/.cache/gemini_models.json"))
-        self.ttl_sec = int(os.getenv("GEMINI_MODELS_CACHE_TTL_SEC", "21600"))
+        self.api_base = os.getenv("ANTIGRAVITY_MODELS_API", os.getenv("GEMINI_MODELS_API", "https://generativelanguage.googleapis.com/v1beta/models"))
+        self.cache_path = Path(os.getenv("ANTIGRAVITY_MODELS_CACHE_PATH", os.getenv("GEMINI_MODELS_CACHE_PATH", "ai_bridge/.cache/antigravity_models.json")))
+        self.ttl_sec = int(os.getenv("ANTIGRAVITY_MODELS_CACHE_TTL_SEC", os.getenv("GEMINI_MODELS_CACHE_TTL_SEC", "21600")))
 
     def _api_key(self) -> str:
-        return os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+        return os.getenv("ANTIGRAVITY_API_KEY", "").strip() or os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
 
     def _fetch_live(self) -> list[str]:
+        # Try fetching via agy CLI first as a reliable local source
+        try:
+            result = subprocess.run(["agy", "models"], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                # Map the CLI output to the expected model format if necessary
+                models = [line.strip().replace(" ", "-").lower() for line in result.stdout.splitlines() if line.strip()]
+                return [m for m in models if "gemini" in m]
+        except Exception:
+            pass
+
         key = self._api_key()
         if not key:
             return []
@@ -42,18 +53,18 @@ class GeminiModelRegistry:
             for item in payload.get("models", []):
                 name = str(item.get("name", "")).replace("models/", "")
                 methods = set(item.get("supportedGenerationMethods", []))
-                if name and "generateContent" in methods and ("gemini" in name or "gemma" in name):
+                if name and "generateContent" in methods and ("antigravity" in name or "gemini" in name or "gemma" in name):
                     out.append(name)
             page_token = payload.get("nextPageToken", "")
             if not page_token:
                 break
         seen: set[str] = set()
         deduped: list[str] = []
-        for m in out:
-            if m in seen:
+        for model in out:
+            if model in seen:
                 continue
-            seen.add(m)
-            deduped.append(m)
+            seen.add(model)
+            deduped.append(model)
         return deduped
 
     def _load_cache(self) -> list[str]:
@@ -83,9 +94,14 @@ class GeminiModelRegistry:
             return live
         return self._load_cache()
 
-    def get_catalog(self, force_refresh: bool = False) -> GeminiModelCatalog:
+    def get_catalog(self, force_refresh: bool = False) -> AntigravityModelCatalog:
         models = self.get_models(force_refresh=force_refresh)
         lite = [m for m in models if "lite" in m]
         flash = [m for m in models if "flash" in m and "lite" not in m]
         pro = [m for m in models if "pro" in m]
-        return GeminiModelCatalog(models, lite, flash, pro)
+        return AntigravityModelCatalog(models, lite, flash, pro)
+
+
+# Legacy compatibility aliases. Keep imports working while the runtime moves to Antigravity.
+GeminiModelCatalog = AntigravityModelCatalog
+GeminiModelRegistry = AntigravityModelRegistry

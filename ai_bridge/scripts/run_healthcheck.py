@@ -9,7 +9,7 @@ def main() -> None:
     registry = AgentRegistry()
     security_manager = SecurityManager(SecurityPolicy())
     
-    registry.register("codex-main", "codex", "local://codex", ["code", "fix", "refactor"])
+    registry.register("codex-main", "custom", "local://codex", ["code", "fix", "refactor"])
     
     checker = HealthChecker(registry)
     

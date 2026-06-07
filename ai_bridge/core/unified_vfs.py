@@ -307,9 +307,10 @@ class UnifiedVFSModule:
     def after_task(self, task: Task, result: AgentResult, context: Dict[str, Any]) -> None:
         """Save terminal state for future recovery or handoff."""
         path = f"active_tasks/{task.task_id}/checkpoint"
+        output = result.output.as_dict() if hasattr(result.output, "as_dict") else result.output
         state = {
             "status": result.status.value,
-            "output": result.output,
+            "output": output,
             "intermediate_artifacts": context.get("intermediate_artifacts", []),
             "last_step": context.get("last_step", "completed")
         }

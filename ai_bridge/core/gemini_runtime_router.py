@@ -3,16 +3,16 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from .gemini_model_registry import GeminiModelRegistry
+from .gemini_model_registry import AntigravityModelRegistry
 from .models import Complexity, Task, TaskType
 
 
-class GeminiBudgetExhaustedError(RuntimeError):
+class AntigravityBudgetExhaustedError(RuntimeError):
     pass
 
 
 @dataclass(slots=True)
-class GeminiRoutingPlan:
+class AntigravityRoutingPlan:
     models: list[str]
     estimated_tokens: int
     remaining_tokens: int
@@ -20,21 +20,21 @@ class GeminiRoutingPlan:
     strategy: str = "balanced"
 
 
-class GeminiRuntimeRouter:
+class AntigravityRuntimeRouter:
     _session_token_usage: dict[str, int] = {}
     _session_blocked_models: dict[str, set[str]] = {}
 
     def __init__(self) -> None:
-        self.session_budget = self._read_int("GEMINI_SESSION_TOKEN_BUDGET", 200_000)
-        self.registry = GeminiModelRegistry()
+        self.session_budget = self._read_int("ANTIGRAVITY_SESSION_TOKEN_BUDGET", os.getenv("GEMINI_SESSION_TOKEN_BUDGET", "200000"))
+        self.registry = AntigravityModelRegistry()
 
     @staticmethod
-    def _read_int(key: str, default: int) -> int:
+    def _read_int(key: str, default: int | str) -> int:
         raw = os.getenv(key, str(default)).strip()
         try:
             return int(raw)
         except ValueError:
-            return default
+            return int(default)
 
     @staticmethod
     def _estimate_prompt_tokens(prompt: str) -> int:
@@ -52,13 +52,12 @@ class GeminiRuntimeRouter:
 
     def _complexity_ordered_models(self, complexity: Complexity, *, force_refresh: bool = False) -> list[str]:
         catalog = self.registry.get_catalog(force_refresh=force_refresh)
-        # Prefer stable, currently available models from live API/cache.
         low = catalog.lite + catalog.flash + catalog.pro
         medium = catalog.flash + catalog.lite + catalog.pro
         high = catalog.pro + catalog.flash + catalog.lite
-        low_fb = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"]
-        med_fb = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.5-pro"]
-        high_fb = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
+        low_fb = ["antigravity-flash-lite", "antigravity-flash", "antigravity-pro"]
+        med_fb = ["antigravity-flash", "antigravity-flash-lite", "antigravity-pro"]
+        high_fb = ["antigravity-pro", "antigravity-flash", "antigravity-flash-lite"]
         if complexity == Complexity.LOW:
             return low or low_fb
         if complexity == Complexity.MEDIUM:
@@ -69,7 +68,7 @@ class GeminiRuntimeRouter:
 
     @staticmethod
     def _parse_extra_fallbacks() -> list[str]:
-        raw = os.getenv("GEMINI_CLI_EXTRA_MODELS", "").strip()
+        raw = os.getenv("ANTIGRAVITY_CLI_EXTRA_MODELS", os.getenv("GEMINI_CLI_EXTRA_MODELS", "")).strip()
         if not raw:
             return []
         return [item.strip() for item in raw.split(",") if item.strip()]
@@ -77,10 +76,10 @@ class GeminiRuntimeRouter:
     @staticmethod
     def strategy_profiles() -> dict[str, list[str]]:
         return {
-            "low_cost": ["gemini-2.5-flash-lite", "gemini-2.5-flash"],
-            "docs_research": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
-            "code_fix": ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro"],
-            "high_reasoning": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+            "low_cost": ["antigravity-flash-lite", "antigravity-flash"],
+            "docs_research": ["antigravity-flash", "antigravity-flash-lite", "antigravity-pro"],
+            "code_fix": ["antigravity-flash-lite", "antigravity-flash", "antigravity-pro"],
+            "high_reasoning": ["antigravity-pro", "antigravity-flash", "antigravity-flash-lite"],
         }
 
     def _strategy_for(self, complexity: Complexity, task: Task) -> str:
@@ -94,7 +93,7 @@ class GeminiRuntimeRouter:
             return "code_fix"
         return "balanced"
 
-    def build_plan(self, task: Task, prompt: str) -> GeminiRoutingPlan:
+    def build_plan(self, task: Task, prompt: str) -> AntigravityRoutingPlan:
         complexity = task.complexity or Complexity.MEDIUM
         estimated = self._estimate_prompt_tokens(prompt) + self._estimate_completion_tokens(complexity)
         session_id = task.session_id or "default"
@@ -103,11 +102,9 @@ class GeminiRuntimeRouter:
         strategy = self._strategy_for(complexity, task)
 
         if remaining <= 0 or estimated > remaining * 2:
-            # If budget is almost depleted, use only lightweight model.
-            models = ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+            models = ["antigravity-flash-lite", "antigravity-flash"]
             strategy = "low_cost"
         else:
-            # Before first model call in session, force-refresh catalog from API.
             first_call = used <= 0
             models = self._complexity_ordered_models(complexity, force_refresh=first_call)
 
@@ -124,9 +121,9 @@ class GeminiRuntimeRouter:
             deduped.append(model)
 
         if not deduped:
-            raise GeminiBudgetExhaustedError("no models available for runtime routing")
+            raise AntigravityBudgetExhaustedError("no models available for runtime routing")
 
-        return GeminiRoutingPlan(deduped, estimated, remaining, complexity, strategy=strategy)
+        return AntigravityRoutingPlan(deduped, estimated, remaining, complexity, strategy=strategy)
 
     def register_usage(self, task: Task, consumed_tokens: int) -> None:
         session_id = task.session_id or "default"
@@ -138,3 +135,8 @@ class GeminiRuntimeRouter:
         blocked = self._session_blocked_models.setdefault(session_id, set())
         blocked.add(model)
 
+
+# Legacy compatibility aliases.
+GeminiBudgetExhaustedError = AntigravityBudgetExhaustedError
+GeminiRoutingPlan = AntigravityRoutingPlan
+GeminiRuntimeRouter = AntigravityRuntimeRouter

@@ -180,41 +180,58 @@ class LocalLLMModule(KernelModule):
         }
 
     def _probe(self) -> dict[str, Any]:
-        try:
-            response = requests.get(f"{self.endpoint}/api/tags", timeout=self.timeout_sec)
-            response.raise_for_status()
-            payload = response.json() if response.content else {}
-            models = payload.get("models", []) if isinstance(payload, dict) else []
-            available_models: list[str] = []
-            if isinstance(models, list):
-                for item in models:
-                    if isinstance(item, dict):
-                        name = item.get("name")
-                        if isinstance(name, str) and name.strip():
-                            available_models.append(name.strip())
-            model_present = any(self._model_matches(self.model_name, candidate) for candidate in available_models)
-            return {
-                "ok": True,
-                "status_code": response.status_code,
-                "available_models": available_models,
-                "model_present": model_present,
-                "error": None,
-            }
-        except Exception as exc:
-            return {
-                "ok": False,
-                "status_code": None,
-                "available_models": [],
-                "model_present": False,
-                "error": str(exc),
-            }
+        endpoints = [self.endpoint]
+        if "host.containers.internal" in self.endpoint:
+            endpoints.append(self.endpoint.replace("host.containers.internal", "127.0.0.1"))
+        elif "127.0.0.1" in self.endpoint or "localhost" in self.endpoint:
+            endpoints.append(self.endpoint.replace("127.0.0.1", "host.containers.internal").replace("localhost", "host.containers.internal"))
+
+        last_exc = "no endpoints tried"
+        for url in endpoints:
+            try:
+                response = requests.get(f"{url}/api/tags", timeout=self.timeout_sec)
+                response.raise_for_status()
+                payload = response.json() if response.content else {}
+                models = payload.get("models", []) if isinstance(payload, dict) else []
+                available_models: list[str] = []
+                if isinstance(models, list):
+                    for item in models:
+                        if isinstance(item, dict):
+                            name = item.get("name")
+                            if isinstance(name, str) and name.strip():
+                                available_models.append(name.strip())
+                model_present = any(self._model_matches(self.model_name, candidate) for candidate in available_models)
+                
+                # If we successfully probed an alternative endpoint, update self.endpoint
+                if url != self.endpoint:
+                    logger.info(f"[LOCAL_LLM] Switching endpoint to {url} after successful probe")
+                    self.endpoint = url
+
+                return {
+                    "ok": True,
+                    "status_code": response.status_code,
+                    "available_models": available_models,
+                    "model_present": model_present,
+                    "error": None,
+                }
+            except Exception as exc:
+                last_exc = str(exc)
+                continue
+
+        return {
+            "ok": False,
+            "status_code": None,
+            "available_models": [],
+            "model_present": False,
+            "error": last_exc,
+        }
 
     def query(self, prompt: str, model_name: str | None = None) -> str:
         target_model = (model_name or self.model_name).strip()
         readiness = self.can_use_model(target_model)
         if not readiness["ok"]:
             raise RuntimeError(
-                f"local LLM is not ready: service_reachable={readiness['service_reachable']}, model_present={readiness['model_present']}"
+                f"local LLM is not ready: service_reachable={readiness['service_reachable']}, model_present={readiness['model_present']} (endpoint={self.endpoint})"
             )
 
         start_time = time.perf_counter()
@@ -234,9 +251,9 @@ class LocalLLMModule(KernelModule):
             )
             response.raise_for_status()
             duration = time.perf_counter() - start_time
-            logger.info(f"[LLM_TELEMETRY] Query to {target_model} took {duration:.3f}s")
+            logger.info(f"[LLM_TELEMETRY] Query to {target_model} at {self.endpoint} took {duration:.3f}s")
         except Exception as exc:
-            logger.error(f"[LLM_ERROR] Query to {target_model} failed: {exc}")
+            logger.error(f"[LLM_ERROR] Query to {target_model} at {self.endpoint} failed: {exc}")
             raise
 
         payload = response.json() if response.content else {}

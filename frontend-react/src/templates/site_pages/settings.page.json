@@ -1,0 +1,23 @@
+{
+  "page": "settings",
+  "surface": "main_app",
+  "goal": "Adjust profile, language, theme, density, and admin landing preferences.",
+  "layout": "settings_split_view",
+  "components": [
+    "profile_header",
+    "preferences_form",
+    "theme_mode_switch",
+    "language_picker",
+    "density_toggle",
+    "admin_landing_section_picker"
+  ],
+  "backend_dependencies": [
+    "/api/users/profile",
+    "/api/users/preferences"
+  ],
+  "ux_rules": [
+    "Keep destructive actions out of the main preferences view.",
+    "Persist settings immediately with clear confirmation.",
+    "Show admin landing section only for elevated roles."
+  ]
+}

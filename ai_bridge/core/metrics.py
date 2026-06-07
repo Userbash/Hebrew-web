@@ -46,5 +46,8 @@ class MetricsCollector:
         return {
             "counters": dict(self.counters),
             "avg_latency_ms": {agent_id: self.average_latency(agent_id) for agent_id in self.latencies},
-            "agents": {agent_id: metrics.as_dict() for agent_id, metrics in self.agent_metrics.items()},
+            "agents": {
+                agent_id: (metrics.as_dict() if hasattr(metrics, "as_dict") else vars(metrics))
+                for agent_id, metrics in self.agent_metrics.items()
+            },
         }

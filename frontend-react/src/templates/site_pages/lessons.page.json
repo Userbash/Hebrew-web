@@ -1,0 +1,23 @@
+{
+  "page": "lessons",
+  "surface": "main_app",
+  "goal": "Browse lessons and continue structured learning.",
+  "layout": "catalog_with_detail_panel",
+  "components": [
+    "search_bar",
+    "lesson_filter_pills",
+    "lesson_card_grid",
+    "lesson_detail_panel",
+    "lesson_progress_indicator"
+  ],
+  "backend_dependencies": [
+    "/api/lessons",
+    "/api/quizzes",
+    "/api/dictionary"
+  ],
+  "ux_rules": [
+    "Keep filters sticky above the list.",
+    "Use a focused detail panel instead of navigation hops.",
+    "Highlight incomplete lessons and quiz links."
+  ]
+}
