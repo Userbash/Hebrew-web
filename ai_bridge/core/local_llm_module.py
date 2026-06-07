@@ -511,6 +511,49 @@ class LocalLLMModule(KernelModule):
             "summary": summary,
         }
 
+    @property
+    def ready(self) -> bool:
+        try:
+            resp = requests.get(f"{self.endpoint}/api/tags", timeout=self.timeout_sec)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def query(self, prompt: str, system: str = "You are a specialized AI Kernel Optimizer.") -> str:
+        """Synchronous query for internal kernel tasks."""
+        if not self.ready:
+            return ""
+        try:
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "system": system,
+                "stream": False,
+                "options": {"temperature": 0.1}
+            }
+            resp = requests.post(f"{self.endpoint}/api/generate", json=payload, timeout=300)
+            return resp.json().get("response", "").strip()
+        except Exception as e:
+            logger.error(f"Local LLM query failed: {e}")
+            return ""
+
+    def compact_memory(self, raw_data: list[dict[str, Any]]) -> str:
+        """Uses local LLM to turn raw logs/history into a dense semantic summary."""
+        prompt = f"Compact the following activity trace into a dense technical summary for another AI. Keep keys, schemas, and logic decisions. Data: {json.dumps(raw_data)}"
+        return self.query(prompt, system="Summarize memory for context efficiency.")
+
+    def generate_embedding_keywords(self, text: str) -> list[str]:
+        """Generates semantic tags for indexing without calling expensive cloud APIs."""
+        prompt = f"Return 10 technical keywords for indexing this code/task: {text[:1000]}"
+        resp = self.query(prompt, system="Return only comma-separated keywords.")
+        return [k.strip() for k in resp.split(",") if k.strip()]
+
+    def analyze_p2p_intent(self, sender: str, receiver: str, payload: dict) -> bool:
+        """Security: Analyze if a direct P2P message is safe and logical."""
+        prompt = f"Analyze P2P message from {sender} to {receiver}. Payload: {json.dumps(payload)}. Is this safe and architecturaly sound? Return 'SAFE' or 'RISK: reason'."
+        resp = self.query(prompt).upper()
+        return "SAFE" in resp
+
     def check_health(self) -> dict[str, Any]:
         try:
             self.last_probe = self._probe()

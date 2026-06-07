@@ -35,6 +35,7 @@ class HotEntry:
     tags: list[str] = field(default_factory=list)
     indexed_terms: set[str] = field(default_factory=set)
     stub: MemoryStub | None = None
+    vfs_warm: bool = False
 
 
 @dataclass(slots=True)
@@ -290,17 +291,34 @@ class HybridMemory:
         self._project_index.clear()
         self.backend.clear()
 
-    def soft_flush(self) -> int:
-        """Persist all hot entries and buffered records to the database synchronously."""
+    def soft_flush(self, api: Any | None = None) -> int:
+        """Persist all hot entries and buffered records with AI-driven compaction."""
         flushed = 0
+        local_llm = api.get_module("local_llm") if api else None
+        
+        # Batch events for compaction if many
+        if len(self._hot) > 10 and local_llm and getattr(local_llm, "ready", False):
+            try:
+                # Group by session for compaction
+                raw_logs = [{"key": entry.key, "value": str(entry.value)} for entry in self._hot.values()]
+                summary = local_llm.compact_memory(raw_logs)
+                # Store summary as a special 'Anchor' memory
+                self.set("session", "system", "archive_summary", summary, importance_score=0.9, memory_type="anchor")
+            except Exception:
+                pass
+
         for _, entry in list(self._hot.items()):
+            # Use AI to generate indexing keywords if missing
+            if not entry.tags and local_llm and getattr(local_llm, "ready", False):
+                entry.tags = local_llm.generate_embedding_keywords(str(entry.value))
+
             memory_id = self.persistent.store_memory(
                 session_id=entry.identifier,
                 agent_id=self._persistence_agent_id(entry.scope, entry.identifier),
                 memory_type=entry.memory_type,
                 content=self.persistent.serialize_payload(entry.value),
                 importance_score=entry.importance_score,
-                metadata={"key": entry.key, "scope": entry.scope, "tags": entry.tags},
+                metadata={"key": entry.key, "scope": entry.scope, "tags": entry.tags, "vfs_warm": entry.vfs_warm},
                 expires_at=entry.expires_at,
             )
             if memory_id:

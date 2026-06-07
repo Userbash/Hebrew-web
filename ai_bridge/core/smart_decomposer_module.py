@@ -58,7 +58,7 @@ class SmartDecomposerModule:
                 prompt, 
                 DecompositionResponse, 
                 system_prompt=system_prompt,
-                model="claude-3-5-sonnet-20241022" # thinking model
+                model="gemini-3.5-flash"
             )
             
             if not response:

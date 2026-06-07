@@ -22,6 +22,7 @@ from .env_loader import load_env_file
 from .external_ai_bridge import ExternalAIBridge
 from .integrations.antigravity_manager import AntigravityManager
 from .integrations.mistral_manager import MistralManager
+from .openai_model_registry import OpenAIModelRegistry
 
 
 class ProviderStatus(Enum):
@@ -63,10 +64,14 @@ class ModelAvailability:
         p = provider.strip().lower()
         if p in {"antigravity", "antigravity-cli", "agy", "google", "gemini", "gemini-cli"}:
             return "antigravity"
+        if p in {"openai", "codex", "codex-main", "gpt"}:
+            return "openai"
         return p
 
     def __init__(self) -> None:
         load_env_file()
+        load_env_file(".env.bridge")
+        load_env_file(".env.gemini.local")
         self._health_cache: dict[str, ProviderHealth] = {}
         self._failure_cache: dict[str, ProviderHealth] = {}
 
@@ -96,6 +101,8 @@ class ModelAvailability:
             raw = os.getenv("ANTIGRAVITY_TCP_PROBE_HOSTS", os.getenv("GEMINI_TCP_PROBE_HOSTS", "antigravity.google:443,generativelanguage.googleapis.com:443,www.googleapis.com:443"))
         elif provider == "mistral":
             raw = os.getenv("MISTRAL_TCP_PROBE_HOSTS", "api.mistral.ai:443")
+        elif provider == "openai":
+            raw = os.getenv("OPENAI_TCP_PROBE_HOSTS", "api.openai.com:443")
         else:
             raw = ""
 
@@ -151,12 +158,24 @@ class ModelAvailability:
         return AntigravityRuntimeRouter.strategy_profiles()
 
     @staticmethod
+    def _env_models(key: str) -> list[str]:
+        raw = os.getenv(key, "").strip()
+        if not raw:
+            return []
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    @staticmethod
     def _remediation(provider: str, status: ProviderStatus, diagnostics: dict[str, Any]) -> list[str]:
         steps: list[str] = []
         tcp = diagnostics.get("tcp", {}) if isinstance(diagnostics.get("tcp"), dict) else {}
         if status == ProviderStatus.AUTH_FAILED:
-            key_name = "ANTIGRAVITY_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY" if provider == "antigravity" else "MISTRAL_API_KEY"
-            steps.append(f"Проверь {key_name}: переменная окружения должна быть задана и не просрочена.")
+            if provider == "antigravity":
+                key_name = "ANTIGRAVITY_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY или agy OAuth session"
+            elif provider == "openai":
+                key_name = "OPENAI_API_KEY"
+            else:
+                key_name = "MISTRAL_API_KEY"
+            steps.append(f"Проверь {key_name}: переменная окружения или CLI-сессия должна быть задана и не просрочена.")
         if status == ProviderStatus.QUOTA_EXCEEDED:
             steps.append("Проверь quota/rate limit у провайдера и временно снизь приоритет этого провайдера в routing policy.")
         if status in {ProviderStatus.TIMEOUT, ProviderStatus.OFFLINE}:
@@ -164,6 +183,8 @@ class ModelAvailability:
             steps.append("Проверь proxy/firewall/VPN: соединение должно открываться до host из tcp diagnostics.")
             if provider == "antigravity":
                 steps.append("Проверь, что Antigravity CLI (`agy`) установлен/доступен и может выполнить `agy -p`.")
+            if provider == "openai":
+                steps.append("Проверь доступ к https://api.openai.com/v1/models и что выбранная Codex/OpenAI модель есть в live catalog.")
         if tcp and not tcp.get("ok"):
             steps.append("TCP probe не открыл ни одного соединения; fallback до другого провайдера корректен до восстановления сети.")
         return steps
@@ -210,16 +231,23 @@ class ModelAvailability:
             return self._cache(health)
 
         manager = AntigravityManager()
-        ready = manager.is_ready()
-        models = manager.list_models()
-        diagnostics["models"] = models
+        status = manager.status()
+        diagnostics["models"] = status.get("models", [])
+        diagnostics["models_probe"] = status.get("models_probe", {})
+        diagnostics["generation_probe"] = status.get("generation_probe", {})
+        if status.get("auth_probe"):
+            diagnostics["auth_probe"] = status.get("auth_probe")
+        if status.get("api_probe"):
+            diagnostics["api_probe"] = status.get("api_probe")
+        diagnostics["auth_mode"] = status.get("auth_mode", "agy_oauth")
         
         latency = (datetime.now(UTC) - start).total_seconds() * 1000
         
-        if ready:
+        if status.get("ready"):
             health = ProviderHealth("antigravity", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
         else:
-            error = "antigravity_not_ready"
+            raw_error = str(diagnostics.get("models_probe", {}).get("stderr") or diagnostics.get("generation_probe", {}).get("stderr") or diagnostics.get("auth_probe", {}).get("stderr") or "antigravity_not_ready")
+            error = "antigravity_auth_failed" if self._status_from_error(raw_error, ProviderStatus.DEGRADED) == ProviderStatus.AUTH_FAILED else "antigravity_not_ready"
             health = ProviderHealth("antigravity", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
             diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
             
@@ -244,20 +272,64 @@ class ModelAvailability:
 
         # 2. Functional/Auth probe using MistralManager
         manager = MistralManager()
-        ready = manager.is_ready()
-        models = manager.list_models()
-        diagnostics["models"] = models
+        status = manager.status()
+        diagnostics["models"] = status.get("models", [])
+        diagnostics["api_probe"] = status.get("api_probe", {})
         
         latency = (datetime.now(UTC) - start).total_seconds() * 1000
         
-        if ready:
+        if status.get("ready"):
             health = ProviderHealth("mistral", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
         else:
-            error = "mistral_auth_failed" if not manager.api_key else "mistral_not_ready"
+            error = "mistral_auth_failed" if not manager.api_key or diagnostics.get("api_probe", {}).get("status_code") in {401, 403} else "mistral_not_ready"
             health = ProviderHealth("mistral", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
             diagnostics["remediation"] = self._remediation("mistral", health.status, diagnostics)
             
         return self._cache(health)
+
+
+    def check_openai(self, *, live: bool | None = None) -> ProviderHealth:
+        start = datetime.now(UTC)
+        diagnostics: dict[str, Any] = {"provider": "openai"}
+        tcp = self._tcp_probe("openai")
+        diagnostics["tcp"] = tcp
+        if not tcp.get("ok"):
+            latency = (datetime.now(UTC) - start).total_seconds() * 1000
+            health = ProviderHealth("openai", ProviderStatus.TIMEOUT, latency, datetime.now(UTC), error="tcp_probe_failed", diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("openai", health.status, diagnostics)
+            return self._cache(health)
+
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            latency = (datetime.now(UTC) - start).total_seconds() * 1000
+            health = ProviderHealth("openai", ProviderStatus.AUTH_FAILED, latency, datetime.now(UTC), error="openai_api_key_missing", diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("openai", health.status, diagnostics)
+            return self._cache(health)
+
+        registry = OpenAIModelRegistry()
+        models = registry.get_models(force_refresh=bool(live if live is not None else self._live_probe_enabled()))
+        diagnostics["models"] = models
+        configured = [
+            os.getenv("CODEX_OPENAI_MODEL", "").strip(),
+            *self._env_models("OPENAI_HIGH_MODELS"),
+            *self._env_models("OPENAI_MEDIUM_MODELS"),
+            *self._env_models("OPENAI_EXTRA_MODELS"),
+        ]
+        configured = [item for item in configured if item]
+        diagnostics["configured_models"] = configured
+        if configured and models:
+            diagnostics["configured_models_available"] = [item for item in configured if item in set(models)]
+
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
+        if models:
+            health = ProviderHealth("openai", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
+        else:
+            health = ProviderHealth("openai", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error="openai_models_unavailable", diagnostics=diagnostics)
+            diagnostics["remediation"] = self._remediation("openai", health.status, diagnostics)
+        return self._cache(health)
+
+    def check_codex(self, *, live: bool | None = None) -> ProviderHealth:
+        return self.check_openai(live=live)
 
     def check_provider(self, provider: str, *, live: bool | None = None) -> ProviderHealth:
         normalized = self._normalize_provider(provider)
@@ -265,13 +337,16 @@ class ModelAvailability:
             return self.check_antigravity(live=live)
         if normalized == "mistral":
             return self.check_mistral(live=live)
+        if normalized == "openai":
+            return self.check_openai(live=live)
         health = ProviderHealth(normalized, ProviderStatus.HEALTHY, 0.0, datetime.now(UTC), diagnostics={"provider": normalized, "probe": "local_provider_assumed_ready"})
         return self._cache(health)
 
     def check_all(self) -> dict[str, ProviderHealth]:
         return {
             "antigravity": self.check_antigravity(),
-            "mistral": self.check_mistral()
+            "mistral": self.check_mistral(),
+            "openai": self.check_openai(),
         }
 
     def cached_report(self) -> dict[str, dict]:

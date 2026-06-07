@@ -1,86 +1,68 @@
 from __future__ import annotations
-import os
+
 import logging
-from pathlib import Path
+import os
+import subprocess
+import time
+from dataclasses import dataclass, field
 from typing import Any
+
 from .kernel_protocol import KernelAPI, KernelModule
-from .session_memory import SessionMemory
+from .host_bridge import HostBridge
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cold_boot")
 
-class ColdBootModule(KernelModule):
+@dataclass
+class ColdBootModule:
     """
-    Kernel Module for loading previous session memories on startup.
-    Implements the 'Cold Auto-Start' functionality requested by the user.
+    Automated bootstrap module for AI Infrastructure.
+    Detects missing containers/services and triggers self-healing.
     """
-    name = "cold_boot"
-
-    def __init__(self) -> None:
-        self.api: KernelAPI | None = None
-        self.booted = False
+    name: str = "cold_boot"
+    _api: KernelAPI | None = None
+    _host: HostBridge = field(default_factory=HostBridge)
 
     def on_load(self, api: KernelAPI) -> None:
-        self.api = api
-        self.api.log("info", "ColdBootModule loaded. Ready for cold start.")
+        self._api = api
+        self._api.log("info", "[COLD_BOOT] Infrastructure Sentinel active.")
+        
+        if os.getenv("AI_BRIDGE_AUTO_BOOTSTRAP", "true").lower() == "true":
+            self.ensure_infrastructure()
+
+    def ensure_infrastructure(self) -> dict[str, Any]:
+        """Checks and starts missing AI components."""
+        report = {"ollama": False, "orchestrator_container": False, "repaired": []}
+        
+        # 1. Check Local LLM (Ollama)
+        local_llm = self._api.get_module("local_llm") if self._api else None
+        if local_llm and not getattr(local_llm, "ready", False):
+            self._api.log("warn", "[COLD_BOOT] Local LLM offline. Attempting bootstrap...")
+            # Try to start via host script
+            try:
+                # Assuming scripts/start_ai_bridge_stack.sh handles this
+                self._host.execute(["bash", "scripts/start_ai_bridge_stack.sh"])
+                report["repaired"].append("local_llm_stack")
+                # Wait for boot
+                time.sleep(5)
+            except Exception as e:
+                self._api.log("error", f"[COLD_BOOT] Bootstrap failed: {e}")
+
+        # 2. Check Podman Container availability
+        try:
+            result = self._host.execute(["podman", "ps", "--filter", "name=hebrew_ai_orchestrator", "--format", "{{.Status}}"])
+            if "Up" in result.stdout:
+                report["orchestrator_container"] = True
+            else:
+                self._api.log("warn", "[COLD_BOOT] Orchestrator container not running. Re-stacking...")
+                self._host.execute(["bash", "scripts/start_ai_bridge_stack.sh"])
+                report["repaired"].append("orchestrator_container")
+        except Exception:
+            pass
+
+        return report
 
     def on_unload(self) -> None:
-        self.api = None
-
-    def before_task(self, task: Any, context: dict[str, Any]) -> None:
-        """
-        Check if the task is a request to trigger a cold start.
-        """
-        if hasattr(task, "description") and "COLD_START" in str(task.description).upper():
-            self.trigger_cold_start()
-
-    def after_task(self, task: Any, result: Any, context: dict[str, Any]) -> None:
         pass
 
     def finalize(self) -> dict[str, Any]:
-        return {"booted": self.booted}
-
-    def trigger_cold_start(self) -> int:
-        """
-        Scans memory_store/ for the most recent previous run and loads it.
-        """
-        if self.api is None:
-            return 0
-        
-        memory: SessionMemory = self.api.get_context("session_memory")
-        if not memory:
-            self.api.log("error", "SessionMemory not found in context.")
-            return 0
-
-        store_dir = Path("memory_store")
-        if not store_dir.exists():
-            return 0
-
-        # Find all run directories, excluding the current one if possible
-        # (Assuming current one is created by PersistentMemoryManager and we might be in it)
-        # For simplicity, we just look for all run_* and sort by mtime
-        runs = sorted(
-            [d for d in store_dir.iterdir() if d.is_dir() and d.name.startswith("run_")],
-            key=lambda x: x.stat().st_mtime,
-            reverse=True
-        )
-
-        if not runs:
-            self.api.log("warn", "No previous runs found for cold start.")
-            return 0
-
-        # Pick the most recent one (that is NOT empty)
-        target_run = None
-        for run in runs:
-            if (run / "memory_index.json").exists():
-                target_run = run
-                break
-        
-        if not target_run:
-            self.api.log("warn", "No valid memory index found in previous runs.")
-            return 0
-
-        self.api.log("info", f"Initiating cold start from {target_run.name}...")
-        count = memory.load_from_cold_storage(str(target_run))
-        self.booted = True
-        self.api.log("info", f"Cold start complete. Loaded {count} memories.")
-        return count
+        return {"status": "sentinel_active"}

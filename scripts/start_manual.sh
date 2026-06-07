@@ -14,6 +14,13 @@ JWT_SECRET="${JWT_SECRET:-dev_local_jwt_secret_2026_change_me}"
 BACKEND_PORT="${BACKEND_PORT:-3001}"
 FRONTEND_PORT="${FRONTEND_PORT:-8081}"
 ORCHESTRATOR_PORT="${ORCHESTRATOR_PORT:-8000}"
+ORCHESTRATOR_ENV_ARGS=()
+if [ -f "$PROJECT_ROOT/.env.bridge" ]; then
+  ORCHESTRATOR_ENV_ARGS+=(--env-file "$PROJECT_ROOT/.env.bridge")
+fi
+if [ -f "$PROJECT_ROOT/.env.gemini.local" ]; then
+  ORCHESTRATOR_ENV_ARGS+=(--env-file "$PROJECT_ROOT/.env.gemini.local")
+fi
 
 wait_http_ok() {
   local name="$1"
@@ -114,6 +121,7 @@ $BRIDGE_CMD podman run -d --pull=never \
   --security-opt no-new-privileges \
   --network hebrew-net \
   -p ${ORCHESTRATOR_PORT}:8000 \
+  "${ORCHESTRATOR_ENV_ARGS[@]}" \
   -e PYTHONPATH=/app \
   -e AI_BRIDGE_API_ENABLED=1 \
   -e AI_BRIDGE_AUTOSTART_LOCAL_LLM="${AI_BRIDGE_AUTOSTART_LOCAL_LLM:-false}" \
