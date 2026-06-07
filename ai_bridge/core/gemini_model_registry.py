@@ -4,7 +4,7 @@ import json
 import os
 import time
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -16,6 +16,7 @@ class AntigravityModelCatalog:
     lite: list[str]
     flash: list[str]
     pro: list[str]
+    thinking: list[str] = field(default_factory=list)
 
 
 class AntigravityModelRegistry:
@@ -33,8 +34,7 @@ class AntigravityModelRegistry:
             result = subprocess.run(["agy", "models"], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 # Map the CLI output to the expected model format if necessary
-                models = [line.strip().replace(" ", "-").lower() for line in result.stdout.splitlines() if line.strip()]
-                return [m for m in models if "gemini" in m]
+                return [line.strip().replace(" ", "-").lower() for line in result.stdout.splitlines() if line.strip()]
         except Exception:
             pass
 
@@ -53,7 +53,7 @@ class AntigravityModelRegistry:
             for item in payload.get("models", []):
                 name = str(item.get("name", "")).replace("models/", "")
                 methods = set(item.get("supportedGenerationMethods", []))
-                if name and "generateContent" in methods and ("antigravity" in name or "gemini" in name or "gemma" in name):
+                if name and "generateContent" in methods:
                     out.append(name)
             page_token = payload.get("nextPageToken", "")
             if not page_token:
@@ -98,8 +98,9 @@ class AntigravityModelRegistry:
         models = self.get_models(force_refresh=force_refresh)
         lite = [m for m in models if "lite" in m]
         flash = [m for m in models if "flash" in m and "lite" not in m]
-        pro = [m for m in models if "pro" in m]
-        return AntigravityModelCatalog(models, lite, flash, pro)
+        pro = [m for m in models if "pro" in m or ("claude-sonnet" in m and "thinking" not in m)]
+        thinking = [m for m in models if "thinking" in m or "claude-opus" in m]
+        return AntigravityModelCatalog(models, lite, flash, pro, thinking)
 
 
 # Legacy compatibility aliases. Keep imports working while the runtime moves to Antigravity.

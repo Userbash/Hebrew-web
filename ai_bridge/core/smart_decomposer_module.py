@@ -9,8 +9,6 @@ try:
 except ImportError:
     pass
 
-import instructor
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from .kernel_protocol import KernelAPI, KernelModule
@@ -33,41 +31,38 @@ class DecompositionResponse(BaseModel):
 class SmartDecomposerModule:
     name: str = "smart_decomposer"
     _api: KernelAPI | None = None
-    _client: Any | None = None
 
     def on_load(self, api: KernelAPI) -> None:
         self._api = api
-        # Initialize instructor client with OpenAI (or any compatible provider)
-        # For local safety, we check for API key
-        import os
-        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("MISTRAL_API_KEY")
-        base_url = "https://api.mistral.ai/v1" if os.getenv("MISTRAL_API_KEY") else None
-        
-        if api_key:
-            self._client = instructor.from_openai(OpenAI(api_key=api_key, base_url=base_url))
-            self._api.log("info", f"[DECOMP] {self.name} loaded with instructor support.")
-        else:
-            self._api.log("warn", f"[DECOMP] {self.name} loaded without LLM client (missing keys). Falling back to legacy.")
+        self._api.log("info", f"[DECOMP] {self.name} loaded.")
 
     def on_unload(self) -> None:
         pass
 
     def decompose_task(self, root_task: Task) -> Optional[ExecutionPlan]:
-        if not self._client or root_task.type != TaskType.PLAN:
+        if not self._api or root_task.type != TaskType.PLAN:
+            return None
+
+        reasoning = self._api.get_module("reasoning")
+        if not reasoning or not getattr(reasoning, "_client", None):
             return None
 
         try:
             self._api.log("info", f"[DECOMP] Smartly decomposing task: {root_task.task_id}")
             
-            # Request structured decomposition
-            response: DecompositionResponse = self._client.chat.completions.create(
-                model="mistral-large-latest", # Defaulting to mistral if available
-                response_model=DecompositionResponse,
-                messages=[
-                    {"role": "system", "content": "You are an expert task decomposer. Break down the user request into technical atomic tasks."},
-                    {"role": "user", "content": root_task.input.description}
-                ]
+            prompt = f"Break down the following user request into technical atomic tasks: {root_task.input.description}"
+            system_prompt = "You are an expert task decomposer and system architect. Create a detailed execution plan with atomic sub-tasks."
+            
+            # Request structured decomposition using a thinking model if available
+            response: DecompositionResponse = reasoning.structured_call(
+                prompt, 
+                DecompositionResponse, 
+                system_prompt=system_prompt,
+                model="claude-3-5-sonnet-20241022" # thinking model
             )
+            
+            if not response:
+                return None
 
             atomic_tasks = []
             id_map = {}  # Map LLM string ID to UUIDs
@@ -105,7 +100,7 @@ class SmartDecomposerModule:
                     if dep_id and dep_id != task.task_id and dep_id not in task.dependencies:
                         task.dependencies.append(dep_id)
 
-            self._api.log("info", f"[DECOMP] Generated {len(atomic_tasks)} atomic tasks via LLM.")
+            self._api.log("info", f"[DECOMP] Generated {len(atomic_tasks)} atomic tasks via AI Reasoning.")
             return ExecutionPlan(root_task_id=root_task.task_id, atomic_tasks=atomic_tasks)
 
         except Exception as e:
@@ -119,4 +114,6 @@ class SmartDecomposerModule:
         pass
 
     def finalize(self) -> dict[str, Any]:
-        return {"status": "active" if self._client else "fallback_only"}
+        reasoning = self._api.get_module("reasoning") if self._api else None
+        ready = bool(reasoning and getattr(reasoning, "_client", None))
+        return {"status": "active" if ready else "fallback_only"}

@@ -1,21 +1,79 @@
 from __future__ import annotations
 
 import logging
+import asyncio
+from dataclasses import dataclass, field
+from datetime import datetime, UTC
 from collections import defaultdict, deque
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Dict, List, Optional
 
-from .models import AckStatus, MessageAck, P2PMessage, TaskEnvelope, TaskStatus
+from .models import AckStatus, MessageAck, P2PMessage, TaskEnvelope, TaskStatus, AgentStatus
 
 logger = logging.getLogger(__name__)
 
+@dataclass(slots=True)
+class PodState:
+    agent_id: str
+    status: AgentStatus
+    current_task: str | None
+    memory_fingerprint: str
+    last_heartbeat: datetime
+    capabilities: List[str]
+
 class MessageBus:
+    """
+    Transparent Peer-to-Peer (TPP) Message Bus.
+    Acts as a distributed mesh where Agents (Pods) communicate directly.
+    """
     def __init__(self) -> None:
-        self._queues: dict[str, deque[Any]] = defaultdict(deque)
-        self._subscribers: dict[str, list[Callable[[Any], None]]] = defaultdict(list)
-        self._acks: dict[str, list[MessageAck]] = defaultdict(list)
-        self._unacked: dict[str, Any] = {}
+        self._queues: Dict[str, deque[Any]] = defaultdict(deque)
+        self._subscribers: Dict[str, list[Callable[[Any], None]]] = defaultdict(list)
+        self._acks: Dict[str, list[MessageAck]] = defaultdict(list)
+        self._unacked: Dict[str, Any] = {}
         self.dead_letters: list[Any] = []
+        
+        # TPP Pod State Management
+        self.pods: Dict[str, PodState] = {}
+        self._pod_inboxes: Dict[str, asyncio.Queue] = {}
+
+    def register_pod(self, agent_id: str, capabilities: List[str]) -> None:
+        """Register a new Agent Pod in the TPP mesh."""
+        from datetime import UTC, datetime
+        self.pods[agent_id] = PodState(
+            agent_id=agent_id,
+            status=AgentStatus.READY,
+            current_task=None,
+            memory_fingerprint="",
+            last_heartbeat=datetime.now(UTC),
+            capabilities=capabilities
+        )
+        if agent_id not in self._pod_inboxes:
+            self._pod_inboxes[agent_id] = asyncio.Queue()
+        logger.info(f"[TPP] Pod registered: {agent_id}")
+
+    def update_pod_state(self, agent_id: str, status: AgentStatus, task: str | None = None, fingerprint: str = "") -> None:
+        """Update the shared state of a Pod in the mesh."""
+        from datetime import UTC, datetime
+        if pod := self.pods.get(agent_id):
+            pod.status = status
+            pod.current_task = task
+            pod.memory_fingerprint = fingerprint
+            pod.last_heartbeat = datetime.now(UTC)
+            self._gossip_state(agent_id)
+
+    def discover_peers(self, capability: str) -> List[str]:
+        """Find other pods in the mesh that have a specific capability."""
+        return [
+            pod_id for pod_id, state in self.pods.items()
+            if capability in state.capabilities and state.status in {AgentStatus.READY, AgentStatus.IDLE}
+        ]
+
+    def _gossip_state(self, sender_id: str) -> None:
+        """Broadcast state updates to the entire mesh."""
+        # In a fully distributed system, this would be a real gossip protocol.
+        # Here we simulate it by updating the shared 'pods' dictionary.
+        pass
 
     def publish(self, topic: str, message: Any) -> None:
         self._queues[topic].append(message)
@@ -34,37 +92,32 @@ class MessageBus:
             
         return msg
 
-    def replay_unacked(self) -> int:
-        count = 0
-        for msg_id, msg in list(self._unacked.items()):
-            topic = self.agent_topic(getattr(msg, "target_agent", getattr(msg, "to_agent", "orchestrator")))
-            self.publish(topic, msg)
-            count += 1
-        return count
-
-    def subscribe(self, topic: str, callback: Callable[[Any], None]) -> None:
-        self._subscribers[topic].append(callback)
-
-    def depth(self, topic: str) -> int:
-        return len(self._queues[topic])
-
     def send_p2p(self, message: P2PMessage) -> MessageAck:
+        """Direct P2P delivery using TPP protocol."""
         topic = self.agent_topic(message.to_agent)
         message.route = message.route or [message.from_agent, message.to_agent]
+        message.delivery_mode = "tpp_direct"
+        
+        # Put in pod's virtual inbox queue if available
+        if message.to_agent in self._pod_inboxes:
+            try:
+                self._pod_inboxes[message.to_agent].put_nowait(message)
+            except Exception:
+                pass
+                
         self.publish(topic, message)
         return self.ack(message.message_id, AckStatus.SENT, message.to_agent)
 
-    def relay_p2p(self, message: P2PMessage, nearest_peer: str) -> MessageAck:
-        message.delivery_mode = "p2p_relay"
-        if not message.route:
-            message.route = [message.from_agent]
-        if nearest_peer not in message.route:
-            message.route.append(nearest_peer)
-        if message.to_agent not in message.route:
-            message.route.append(message.to_agent)
-        return self.send_p2p(message)
-
     def receive_for_agent(self, agent_id: str) -> P2PMessage | TaskEnvelope | None:
+        # Check TPP direct inbox first
+        if agent_id in self._pod_inboxes:
+            try:
+                msg = self._pod_inboxes[agent_id].get_nowait()
+                if msg:
+                    return msg
+            except Exception:
+                pass
+                
         message = self.consume(self.agent_topic(agent_id))
         if isinstance(message, P2PMessage) and message.requires_ack:
             self.ack(message.message_id, AckStatus.RECEIVED, agent_id)

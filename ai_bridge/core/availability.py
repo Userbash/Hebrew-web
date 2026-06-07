@@ -20,6 +20,8 @@ from .gemini_model_registry import AntigravityModelRegistry
 from .gemini_runtime_router import AntigravityRuntimeRouter
 from .env_loader import load_env_file
 from .external_ai_bridge import ExternalAIBridge
+from .integrations.antigravity_manager import AntigravityManager
+from .integrations.mistral_manager import MistralManager
 
 
 class ProviderStatus(Enum):
@@ -188,57 +190,39 @@ class ModelAvailability:
         )
         return self._cache(health)
 
+    def is_provider_ready(self, provider: str) -> bool:
+        normalized = self._normalize_provider(provider)
+        health = self._health_cache.get(normalized)
+        if not health:
+            return False
+        return health.status == ProviderStatus.HEALTHY
+
     def check_antigravity(self, *, live: bool | None = None) -> ProviderHealth:
         start = datetime.now(UTC)
         diagnostics: dict[str, Any] = {"provider": "antigravity"}
         tcp = self._tcp_probe("antigravity")
         diagnostics["tcp"] = tcp
-        diagnostics["auth"] = ExternalAIBridge.antigravity_auth_diagnostics()
+        
         if not tcp.get("ok"):
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
             health = ProviderHealth("antigravity", ProviderStatus.TIMEOUT, latency, datetime.now(UTC), error="tcp_probe_failed", diagnostics=diagnostics)
             diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
             return self._cache(health)
 
-        should_live_probe = self._live_probe_enabled() if live is None else live
-        if not should_live_probe:
-            latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            health = ProviderHealth("antigravity", ProviderStatus.DEGRADED, latency, datetime.now(UTC), diagnostics=diagnostics)
+        manager = AntigravityManager()
+        ready = manager.is_ready()
+        models = manager.list_models()
+        diagnostics["models"] = models
+        
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
+        
+        if ready:
+            health = ProviderHealth("antigravity", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
+        else:
+            error = "antigravity_not_ready"
+            health = ProviderHealth("antigravity", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
             diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
-            return self._cache(health)
-
-        model = os.getenv("ANTIGRAVITY_PROBE_MODEL", os.getenv("GEMINI_PROBE_MODEL", "agy"))
-        cli = self._resolve_antigravity_cli_command()
-        diagnostics["strategy_profiles"] = self._antigravity_strategy_profiles()
-        catalog = AntigravityModelRegistry().get_catalog(force_refresh=False)
-        diagnostics["model_catalog"] = {"all_models": catalog.all_models, "lite": catalog.lite, "flash": catalog.flash, "pro": catalog.pro}
-        if not cli:
-            latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            diagnostics["model_probe"] = {"command": None, "model": model, "returncode": None, "stdout_preview": "", "stderr_preview": "antigravity cli not found"}
-            health = ProviderHealth("antigravity", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error="antigravity_cli_not_found", diagnostics=diagnostics)
-            diagnostics["remediation"] = self._remediation("antigravity", health.status, diagnostics)
-            return self._cache(health)
-
-        cmd = [*cli, "-p", "healthcheck: respond with ok"]
-        diagnostics["model_probe"] = {"command": " ".join(cli), "model": model}
-        try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._probe_timeout_sec(), env=self._antigravity_runtime_env(), cwd=os.getcwd())
-            latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            diagnostics["model_probe"].update({"returncode": proc.returncode, "stdout_preview": (proc.stdout or "")[:120], "stderr_preview": (proc.stderr or "")[:240]})
-            output_error = ExternalAIBridge._cli_output_error(proc.stdout or "", proc.stderr or "")
-            if proc.returncode == 0 and not output_error:
-                health = ProviderHealth("antigravity", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
-            elif output_error:
-                health = ProviderHealth("antigravity", self._status_from_error(output_error), latency, datetime.now(UTC), error=output_error, diagnostics=diagnostics)
-            else:
-                error = (proc.stderr or proc.stdout or f"non-zero exit code: {proc.returncode}").strip()
-                health = ProviderHealth("antigravity", self._status_from_error(error), latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
-        except subprocess.TimeoutExpired as exc:
-            health = ProviderHealth("antigravity", ProviderStatus.TIMEOUT, self._probe_timeout_sec() * 1000, datetime.now(UTC), error=f"model_probe_timeout: {exc}", diagnostics=diagnostics)
-        except Exception as exc:
-            health = ProviderHealth("antigravity", self._status_from_error(str(exc), ProviderStatus.DEGRADED), 0.0, datetime.now(UTC), error=str(exc), diagnostics=diagnostics)
-
-        health.diagnostics["remediation"] = self._remediation("antigravity", health.status, health.diagnostics)
+            
         return self._cache(health)
 
     def check_gemini(self, *, live: bool | None = None) -> ProviderHealth:
@@ -248,12 +232,8 @@ class ModelAvailability:
     def check_mistral(self, *, live: bool | None = None) -> ProviderHealth:
         start = datetime.now(UTC)
         diagnostics: dict[str, Any] = {"provider": "mistral"}
-        api_key = os.getenv("MISTRAL_API_KEY")
-        if not api_key:
-            health = ProviderHealth("mistral", ProviderStatus.AUTH_FAILED, 0.0, datetime.now(UTC), error="MISTRAL_API_KEY not set", diagnostics=diagnostics)
-            diagnostics["remediation"] = self._remediation("mistral", health.status, diagnostics)
-            return self._cache(health)
-
+        
+        # 1. TCP connectivity probe
         tcp = self._tcp_probe("mistral")
         diagnostics["tcp"] = tcp
         if not tcp.get("ok"):
@@ -262,29 +242,21 @@ class ModelAvailability:
             diagnostics["remediation"] = self._remediation("mistral", health.status, diagnostics)
             return self._cache(health)
 
-        should_live_probe = self._live_probe_enabled() if live is None else live
-        if not should_live_probe or httpx is None:
-            latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            health = ProviderHealth("mistral", ProviderStatus.DEGRADED if httpx is None else ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
+        # 2. Functional/Auth probe using MistralManager
+        manager = MistralManager()
+        ready = manager.is_ready()
+        models = manager.list_models()
+        diagnostics["models"] = models
+        
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
+        
+        if ready:
+            health = ProviderHealth("mistral", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
+        else:
+            error = "mistral_auth_failed" if not manager.api_key else "mistral_not_ready"
+            health = ProviderHealth("mistral", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error=error, diagnostics=diagnostics)
             diagnostics["remediation"] = self._remediation("mistral", health.status, diagnostics)
-            return self._cache(health)
-
-        try:
-            response = httpx.get("https://api.mistral.ai/v1/models", headers={"Authorization": f"Bearer {api_key}"}, timeout=self._probe_timeout_sec())
-            latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            if response.status_code == 401:
-                health = ProviderHealth("mistral", ProviderStatus.AUTH_FAILED, latency, datetime.now(UTC), error="unauthorized", diagnostics=diagnostics)
-            elif response.status_code == 429:
-                health = ProviderHealth("mistral", ProviderStatus.QUOTA_EXCEEDED, latency, datetime.now(UTC), error=response.text[:240], diagnostics=diagnostics)
-            elif response.status_code >= 400:
-                health = ProviderHealth("mistral", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error=response.text[:240], diagnostics=diagnostics)
-            else:
-                health = ProviderHealth("mistral", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
-        except Exception as exc:
-            latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            health = ProviderHealth("mistral", self._status_from_error(str(exc), ProviderStatus.DEGRADED), latency, datetime.now(UTC), error=str(exc), diagnostics=diagnostics)
-
-        health.diagnostics["remediation"] = self._remediation("mistral", health.status, health.diagnostics)
+            
         return self._cache(health)
 
     def check_provider(self, provider: str, *, live: bool | None = None) -> ProviderHealth:

@@ -50,6 +50,10 @@ from .dev_toolkit_module import DevToolkitModule
 from .local_llm_bridge import LocalLLMBridge
 from .local_llm_module import LocalLLMModule
 from .sourcecraft_module import SourceCraftModule
+from .reasoning_module import ReasoningModule
+from .risk_advisor_module import RiskAdvisorModule
+from .orchestrator_advisor_module import OrchestratorAdvisorModule
+from .intelligence_module import AIIntelligenceModule
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -170,6 +174,10 @@ class Orchestrator:
         self.kpi_events = KPIEventLogger.from_env()
         self.local_llm_bridge = LocalLLMBridge(host_bridge=self.host_bridge)
         
+        # Connect API for smart modules
+        self.model_selector.set_api(self)
+        self.router.set_api(self)
+        
         self.module_manager = KernelModuleManager()
         self.module_manager.set_api(self)
         self.module_manager.register(AIActivityModule())
@@ -192,6 +200,10 @@ class Orchestrator:
         self.module_manager.register(LocalLLMModule())
         self.module_manager.register(SourceCraftModule())
         self.module_manager.register(VoiceListenerModule())
+        self.module_manager.register(ReasoningModule())
+        self.module_manager.register(RiskAdvisorModule())
+        self.module_manager.register(OrchestratorAdvisorModule())
+        self.module_manager.register(AIIntelligenceModule())
         
         # Register DesignConceptAgent
         from ai_bridge.agents.design_concept_agent import DesignConceptAgent
@@ -222,6 +234,10 @@ class Orchestrator:
         self.module_manager.load("dev_toolkit")
         self.module_manager.load("sourcecraft")
         self.module_manager.load("voice_listener")
+        self.module_manager.load("reasoning")
+        self.module_manager.load("risk_advisor")
+        self.module_manager.load("orchestrator_advisor")
+        self.module_manager.load("intelligence")
 
         # Load local_llm before autostart so the module is available for
         # advisory context and readiness checks during kernel boot.
@@ -294,6 +310,22 @@ class Orchestrator:
         if not self.registry.get(agent_id):
             self.registry.register(agent_id, agent_type, f"local://{agent_id}", agent.capabilities, critical=critical, model_name=model_name, provider=provider)
             self.metrics.register_agent(self.registry.get(agent_id))  # type: ignore[arg-type]
+            
+        # 2. Register as TPP Pod (Mesh Architecture)
+        if hasattr(self.message_bus, "register_pod"):
+            self.message_bus.register_pod(agent_id, agent.capabilities)
+        self.log("info", f"[KERNEL] Attached local agent pod: {agent_id} (TPP Enabled)")
+
+    def _broadcast_pod_state(self, agent_id: str, status: AgentStatus, task_id: str | None = None) -> None:
+        """Updates the TPP mesh with the current pod state."""
+        if not hasattr(self.message_bus, "update_pod_state"):
+            return
+            
+        # Calculate memory fingerprint (hash of recent thoughts/results)
+        thoughts = self.session_memory.get(MemoryScope.AGENT, agent_id, "thoughts") or []
+        fingerprint = hashlib.md5(str(thoughts).encode()).hexdigest()[:8]
+        
+        self.message_bus.update_pod_state(agent_id, status, task=task_id, fingerprint=fingerprint)
 
     def load_kernel_module(self, name: str) -> None:
         self.module_manager.load(name)
@@ -651,7 +683,14 @@ class Orchestrator:
                 self.module_manager.after_task(task, failed_result, module_context)
                 return failed_result
             memory_context = self._load_memory_context(task, agent_id)
+            
+            # TPP: Mark pod as BUSY
+            self._broadcast_pod_state(agent_id, AgentStatus.BUSY, task_id=task.task_id)
+            
             result = agent.run(task, memory_context=memory_context)
+            
+            # TPP: Mark pod as READY
+            self._broadcast_pod_state(agent_id, AgentStatus.READY)
 
             is_google_cli = bool(agent_record and agent_record.provider in {"antigravity", "antigravity-cli", "agy"})
             result_errors = " ".join(result.errors or [])
@@ -659,7 +698,7 @@ class Orchestrator:
             if result_errors:
                 try:
                     from .external_ai_bridge import ExternalAIBridge
-                    classified = ExternalAIBridge.classify_error(result_errors)
+                    classified = ExternalAIBridge.classify_error(result_errors, task=task, api=self, model=result.model_name or "unknown")
                 except Exception:
                     classified = ""
 
