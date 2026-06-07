@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.codex_agent import CodexAgent
 from ai_bridge.agents.antigravity_cli_agent import AntigravityCLIAgent
@@ -9,7 +10,8 @@ from ai_bridge.agents.tester_agent import TesterAgent
 from ai_bridge.core.models import Task, TaskType, Priority, TaskInput, TaskContext
 from ai_bridge.core.security import SecurityManager, SecurityPolicy
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
+print(f"DEBUG: MISTRAL_API_KEY loaded: {os.getenv('MISTRAL_API_KEY') is not None}")
 
 def main():
     security_manager = SecurityManager(SecurityPolicy(allow_shell=True, shell_allowlist=["agy -p", "antigravity -p"]))
@@ -51,7 +53,7 @@ def main():
             
             responses[agent.agent_id] = {
                 "status": result.status.value,
-                "output": result.output,
+                "output": result.output.as_dict(),
                 "confidence": result.confidence
             }
         except Exception as e:

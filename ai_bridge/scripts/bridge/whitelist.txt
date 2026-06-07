@@ -10,11 +10,16 @@ node
 ls
 which
 cat
+bash
+sh
 docker-compose
 podman-compose
 network
 npx
 gemini
-podman
 curl
 wget
+python3
+python
+agy
+antigravity

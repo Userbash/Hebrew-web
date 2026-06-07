@@ -10,6 +10,13 @@ except ImportError:
 
 sys.path.insert(0, '/app')
 
+from ai_bridge.core.env_loader import load_env_file
+
+load_env_file()
+load_env_file(".env.bridge")
+load_env_file(".env.gemini.local")
+load_env_file("/app/.env.bridge")
+
 from ai_bridge.core.orchestrator import Orchestrator
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.codex_agent import CodexAgent
@@ -46,7 +53,7 @@ async def main():
         codex_model = "mistral-large-latest"
     elif openai_key:
         codex_provider = "openai"
-        codex_model = os.getenv("CODEX_OPENAI_MODEL", "gpt-coding-large")
+        codex_model = os.getenv("CODEX_OPENAI_MODEL", "gpt-4o")
     else:
         codex_provider = "local"
         codex_model = "local-small"

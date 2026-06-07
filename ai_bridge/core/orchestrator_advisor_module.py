@@ -48,7 +48,7 @@ Current Report Issues: {', '.join(report.issues)}
 """
         
         system_prompt = "You are a lead system architect. Audit the work of an AI agent and ensure it meets production standards."
-        return reasoning.structured_call(prompt, QualityAudit, system_prompt=system_prompt, model="claude-3-5-sonnet-20241022")
+        return reasoning.structured_call(prompt, QualityAudit, system_prompt=system_prompt, model="gpt-4o")
 
     def suggest_optimizations(self, metrics: dict[str, Any]) -> Optional[SystemOptimization]:
         reasoning = self._api.get_module("reasoning") if self._api else None
@@ -57,7 +57,7 @@ Current Report Issues: {', '.join(report.issues)}
 
         prompt = f"Analyze the current system metrics and suggest optimizations: {metrics}"
         system_prompt = "You are a high-level AI operations manager. Analyze metrics and provide strategic routing and agent management advice."
-        return reasoning.structured_call(prompt, SystemOptimization, system_prompt=system_prompt, model="claude-3-5-sonnet-20241022")
+        return reasoning.structured_call(prompt, SystemOptimization, system_prompt=system_prompt, model="gpt-4o")
 
     def finalize(self) -> dict[str, Any]:
         return {"status": "ready"}

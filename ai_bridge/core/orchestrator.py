@@ -54,6 +54,7 @@ from .reasoning_module import ReasoningModule
 from .risk_advisor_module import RiskAdvisorModule
 from .orchestrator_advisor_module import OrchestratorAdvisorModule
 from .intelligence_module import AIIntelligenceModule
+from .security_sentinel import KernelSecuritySentinel
 
 
 TIMEOUT_ERROR_TYPES = {"tcp_timeout", "api_timeout", "sdk_hang"}
@@ -204,6 +205,7 @@ class Orchestrator:
         self.module_manager.register(RiskAdvisorModule())
         self.module_manager.register(OrchestratorAdvisorModule())
         self.module_manager.register(AIIntelligenceModule())
+        self.module_manager.register(KernelSecuritySentinel())
         
         # Register DesignConceptAgent
         from ai_bridge.agents.design_concept_agent import DesignConceptAgent
@@ -238,6 +240,7 @@ class Orchestrator:
         self.module_manager.load("risk_advisor")
         self.module_manager.load("orchestrator_advisor")
         self.module_manager.load("intelligence")
+        self.module_manager.load("security_sentinel")
 
         # Load local_llm before autostart so the module is available for
         # advisory context and readiness checks during kernel boot.

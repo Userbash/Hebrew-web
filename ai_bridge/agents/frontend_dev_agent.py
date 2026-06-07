@@ -12,6 +12,9 @@ class FrontendDevAgent(CodexAgent):
         self.capabilities = ["code", "fix", "test", "docs", "review"]
 
     def run(self, task: Task, memory_context: dict | None = None) -> AgentResult:
+        # Fetch design tokens from memory if available
+        ui_tokens = self.orchestrator.session_memory.get("agent", "frontend-design-1", "ui_tokens")
+        
         scoped_task = Task(
             type=task.type,
             input=task.input,
@@ -29,8 +32,12 @@ class FrontendDevAgent(CodexAgent):
             cache_policy=task.cache_policy,
             session_id=task.session_id,
         )
+        
+        design_constraint = "Use these Design Tokens: " + str(ui_tokens) if ui_tokens else "Use standard CRM system design tokens."
+        
         scoped_task.input.constraints = list(scoped_task.input.constraints) + [
             "Target: frontend-react",
+            design_constraint,
             "Preserve existing design system and routing",
             "Ensure desktop/mobile responsiveness",
             "Use AI vision reasoning for UI image refs when provided",

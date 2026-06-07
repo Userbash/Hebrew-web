@@ -52,7 +52,7 @@ Description: {task.input.description}
 Files involved: {len(task.input.files)}
 Acceptance Criteria count: {len(task.input.acceptance_criteria)}
 """
-        return reasoning.structured_call(prompt, ComplexityAnalysis, system_prompt="You are a technical project manager.", model="claude-3-5-sonnet-20241022")
+        return reasoning.structured_call(prompt, ComplexityAnalysis, system_prompt="You are a technical project manager.", model="gpt-4o")
 
     def diagnose_error(self, raw_error: str, task: Task, model_used: str) -> Optional[ErrorDiagnosis]:
         # Local LLM is great for classification if ready

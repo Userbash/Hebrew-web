@@ -25,6 +25,7 @@ class CodexAgent(BaseAgent):
     def __init__(self, agent_id: str = "codexagent") -> None:
         super().__init__(agent_id, capabilities=["code", "fix", "refactor", "test"])
         load_env_file()
+        load_env_file(".env.bridge")
         self.openai_key = os.getenv("OPENAI_API_KEY")
         self.mistral_key = os.getenv("MISTRAL_API_KEY")
         self._provider = "unknown"
