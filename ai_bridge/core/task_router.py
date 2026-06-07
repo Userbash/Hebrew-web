@@ -30,6 +30,10 @@ class TaskRouter:
         self.registry = registry
         self.load_balancer = load_balancer
         self.codex_economy_mode = os.getenv("AI_BRIDGE_CODEX_ECONOMY_MODE", "true").strip().lower() in {"1", "true", "yes", "on"}
+        self._api: Any | None = None
+
+    def set_api(self, api: Any) -> None:
+        self._api = api
 
     @staticmethod
     def _is_sourcecraft_work(task: Task) -> bool:
@@ -185,10 +189,18 @@ class TaskRouter:
         risk = evaluate_risk_context(text)
         return risk.high_risk
 
-    @staticmethod
-    def estimate_complexity(task: Task) -> str:
+    def estimate_complexity(self, task: Task) -> str:
         if task.complexity:
             return task.complexity.value
+        
+        if self._api:
+            intel = self._api.get_module("intelligence")
+            if intel:
+                analysis = intel.estimate_complexity(task)
+                if analysis:
+                    return analysis.complexity
+
+        # Fallback to heuristic
         score = len(task.input.files) + len(task.input.acceptance_criteria) + len(task.input.description) // 160
         if task.priority == Priority.CRITICAL:
             score += 2

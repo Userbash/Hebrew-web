@@ -39,10 +39,39 @@ class ModelSelector:
     def __init__(self) -> None:
         self.policy_mode = os.getenv("AI_BRIDGE_POLICY_MODE", "legacy").strip().lower()
         self.openai_router = OpenAIRuntimeRouter()
+        self._api: Any | None = None
+
+    def set_api(self, api: Any) -> None:
+        self._api = api
+
+    def _evaluate_with_advisor(self, task: Task) -> RiskEvaluation | None:
+        if not self._api:
+            return None
+        
+        advisor = self._api.get_module("risk_advisor")
+        if not advisor:
+            return None
+            
+        assessment = advisor.evaluate_task(task)
+        if not assessment:
+            return None
+            
+        return RiskEvaluation(
+            detected_keywords=assessment.impact_areas,
+            matched_high_risk_rules=[assessment.justification],
+            matched_low_risk_exemptions=[],
+            high_risk=assessment.risk_score > 0.6
+        )
 
     def classify(self, task: Task) -> Complexity:
         if task.complexity:
             return task.complexity
+        
+        # Try AI-powered advisor first
+        advisor_eval = self._evaluate_with_advisor(task)
+        if advisor_eval and advisor_eval.high_risk:
+            return Complexity.CRITICAL
+
         text = task.input.description.lower()
         risk = evaluate_risk_context(text)
         if task.priority == Priority.CRITICAL or risk.high_risk:

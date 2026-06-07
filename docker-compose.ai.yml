@@ -39,6 +39,7 @@ services:
       - sh
       - -lc
       - |
+        export PATH=$PATH:/app/.local/bin
         export PYTHONPATH=/app
         export TESTING=false
         export AI_BRIDGE_AUTOSTART_LOCAL_LLM=false
@@ -59,7 +60,10 @@ services:
       - "${ORCHESTRATOR_PORT:-8000}:8000"
     volumes:
       - ai_bridge_memory:/app/memory_store
-    healthcheck:
+      - /var/home/sanya/.local/bin:/app/.local/bin:ro
+      - ./.env.bridge:/app/.env.bridge:ro
+    command:
+
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"]
       interval: 15s
       timeout: 8s

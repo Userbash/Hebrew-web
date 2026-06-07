@@ -52,12 +52,12 @@ class AntigravityRuntimeRouter:
 
     def _complexity_ordered_models(self, complexity: Complexity, *, force_refresh: bool = False) -> list[str]:
         catalog = self.registry.get_catalog(force_refresh=force_refresh)
-        low = catalog.lite + catalog.flash + catalog.pro
-        medium = catalog.flash + catalog.lite + catalog.pro
-        high = catalog.pro + catalog.flash + catalog.lite
+        low = catalog.lite + catalog.flash + catalog.pro + catalog.thinking
+        medium = catalog.flash + catalog.pro + catalog.lite + catalog.thinking
+        high = catalog.thinking + catalog.pro + catalog.flash + catalog.lite
         low_fb = ["antigravity-flash-lite", "antigravity-flash", "antigravity-pro"]
         med_fb = ["antigravity-flash", "antigravity-flash-lite", "antigravity-pro"]
-        high_fb = ["antigravity-pro", "antigravity-flash", "antigravity-flash-lite"]
+        high_fb = ["antigravity-pro", "antigravity-flash", "antigravity-flash-lite", "antigravity-thinking"]
         if complexity == Complexity.LOW:
             return low or low_fb
         if complexity == Complexity.MEDIUM:
@@ -79,7 +79,7 @@ class AntigravityRuntimeRouter:
             "low_cost": ["antigravity-flash-lite", "antigravity-flash"],
             "docs_research": ["antigravity-flash", "antigravity-flash-lite", "antigravity-pro"],
             "code_fix": ["antigravity-flash-lite", "antigravity-flash", "antigravity-pro"],
-            "high_reasoning": ["antigravity-pro", "antigravity-flash", "antigravity-flash-lite"],
+            "high_reasoning": ["antigravity-thinking", "antigravity-pro", "antigravity-flash"],
         }
 
     def _strategy_for(self, complexity: Complexity, task: Task) -> str:

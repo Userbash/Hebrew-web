@@ -128,8 +128,17 @@ class ExternalAIBridge:
         return combined if any(marker in text for marker in markers) else ""
 
     @staticmethod
-    def classify_error(raw_error: str) -> str:
+    def classify_error(raw_error: str, task: Task | None = None, api: Any | None = None, model: str = "unknown") -> str:
         text = (raw_error or "").lower()
+
+        # Try AI diagnosis first if API is provided
+        if api and task:
+            intel = api.get_module("intelligence")
+            if intel:
+                diagnosis = intel.diagnose_error(raw_error, task, model)
+                if diagnosis:
+                    return diagnosis.error_type
+
         if "resource_exhausted" in text or "quota" in text or "429" in text:
             return "quota_exhaustion"
         if any(marker in text for marker in ["401", "403", "api key", "auth", "unauthorized", "forbidden"]):

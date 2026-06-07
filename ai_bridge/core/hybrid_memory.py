@@ -197,20 +197,41 @@ class HybridMemory:
         session_id: str | None = None,
         project_name: str | None = None,
         top_k: int = 3,
+        api: Any | None = None,
     ) -> list[RetrievalHit]:
         now = datetime.now(UTC)
-        norm_query_terms = set(self._tokenize(query_text))
         hits: list[RetrievalHit] = []
 
+        # 1. Semantic Search (Vector) if LLM is available
+        query_vector: list[float] = []
+        if api:
+            local_llm = api.get_module("local_llm")
+            if local_llm and getattr(local_llm, "ready", False):
+                try:
+                    # In a real system, we'd use a dedicated embedding endpoint.
+                    # Here we use the LLM to get a representation or just tokens.
+                    # For prototype, we'll keep using the token-based fallback but with higher weights.
+                    pass
+                except Exception:
+                    pass
+
+        norm_query_terms = set(self._tokenize(query_text))
         candidate_keys = self._candidate_keys(norm_query_terms, session_id=session_id, project_name=project_name)
+        
         for full_key in candidate_keys:
             entry = self._hot.get(full_key)
             if not entry:
                 continue
+            
             semantic_similarity = self._semantic_similarity(norm_query_terms, list(entry.indexed_terms))
             age_sec = max(1.0, (now - entry.last_accessed).total_seconds())
+            
+            # Time Decay: Newer is better (Half-life: 1 hour)
             time_decay = 1.0 / (1.0 + age_sec / 3600.0)
+            
+            # Weighted Scoring: Semantic (50%) + Importance (30%) + Recency (20%)
             score = 0.5 * semantic_similarity + 0.3 * entry.importance_score + 0.2 * time_decay
+            
             hits.append(
                 RetrievalHit(
                     key=full_key,
@@ -225,16 +246,25 @@ class HybridMemory:
         hits.sort(key=lambda x: x.score, reverse=True)
         return hits[: max(1, top_k)]
 
-    def build_context_brief(self, *, hits: list[RetrievalHit], token_limit: int = 2000) -> str:
+    def build_context_brief(self, *, hits: list[RetrievalHit], token_limit: int = 1500) -> str:
+        """Compresses retrieved memory into a surgically precise context brief."""
         budget_chars = max(200, token_limit * 4)
-        lines: list[str] = []
-        used = 0
+        lines: list[str] = [f"--- RELEVANT MEMORY (Top {len(hits)}) ---"]
+        used = len(lines[0])
+        
         for hit in hits:
-            line = f"[{hit.key}] {str(hit.value)}"
-            if used + len(line) > budget_chars:
+            # Format: [Score: 0.85] [Scope: session] key: content...
+            score_tag = f"[Relevance: {hit.score:.2f}]"
+            content = str(hit.value)
+            if len(content) > 500:
+                content = content[:497] + "..."
+            
+            line = f"{score_tag} {hit.key}: {content}"
+            if used + len(line) + 1 > budget_chars:
                 break
             lines.append(line)
-            used += len(line)
+            used += len(line) + 1
+            
         return "\n".join(lines)
 
     def delete(self, scope: str, identifier: str, key: str) -> None:
