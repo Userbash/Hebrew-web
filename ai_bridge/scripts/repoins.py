@@ -38,7 +38,7 @@ async def run_repoins():
     from ai_bridge.agents.codex_agent import CodexAgent
     from ai_bridge.agents.reviewer_agent import ReviewerAgent
     from ai_bridge.agents.tester_agent import TesterAgent
-    from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
+    from ai_bridge.agents.antigravity_cli_agent import AntigravityCLIAgent
     from ai_bridge.agents.mistral_agent import MistralAgent
 
     agents_to_run = [
@@ -47,7 +47,7 @@ async def run_repoins():
         ("reviewer-1", ReviewerAgent("reviewer-1")),
         ("tester-1", TesterAgent("tester-1")),
         ("mistral-1", MistralAgent("mistral-1", security_manager)),
-        ("antigravity-cli-1", GeminiCLIAgent("antigravity-cli-1", security_manager))
+        ("antigravity-cli-1", AntigravityCLIAgent("antigravity-cli-1", security_manager))
     ]
 
     for aid, agent_obj in agents_to_run:

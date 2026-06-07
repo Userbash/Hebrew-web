@@ -4,21 +4,22 @@ import os
 import shutil
 import socket
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+from urllib.error import URLError
+from urllib.request import urlopen
 
 try:
     import httpx
 except Exception:  # pragma: no cover - optional in minimal test envs
     httpx = None  # type: ignore
 
+from .gemini_model_registry import AntigravityModelRegistry
+from .gemini_runtime_router import AntigravityRuntimeRouter
 from .env_loader import load_env_file
 from .external_ai_bridge import ExternalAIBridge
-from .gemini_runtime_router import GeminiRuntimeRouter
-from .gemini_model_registry import GeminiModelRegistry
-from .kernel_protocol import KernelAPI
 
 
 class ProviderStatus(Enum):
@@ -37,7 +38,11 @@ class ProviderHealth:
     latency_ms: float
     last_check: datetime
     error: str | None = None
-    diagnostics: dict[str, Any] = field(default_factory=dict)
+    diagnostics: dict[str, Any] = None
+
+    def __post_init__(self) -> None:
+        if self.diagnostics is None:
+            self.diagnostics = {}
 
     def as_dict(self) -> dict:
         return {
@@ -54,7 +59,7 @@ class ModelAvailability:
     @staticmethod
     def _normalize_provider(provider: str) -> str:
         p = provider.strip().lower()
-        if p in {"google", "antigravity", "antigravity-cli", "agy", "gemini-cli", "gemini"}:
+        if p in {"antigravity", "antigravity-cli", "agy", "google", "gemini", "gemini-cli"}:
             return "antigravity"
         return p
 
@@ -80,16 +85,8 @@ class ModelAvailability:
         return ExternalAIBridge.resolve_antigravity_cli_command()
 
     @staticmethod
-    def _resolve_gemini_cli_command() -> list[str] | None:
-        return ModelAvailability._resolve_antigravity_cli_command()
-
-    @staticmethod
     def _antigravity_runtime_env() -> dict[str, str]:
         return ExternalAIBridge._antigravity_runtime_env()
-
-    @staticmethod
-    def _gemini_runtime_env() -> dict[str, str]:
-        return ModelAvailability._antigravity_runtime_env()
 
     @staticmethod
     def _tcp_targets(provider: str) -> list[tuple[str, int]]:
@@ -148,15 +145,15 @@ class ModelAvailability:
         return default
 
     @staticmethod
-    def _gemini_strategy_profiles() -> dict[str, list[str]]:
-        return GeminiRuntimeRouter.strategy_profiles()
+    def _antigravity_strategy_profiles() -> dict[str, list[str]]:
+        return AntigravityRuntimeRouter.strategy_profiles()
 
     @staticmethod
     def _remediation(provider: str, status: ProviderStatus, diagnostics: dict[str, Any]) -> list[str]:
         steps: list[str] = []
         tcp = diagnostics.get("tcp", {}) if isinstance(diagnostics.get("tcp"), dict) else {}
         if status == ProviderStatus.AUTH_FAILED:
-            key_name = "GEMINI_API_KEY/GOOGLE_API_KEY" if provider == "antigravity" else "MISTRAL_API_KEY"
+            key_name = "ANTIGRAVITY_API_KEY/GEMINI_API_KEY/GOOGLE_API_KEY" if provider == "antigravity" else "MISTRAL_API_KEY"
             steps.append(f"Проверь {key_name}: переменная окружения должна быть задана и не просрочена.")
         if status == ProviderStatus.QUOTA_EXCEEDED:
             steps.append("Проверь quota/rate limit у провайдера и временно снизь приоритет этого провайдера в routing policy.")
@@ -177,6 +174,19 @@ class ModelAvailability:
         else:
             self._failure_cache.pop(provider, None)
         return health
+
+    def record_failure(self, provider: str, error_type: str, raw_error: str | None = None) -> ProviderHealth:
+        normalized = self._normalize_provider(provider)
+        status = self._status_from_error(error_type or raw_error or "", ProviderStatus.OFFLINE)
+        health = ProviderHealth(
+            normalized,
+            status,
+            0.0,
+            datetime.now(UTC),
+            error=raw_error or error_type,
+            diagnostics={"error_type": error_type, "recorded": True},
+        )
+        return self._cache(health)
 
     def check_antigravity(self, *, live: bool | None = None) -> ProviderHealth:
         start = datetime.now(UTC)
@@ -199,8 +209,8 @@ class ModelAvailability:
 
         model = os.getenv("ANTIGRAVITY_PROBE_MODEL", os.getenv("GEMINI_PROBE_MODEL", "agy"))
         cli = self._resolve_antigravity_cli_command()
-        diagnostics["strategy_profiles"] = self._gemini_strategy_profiles()
-        catalog = GeminiModelRegistry().get_catalog(force_refresh=False)
+        diagnostics["strategy_profiles"] = self._antigravity_strategy_profiles()
+        catalog = AntigravityModelRegistry().get_catalog(force_refresh=False)
         diagnostics["model_catalog"] = {"all_models": catalog.all_models, "lite": catalog.lite, "flash": catalog.flash, "pro": catalog.pro}
         if not cli:
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
@@ -231,8 +241,8 @@ class ModelAvailability:
         health.diagnostics["remediation"] = self._remediation("antigravity", health.status, health.diagnostics)
         return self._cache(health)
 
-
     def check_gemini(self, *, live: bool | None = None) -> ProviderHealth:
+        # Legacy compatibility path retained for older call sites.
         return self.check_antigravity(live=live)
 
     def check_mistral(self, *, live: bool | None = None) -> ProviderHealth:
@@ -260,21 +270,15 @@ class ModelAvailability:
             return self._cache(health)
 
         try:
-            response = httpx.get(
-                "https://api.mistral.ai/v1/models",
-                headers={"Authorization": f"Bearer {api_key}"},
-                timeout=self._probe_timeout_sec(),
-            )
+            response = httpx.get("https://api.mistral.ai/v1/models", headers={"Authorization": f"Bearer {api_key}"}, timeout=self._probe_timeout_sec())
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
-            diagnostics["api_probe"] = {"status_code": response.status_code}
-            if response.status_code in {401, 403}:
-                health = ProviderHealth("mistral", ProviderStatus.AUTH_FAILED, latency, datetime.now(UTC), error=response.text[:240], diagnostics=diagnostics)
+            if response.status_code == 401:
+                health = ProviderHealth("mistral", ProviderStatus.AUTH_FAILED, latency, datetime.now(UTC), error="unauthorized", diagnostics=diagnostics)
             elif response.status_code == 429:
                 health = ProviderHealth("mistral", ProviderStatus.QUOTA_EXCEEDED, latency, datetime.now(UTC), error=response.text[:240], diagnostics=diagnostics)
-            elif response.status_code >= 500:
+            elif response.status_code >= 400:
                 health = ProviderHealth("mistral", ProviderStatus.DEGRADED, latency, datetime.now(UTC), error=response.text[:240], diagnostics=diagnostics)
             else:
-                response.raise_for_status()
                 health = ProviderHealth("mistral", ProviderStatus.HEALTHY, latency, datetime.now(UTC), diagnostics=diagnostics)
         except Exception as exc:
             latency = (datetime.now(UTC) - start).total_seconds() * 1000
@@ -295,77 +299,19 @@ class ModelAvailability:
     def check_all(self) -> dict[str, ProviderHealth]:
         return {
             "antigravity": self.check_antigravity(),
-            "mistral": self.check_mistral(),
+            "mistral": self.check_mistral()
         }
 
-    def record_failure(self, provider: str, error_type: str, error: str) -> ProviderHealth:
-        normalized = self._normalize_provider(provider)
-        if error_type == "auth_fail":
-            status = ProviderStatus.AUTH_FAILED
-        elif error_type == "quota_exhaustion":
-            status = ProviderStatus.QUOTA_EXCEEDED
-        elif error_type in {"tcp_timeout", "api_timeout", "sdk_hang"}:
-            status = ProviderStatus.TIMEOUT
-        else:
-            status = ProviderStatus.DEGRADED
-        diagnostics = {"provider": normalized, "runtime_failure": {"error_type": error_type, "error": error[:500]}}
-        diagnostics["remediation"] = self._remediation(normalized, status, diagnostics)
-        return self._cache(ProviderHealth(normalized, status, 0.0, datetime.now(UTC), error=error, diagnostics=diagnostics))
-
-    def is_provider_ready(self, provider: str, *, live: bool | None = None) -> bool:
-        provider = self._normalize_provider(provider)
-        health = self._health_cache.get(provider)
-        if not health:
-            health = self.check_provider(provider, live=live)
-        return health.status in {ProviderStatus.HEALTHY, ProviderStatus.DEGRADED}
-
-    def cached_report(self) -> dict[str, Any]:
+    def cached_report(self) -> dict[str, dict]:
         return {provider: health.as_dict() for provider, health in sorted(self._health_cache.items())}
 
-
-@dataclass
 class ModelAvailabilityModule:
     name: str = "model_availability"
-    _api: KernelAPI | None = None
-    checks_total: int = 0
-    last_task_checks: list[dict[str, Any]] = field(default_factory=list)
+    def __init__(self):
+        pass
+    def on_load(self, api):
+        pass
+    def before_task(self, task, context):
+        pass
 
-    def on_load(self, api: KernelAPI) -> None:
-        self._api = api
-        api.log("info", "[AVAILABILITY] model availability diagnostics loaded")
 
-    def on_unload(self) -> None:
-        self._api = None
-
-    def before_task(self, task: Any, context: dict[str, Any]) -> None:
-        if self._api is None:
-            return
-        provider = str(context.get("selected_provider") or "")
-        availability = self._api.get_context("availability")
-        if not provider or not isinstance(availability, ModelAvailability):
-            return
-        health = availability.check_provider(provider, live=False)
-        self.checks_total += 1
-        context["availability_preflight"] = health.as_dict()
-        self.last_task_checks.append({"task_id": getattr(task, "task_id", None), "provider": provider, "health": health.as_dict()})
-        self.last_task_checks = self.last_task_checks[-20:]
-
-    def after_task(self, task: Any, result: Any, context: dict[str, Any]) -> None:
-        if self._api is None:
-            return
-        availability = self._api.get_context("availability")
-        provider = str(context.get("provider") or context.get("selected_provider") or "")
-        errors = " ".join(str(item) for item in getattr(result, "errors", []) or [])
-        if not provider or not errors or not isinstance(availability, ModelAvailability):
-            return
-        error_type = ExternalAIBridge.classify_error(errors)
-        if error_type != "unknown":
-            availability.record_failure(provider, error_type, errors)
-
-    def finalize(self) -> dict[str, Any]:
-        report: dict[str, Any] = {"checks_total": self.checks_total, "last_task_checks": self.last_task_checks}
-        if self._api is not None:
-            availability = self._api.get_context("availability")
-            if isinstance(availability, ModelAvailability):
-                report["providers"] = availability.cached_report()
-        return report

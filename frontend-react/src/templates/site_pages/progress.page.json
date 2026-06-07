@@ -1,0 +1,21 @@
+{
+  "page": "progress",
+  "surface": "main_app",
+  "goal": "Track skill growth, activity streaks, and mastery levels.",
+  "layout": "analytics_overview",
+  "components": [
+    "progress_summary_cards",
+    "skill_trend_chart",
+    "streak_tracker",
+    "attempt_history_table"
+  ],
+  "backend_dependencies": [
+    "/api/progress",
+    "/api/users/profile"
+  ],
+  "ux_rules": [
+    "Prefer trend lines and badges over heavy textual reports.",
+    "Surface the most recent activity first.",
+    "Use neutral status states for slow progression, not error styling."
+  ]
+}

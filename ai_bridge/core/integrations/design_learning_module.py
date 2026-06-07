@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ai_bridge.core.session_memory import MemoryScope, SessionMemory
+from .design_noise import DesignNoiseGenerator
 
 
 @dataclass(slots=True)
@@ -45,12 +46,16 @@ class DesignLearningModule:
             if isinstance(value, dict) and str(value.get("framework", "")).lower() == framework_l:
                 matched.append(value)
 
+        # Get stochastic noise
+        noise = DesignNoiseGenerator.generate()
+
         if not matched:
             return {
                 "framework": framework_l,
                 "style": "clean-modern",
                 "tokens": ["high-contrast", "clear hierarchy", "micro-interactions"],
                 "confidence": 0.4,
+                "noise": noise
             }
 
         avg = sum(float(x.get("score", 0.0)) for x in matched) / len(matched)
@@ -64,4 +69,5 @@ class DesignLearningModule:
             "style": "data-trained-modern",
             "tokens": top_labels or ["responsive", "accessible", "distinctive"],
             "confidence": round(min(0.95, 0.5 + avg * 0.5), 2),
+            "noise": noise
         }

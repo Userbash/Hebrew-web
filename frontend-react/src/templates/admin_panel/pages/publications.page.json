@@ -1,0 +1,23 @@
+{
+  "page": "admin_publications",
+  "surface": "admin_panel",
+  "goal": "Manage publication lifecycle, visibility, and ownership.",
+  "layout": "content_pipeline_board",
+  "components": [
+    "publication_filters",
+    "publication_pipeline_columns",
+    "publication_detail_preview",
+    "ownership_badges",
+    "publish_state_actions"
+  ],
+  "backend_dependencies": [
+    "/api/admin/publications",
+    "/api/publications",
+    "/api/publications/:id"
+  ],
+  "ux_rules": [
+    "Keep draft/published/private state clear.",
+    "Allow fast review without hiding metadata.",
+    "Use owner identity as a primary sorting signal."
+  ]
+}

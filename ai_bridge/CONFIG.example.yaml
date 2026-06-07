@@ -6,58 +6,22 @@ orchestrator:
   max_parallel_tasks: 5
   retry_limit: 3
   task_timeout_sec: 900
-  idle_shutdown_sec: 900
-  kpi_threshold: 0.65
-  visible_console: true
+
+orchestration:
+  enabled_by_default: true
+  ask_confirmation: false
+  default_mode: "ai_bridge"
+  auto_route_tasks: true
+  auto_start_agents: true
+  auto_retry: true
+  auto_review: true
+  auto_test: true
 
 agents:
   - id: "codex-main"
     type: "codex"
     endpoint: "local://codex"
     capabilities: ["code", "fix", "refactor"]
-    model_name: "gpt-coding-large"
-    provider: "openai"
-    critical: true
-
-  - id: "reviewer-1"
-    type: "reviewer"
-    endpoint: "http://localhost:8011"
-    capabilities: ["review", "security"]
-    model_name: "gpt-review-large"
-    provider: "openai"
-
-  - id: "tester-1"
-    type: "tester"
-    endpoint: "http://localhost:8012"
-    capabilities: ["test", "ci"]
-    model_name: "gpt-test-standard"
-    provider: "openai"
-
-  - id: "mistral-main"
-    type: "custom"
-    endpoint: "local://mistral"
-    capabilities:
-      - "code"
-      - "fix"
-      - "refactor"
-      - "docs"
-      - "test"
-    model_name: "mistral-small-or-medium"
-    provider: "mistral"
-    critical: false
-
-  - id: "antigravity-cli-main"
-    type: "custom"
-    endpoint: "local://antigravity-cli"
-    capabilities:
-      - "code"
-      - "docs"
-      - "research"
-      - "review"
-      - "test"
-    model_name: "antigravity-cli"
-    provider: "google"
-    critical: false
 
 load_balancing:
   strategy: "weighted_score"
@@ -68,183 +32,9 @@ security:
   allow_shell: true
   shell_allowlist:
     - "pytest"
-    - "npm test"
-    - "python -m pytest"
     - "ruff check"
-    - "mypy"
+    - "python -m pytest"
   block_commands:
-    - "rm -rf /"
-    - "curl | sh"
     - "sudo"
+    - "rm -rf /"
     - "chmod 777"
-
-modules:
-  agent_registry: true
-  agent_lifecycle: true
-  agent_autoscaler: true
-  model_selector: true
-  task_decomposer: true
-  task_router: true
-  load_balancer: true
-  metrics: true
-  kpi: true
-  healthcheck: true
-  result_merger: true
-  quality_analyzer: true
-  feedback_loop: true
-  user_console: true
-  orchestration_config: true
-
-models:
-  low_complexity: "local-small"
-
-  medium_complexity: "mistral-small-or-medium"
-  medium_code: "mistral-small-or-medium"
-  medium_docs: "antigravity-cli"
-  medium_research: "antigravity-cli"
-  medium_test: "mistral-small-or-medium"
-
-  high_complexity: "gpt-coding-large"
-  critical_complexity: "gpt-senior-secure"
-
-  fallback_model: "gpt-coding-standard"
-
-routing_policy:
-  prefer_non_openai_for_low_medium: true
-  prefer_local_for_low: true
-  prefer_mistral_for_medium_code: true
-  prefer_antigravity_for_docs_research: true
-  openai_only_for_high_risk: true
-  fallback_to_openai_on_failure: true
-
-openai_auto_model_routing:
-  # Enable with environment variable: AI_BRIDGE_OPENAI_AUTO_MODEL=true
-  # Models are discovered from GET /v1/models and cached locally.
-  enabled: false
-  session_token_budget: 120000
-  low_models: "gpt-5-nano,gpt-4.1-nano,gpt-4o-mini"
-  medium_models: "gpt-5-mini,gpt-4.1-mini,gpt-4o-mini"
-  high_models: "gpt-5.1-codex,gpt-5.1,gpt-5,gpt-4.1"
-  critical_models: "gpt-5.2-codex,gpt-5.2,gpt-5.2-pro,gpt-5.1"
-
-lifecycle:
-  idle_shutdown_sec: 900
-  critical_agent_types: ["planner", "codex"]
-  critical_capabilities: ["security", "orchestrator"]
-
-scheduler:
-  strategy: "hybrid_orchestrator_p2p"
-  retry_limit: 3
-  timeout_sec: 900
-  p0_p1_require_orchestrator: true
-  p2_allow_senior_agent: true
-  p3_p4_p5_allow_p2p: true
-  scoring:
-    task:
-      priority: 0.30
-      urgency: 0.20
-      business_value: 0.20
-      risk: 0.15
-      dependency_count: 0.10
-      complexity: 0.05
-    agent:
-      capability_match: 0.35
-      availability: 0.25
-      low_latency: 0.15
-      low_load: 0.15
-      success_rate: 0.10
-
-p2p:
-  enabled: true
-  requires_ack: true
-  retry_limit: 3
-  ack_timeout_sec: 30
-  allow_relay: true
-  escalate_to_orchestrator_on:
-    - retry_limit_exceeded
-    - risk_threshold_exceeded
-    - architecture_changed
-    - security_affected
-    - agent_conflict_detected
-  message_types:
-    - status_update
-    - heartbeat
-    - task_handoff
-    - request_context
-    - provide_context
-    - test_failed
-    - review_failed
-    - fix_required
-    - dependency_ready
-    - dependency_blocked
-    - agent_overloaded
-    - agent_unavailable
-    - fallback_request
-    - result_ready
-    - retry_request
-    - approval_required
-
-readiness:
-  hot_load_threshold: 0.20
-  overload_threshold: 0.85
-  cold_start_states: ["offline", "sleeping", "disabled"]
-  warm_start_states: ["standby", "starting", "warming_up"]
-
-orchestration:
-  enabled_by_default: true
-  ask_confirmation: false
-  default_mode: ai_bridge
-  auto_route_tasks: true
-  auto_start_agents: true
-  auto_retry: true
-  auto_review: true
-  auto_test: true
-
-confirmation_policy:
-  ask_for_low_risk_tasks: false
-  ask_for_medium_risk_tasks: false
-  ask_for_high_risk_tasks: true
-  ask_for_destructive_actions: true
-  ask_for_external_api_calls: true
-
-safety_guards:
-  allow_auto_code_changes: true
-  allow_auto_tests: true
-  allow_auto_docs: true
-  allow_auto_refactor: true
-  require_confirmation_for:
-    - production_deploy
-    - database_delete
-    - secret_change
-    - payment_action
-    - external_email
-    - public_api_mutation
-    - force_push
-
-external_ai_modules:
-  - id: "external-ai-main"
-    provider: "custom"
-    endpoint: "https://example.com"
-    healthcheck_path: "/health"
-    task_path: "/task"
-    auth_type: "bearer_token"
-    api_key_env: "EXTERNAL_AI_API_KEY"
-    capabilities:
-      - code
-      - review
-      - research
-    timeout_sec: 30
-    max_retries: 3
-    max_latency_ms: 3000
-    max_error_rate: 0.15
-    allow_sensitive_context: false
-    enabled: true
-
-external_ai_healthcheck:
-  enabled: true
-  interval_sec: 30
-  timeout_sec: 10
-  retry_limit: 3
-  fallback_ping_enabled: true
-  disable_after_failures: 5
-

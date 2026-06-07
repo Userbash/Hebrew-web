@@ -159,19 +159,22 @@ class TaskRouter:
     def _preferred_non_openai_group(task: Task, complexity: str, candidates: list[AgentRecord]) -> list[AgentRecord]:
         local_agents = [agent for agent in candidates if agent.provider == "local"]
         mistral_agents = [agent for agent in candidates if agent.provider == "mistral"]
-        gemini_agents = [agent for agent in candidates if agent.provider == "google"]
-        other_agents = [agent for agent in candidates if agent.provider not in {"local", "mistral", "google"}]
+        antigravity_agents = [agent for agent in candidates if agent.provider == "antigravity"]
+        other_agents = [agent for agent in candidates if agent.provider not in {"local", "mistral", "antigravity"}]
 
         if complexity == "low":
-            return local_agents or mistral_agents or gemini_agents or other_agents
+            return local_agents or mistral_agents or antigravity_agents or other_agents
 
-        if task.type in {TaskType.CODE, TaskType.FIX, TaskType.TEST}:
-            return mistral_agents or local_agents or gemini_agents or other_agents
+        if task.type in {TaskType.CODE, TaskType.REVIEW}:
+            return antigravity_agents or mistral_agents or local_agents or other_agents
 
-        if task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
-            return gemini_agents or local_agents or mistral_agents or other_agents
+        if task.type in {TaskType.FIX, TaskType.TEST}:
+            return mistral_agents or antigravity_agents or local_agents or other_agents
 
-        return mistral_agents or gemini_agents or local_agents or other_agents
+        if task.type in {TaskType.DOCS, TaskType.RESEARCH}:
+            return antigravity_agents or local_agents or mistral_agents or other_agents
+
+        return antigravity_agents or mistral_agents or local_agents or other_agents
 
     def _requires_openai_priority(self, task: Task) -> bool:
         if task.priority in {Priority.HIGH, Priority.CRITICAL}:

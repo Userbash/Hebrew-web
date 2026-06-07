@@ -5,7 +5,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 from typing import Any
 
-from .models import AckStatus, MessageAck, P2PMessage, TaskEnvelope
+from .models import AckStatus, MessageAck, P2PMessage, TaskEnvelope, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -72,15 +72,27 @@ class MessageBus:
             self.ack(message.task_id, AckStatus.RECEIVED, agent_id)
         return message
 
-    def ack(self, message_id: str, status: AckStatus, received_by: str, reason: str | None = None) -> MessageAck:
-        ack = MessageAck(message_id=message_id, ack_status=status, received_by=received_by, reason=reason)
+    def ack(self, message_id: str, status: AckStatus | TaskStatus | str, received_by: str, reason: str | None = None) -> MessageAck:
+        ack_status = self._normalize_ack_status(status)
+        ack = MessageAck(message_id=message_id, ack_status=ack_status, received_by=received_by, reason=reason)
         self._acks[message_id].append(ack)
         
-        if status in {AckStatus.RECEIVED, AckStatus.SENT, AckStatus.FAILED}:
+        if ack_status in {AckStatus.RECEIVED, AckStatus.SENT, AckStatus.FAILED, AckStatus.ACCEPTED}:
             # VFS checkpoint is assumed to have been synced and renamed prior to this call
             self._unacked.pop(message_id, None)
             
         return ack
+
+    @staticmethod
+    def _normalize_ack_status(status: AckStatus | TaskStatus | str) -> AckStatus:
+        if isinstance(status, AckStatus):
+            return status
+        raw = status.value if hasattr(status, "value") else str(status)
+        if raw in {TaskStatus.DONE.value, TaskStatus.ACCEPTED.value, "delivered"}:
+            return AckStatus.ACCEPTED
+        if raw in {TaskStatus.FAILED.value, TaskStatus.REJECTED.value}:
+            return AckStatus.FAILED
+        return AckStatus(raw)
 
     def ack_history(self, message_id: str) -> list[MessageAck]:
         return list(self._acks[message_id])

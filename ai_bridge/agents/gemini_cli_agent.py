@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from .antigravity_cli_agent import AntigravityCLIAgent
+from .antigravity_cli_agent import AntigravityCLIAgent as LegacyAntigravityCLIAgent
 
 
-class GeminiCLIAgent(AntigravityCLIAgent):
-    """Compatibility alias: Google CLI execution is now routed through Antigravity."""
+class GeminiCLIAgent(LegacyAntigravityCLIAgent):
+    """Legacy compatibility alias for older imports."""
 

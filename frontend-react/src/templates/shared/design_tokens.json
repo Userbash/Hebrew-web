@@ -1,0 +1,27 @@
+{
+  "colors": {
+    "background": "#0F172A",
+    "surface": "#F8FAFC",
+    "surfaceAlt": "#E2E8F0",
+    "text": "#0F172A",
+    "mutedText": "#475569",
+    "accent": "#8B5CF6",
+    "accentSecondary": "#06B6D4",
+    "success": "#22C55E",
+    "warning": "#F59E0B",
+    "danger": "#EF4444"
+  },
+  "radius": {
+    "sm": 8,
+    "md": 12,
+    "lg": 16
+  },
+  "spacingScale": [4, 8, 12, 16, 20, 24, 32, 40],
+  "typeScale": {
+    "hero": "32/40",
+    "h1": "24/32",
+    "h2": "20/28",
+    "body": "14/22",
+    "caption": "12/18"
+  }
+}

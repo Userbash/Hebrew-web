@@ -1,0 +1,21 @@
+{
+  "page": "admin_system",
+  "surface": "admin_panel",
+  "goal": "Present system health and bottlenecks without extra noise.",
+  "layout": "health_dashboard",
+  "components": [
+    "resource_usage_cards",
+    "database_stats_panel",
+    "disk_and_memory_chart",
+    "db_activity_state_chart",
+    "alert_banner_stack"
+  ],
+  "backend_dependencies": [
+    "/api/admin/system/metrics"
+  ],
+  "ux_rules": [
+    "Start with alert posture, then show detailed metrics.",
+    "Use sparklines or compact charts, not decorative analytics.",
+    "Warn only when metrics cross meaningful thresholds."
+  ]
+}

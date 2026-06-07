@@ -2,7 +2,7 @@ import json
 import logging
 from ai_bridge.agents.planner_agent import PlannerAgent
 from ai_bridge.agents.codex_agent import CodexAgent
-from ai_bridge.agents.gemini_cli_agent import GeminiCLIAgent
+from ai_bridge.agents.antigravity_cli_agent import AntigravityCLIAgent
 from ai_bridge.agents.mistral_agent import MistralAgent
 from ai_bridge.agents.reviewer_agent import ReviewerAgent
 from ai_bridge.agents.tester_agent import TesterAgent
@@ -17,7 +17,7 @@ def main():
     agents = [
         PlannerAgent("planner-1"),
         CodexAgent("codex-main"),
-        GeminiCLIAgent("antigravity-cli-1", security_manager),
+        AntigravityCLIAgent("antigravity-cli-1", security_manager),
         MistralAgent("mistral-1", security_manager),
         TesterAgent("tester-1"),
         ReviewerAgent("reviewer-1")

@@ -78,15 +78,20 @@ class LocalLLMBridge:
             return False
 
     def _host_probe(self) -> dict[str, Any]:
-        url = f"http://host.containers.internal:{self.ollama_port}/api/tags"
-        try:
-            with urlopen(url, timeout=5) as response:
-                payload = response.read().decode("utf-8")
-                return {"ok": True, "status_code": getattr(response, "status", 200), "body": payload, "url": url}
-        except URLError as exc:
-            return {"ok": False, "error": str(exc), "url": url}
-        except Exception as exc:
-            return {"ok": False, "error": str(exc), "url": url}
+        endpoints = [
+            f"http://host.containers.internal:{self.ollama_port}/api/tags",
+            f"http://127.0.0.1:{self.ollama_port}/api/tags",
+        ]
+        last_err = "no endpoints tried"
+        for url in endpoints:
+            try:
+                with urlopen(url, timeout=5) as response:
+                    payload = response.read().decode("utf-8")
+                    return {"ok": True, "status_code": getattr(response, "status", 200), "body": payload, "url": url}
+            except Exception as exc:
+                last_err = str(exc)
+                continue
+        return {"ok": False, "error": last_err, "url": endpoints[0]}
 
     def ensure_ready(self, model_name: str) -> bool:
         auto_provision = os.getenv("AI_BRIDGE_LOCAL_LLM_AUTO_PROVISION", "true").strip().lower() in {"1", "true", "yes", "on"}
@@ -95,6 +100,9 @@ class LocalLLMBridge:
                 logger.warning("Local LLM container '%s' does not exist; skipping autostart.", self.container_name)
                 return False
             try:
+                # Patch runner to use host bridge for deployment script
+                deploy_local_llm.run_command = lambda cmd, **kwargs: self._run(cmd, **kwargs)
+                
                 deploy_local_llm.CONTAINER_NAME = self.container_name
                 deploy_local_llm.MODEL_NAME = model_name
                 deploy_local_llm.OLLAMA_HOST = self.ollama_host
@@ -127,21 +135,34 @@ class LocalLLMBridge:
         return self.is_model_downloaded(model_name)
 
     def query(self, prompt: str, model_name: str) -> str:
-        url = f"http://host.containers.internal:{self.ollama_port}/api/generate"
-        response = requests.post(
-            url,
-            json={
-                "model": model_name,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        payload = response.json() if response.content else {}
-        if not isinstance(payload, dict):
-            raise RuntimeError("invalid local LLM response")
-        text = payload.get("response")
-        if not isinstance(text, str) or not text.strip():
-            raise RuntimeError("empty local LLM response")
-        return text.strip()
+        endpoints = [
+            f"http://host.containers.internal:{self.ollama_port}/api/generate",
+            f"http://127.0.0.1:{self.ollama_port}/api/generate",
+        ]
+        last_exc = None
+        for url in endpoints:
+            try:
+                response = requests.post(
+                    url,
+                    json={
+                        "model": model_name,
+                        "prompt": prompt,
+                        "stream": False,
+                    },
+                    timeout=60,
+                )
+                response.raise_for_status()
+                payload = response.json() if response.content else {}
+                if not isinstance(payload, dict):
+                    continue
+                text = payload.get("response")
+                if not isinstance(text, str) or not text.strip():
+                    continue
+                return text.strip()
+            except Exception as exc:
+                last_exc = exc
+                continue
+        
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("failed to query local LLM on all endpoints")

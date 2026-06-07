@@ -97,7 +97,11 @@ class TaskDecomposer:
         if not isinstance(local, dict):
             return None
         draft = local.get("decomposition")
-        return draft if isinstance(draft, dict) else None
+        if isinstance(draft, dict):
+            return draft
+        if isinstance(local.get("layers"), list):
+            return local
+        return None
 
     def _decorate(self, task: Task) -> None:
         if task.required_capability is None:

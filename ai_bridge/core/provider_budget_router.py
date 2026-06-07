@@ -22,7 +22,7 @@ class ProviderState:
 
 
 class ProviderBudgetRouter:
-    """Global provider fallback router (separate from Gemini intra-model token router)."""
+    """Global provider fallback router (separate from Antigravity intra-model token router)."""
 
     def __init__(self) -> None:
         self._session_provider_state: dict[str, dict[str, ProviderState]] = defaultdict(dict)
@@ -37,8 +37,8 @@ class ProviderBudgetRouter:
     @staticmethod
     def _normalize_provider(provider: str) -> str:
         p = provider.strip().lower()
-        if p in {"google", "antigravity", "antigravity-cli", "agy", "gemini", "gemini-cli"}:
-            return "google"
+        if p in {"antigravity", "antigravity-cli", "agy"}:
+            return "antigravity"
         return p
 
     def _state(self, task: Task, provider: str) -> ProviderState:
@@ -71,25 +71,29 @@ class ProviderBudgetRouter:
         if is_critical:
             # Security-critical uses OpenAI first when selected/available; otherwise honor the selector's ready fallback.
             if preferred == "openai":
-                base = ["openai", "google", "mistral", "local"]
+                base = ["openai", "antigravity", "mistral", "local"]
             else:
-                base = [preferred, "mistral", "google", "local", "openai"]
+                base = [preferred, "antigravity", "mistral", "local", "openai"]
         elif self.policy_mode == "strict":
-            # Strict cost-optimization: defer openai to the end for non-critical.
-            if task.type in {TaskType.CODE, TaskType.TEST, TaskType.FIX}:
-                base = [preferred, "mistral", "google", "local", "openai"]
+            # Strict cost-optimization: keep Antigravity first for code/review and Mistral second for fast fallback.
+            if task.type in {TaskType.CODE, TaskType.REVIEW}:
+                base = ["antigravity", "mistral", "local", "openai"]
+            elif task.type in {TaskType.TEST, TaskType.FIX}:
+                base = ["mistral", "antigravity", "local", "openai"]
             else:
-                base = [preferred, "google", "mistral", "local", "openai"]
-        elif self.force_antigravity and task.type in {TaskType.CODE, TaskType.TEST, TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW, TaskType.FIX}:
-            base = ["google", "mistral", "local", "openai"]
-        elif task.type in {TaskType.CODE, TaskType.TEST, TaskType.FIX}:
-            base = [preferred, "mistral", "google", "local", "openai"]
-        elif task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
-            base = [preferred, "google", "mistral", "local", "openai"]
+                base = [preferred, "antigravity", "mistral", "local", "openai"]
+        elif self.force_antigravity and task.type in {TaskType.CODE, TaskType.REVIEW, TaskType.TEST, TaskType.DOCS, TaskType.RESEARCH, TaskType.FIX}:
+            base = ["antigravity", "mistral", "local", "openai"]
+        elif task.type in {TaskType.CODE, TaskType.REVIEW}:
+            base = ["antigravity", "mistral", "local", "openai"]
+        elif task.type in {TaskType.TEST, TaskType.FIX}:
+            base = ["mistral", "antigravity", "local", "openai"]
+        elif task.type in {TaskType.DOCS, TaskType.RESEARCH}:
+            base = [preferred, "antigravity", "mistral", "local", "openai"]
         elif is_high_risk:
-            base = ["google", preferred, "mistral", "local", "openai"]
+            base = ["antigravity", preferred, "mistral", "local", "openai"]
         else:
-            base = [preferred, "google", "mistral", "local", "openai"]
+            base = [preferred, "antigravity", "mistral", "local", "openai"]
 
         seen: set[str] = set()
         ranked: list[str] = []
@@ -102,4 +106,4 @@ class ProviderBudgetRouter:
             if state.exhausted:
                 continue
             ranked.append(norm)
-        return ranked or ["google", "mistral", "local", "openai"]
+        return ranked or ["antigravity", "mistral", "local", "openai"]

@@ -1,0 +1,24 @@
+{
+  "page": "admin_access",
+  "surface": "admin_panel",
+  "goal": "Explain role hierarchy and manage access groups and assignments.",
+  "layout": "matrix_and_catalog",
+  "components": [
+    "role_hierarchy_tree",
+    "permission_matrix",
+    "role_catalog_cards",
+    "assignment_workflow_panel",
+    "sensitive_action_guardrail_banner"
+  ],
+  "backend_dependencies": [
+    "/api/admin/access/catalog",
+    "/api/admin/access/roles",
+    "/api/admin/access/roles/:roleKey/permissions",
+    "/api/admin/access/users/:userId/roles"
+  ],
+  "ux_rules": [
+    "Distinguish system roles from custom roles visually.",
+    "Permission editing must be a separate interaction from role browsing.",
+    "Show scope and blast radius before any mutation."
+  ]
+}

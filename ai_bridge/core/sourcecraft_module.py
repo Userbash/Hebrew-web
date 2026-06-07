@@ -166,7 +166,9 @@ class SourceCraftModule(KernelModule):
         return RoleProfile(
             name="sourcecraft",
             title="SourceCraft Developer Copilot",
+            description="Developer assistant role for SourceCraft flows that coordinates repository operations, PR work, and delivery hygiene.",
             summary="Developer assistant role for SourceCraft flows that coordinates repository operations, PR work, and delivery hygiene.",
+            capabilities=["sourcecraft", "repo_ops", "pr_flow", "issue_release", "governance"],
             responsibilities=[
                 "summarize repository state and worktree changes",
                 "draft and review pull requests and descriptions",

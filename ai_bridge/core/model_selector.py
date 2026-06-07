@@ -88,7 +88,7 @@ class ModelSelector:
         if not os.getenv("OPENAI_API_KEY", "").strip():
             if os.getenv("MISTRAL_API_KEY", "").strip():
                 return ModelChoice("mistral-large-latest", "mistral", complexity, secondary_review, reason=f"openai_auto_no_key_mistral_fallback:{reason}")
-            return ModelChoice("antigravity-cli", "google", complexity, secondary_review, reason=f"openai_auto_no_key_antigravity_fallback:{reason}")
+            return ModelChoice("antigravity-cli", "antigravity", complexity, secondary_review, reason=f"openai_auto_no_key_antigravity_fallback:{reason}")
         plan = self.openai_router.build_plan(task, task.input.description)
         return ModelChoice(plan.models[0], "openai", complexity, secondary_review, reason=f"openai_auto_{plan.reason}:{reason}")
 
@@ -99,16 +99,24 @@ class ModelSelector:
         if complexity == Complexity.CRITICAL:
             return self._openai_choice(task, complexity, True, "critical_risk_openai_escalation", "gpt-senior-secure")
         if complexity == Complexity.HIGH:
-            if task.type in {TaskType.PLAN, TaskType.REVIEW}:
+            if task.type == TaskType.PLAN:
                 return self._openai_choice(task, complexity, True, "high_complexity_openai_escalation", "gpt-coding-large")
-            return ModelChoice("antigravity-cli", "google", complexity, True, reason="high_reasoning_antigravity")
+            if task.type == TaskType.REVIEW:
+                return self._openai_choice(task, complexity, True, "high_review_openai_escalation", "gpt-review-large")
+            return ModelChoice("antigravity-cli", "antigravity", complexity, True, reason="high_reasoning_antigravity")
         if complexity == Complexity.LOW:
             return ModelChoice("local-small", "local", complexity, False, reason="low_simple_local_routing")
 
-        if task.type in {TaskType.CODE, TaskType.FIX, TaskType.TEST}:
-            return ModelChoice("mistral-small-or-medium", "mistral", complexity, False, reason="medium_code_fix_test_routing")
-        if task.type in {TaskType.DOCS, TaskType.RESEARCH, TaskType.REVIEW}:
-            return ModelChoice("antigravity-cli", "google", complexity, False, reason="medium_docs_research_review_antigravity_routing")
+        if task.type == TaskType.CODE:
+            if advisory_context and advisory_context.get("prefer_openai"):
+                return self._openai_choice(task, complexity, False, "medium_code_openai_selected", "gpt-coding-standard")
+            return ModelChoice("antigravity-cli", "antigravity", complexity, False, reason="medium_code_antigravity_routing")
+        if task.type == TaskType.REVIEW:
+            return self._openai_choice(task, complexity, False, "medium_review_openai_selected", "gpt-review-large")
+        if task.type in {TaskType.FIX, TaskType.TEST}:
+            return ModelChoice("antigravity-cli", "antigravity", complexity, False, reason="medium_fix_test_antigravity_routing")
+        if task.type in {TaskType.DOCS, TaskType.RESEARCH}:
+            return ModelChoice("antigravity-cli", "antigravity", complexity, False, reason="medium_docs_research_antigravity_routing")
         return ModelChoice("local-small", "local", complexity, False, reason="policy_default")
 
     def _select_strict(self, task: Task, complexity: Complexity, advisory_context: dict[str, Any] | None = None) -> ModelChoice:
@@ -120,11 +128,11 @@ class ModelSelector:
             return self._openai_choice(task, complexity, True, "critical_openai_only", "gpt-senior-secure")
         if complexity == Complexity.HIGH:
             if task.type in {TaskType.PLAN, TaskType.REVIEW}:
-                return ModelChoice("antigravity-cli", "google", complexity, True, reason="high_plan_review_antigravity")
+                return ModelChoice("antigravity-cli", "antigravity", complexity, True, reason="high_plan_review_antigravity")
             return ModelChoice("mistral-large-latest", "mistral", complexity, True, reason="high_noncritical_mistral")
         if task.type in {TaskType.CODE, TaskType.FIX, TaskType.TEST}:
             return ModelChoice("mistral-small-or-medium", "mistral", complexity, False, reason="strict_code_mistral")
-        return ModelChoice("antigravity-cli", "google", complexity, False, reason="strict_docs_research_antigravity")
+        return ModelChoice("antigravity-cli", "antigravity", complexity, False, reason="strict_docs_research_antigravity")
 
     def select(self, task: Task, advisory_context: dict[str, Any] | None = None) -> ModelChoice:
         complexity = self.classify(task)

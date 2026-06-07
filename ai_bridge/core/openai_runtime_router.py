@@ -30,7 +30,7 @@ class OpenAIRuntimeRouter:
 
     @staticmethod
     def enabled() -> bool:
-        return os.getenv("AI_BRIDGE_OPENAI_AUTO_MODEL", "false").strip().lower() in {"1", "true", "yes", "on"}
+        return os.getenv("AI_BRIDGE_OPENAI_AUTO_MODEL", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
     def _read_int(key: str, default: int) -> int:
@@ -121,7 +121,7 @@ class OpenAIRuntimeRouter:
             models, reason = self._complexity_ordered_models(task, complexity, force_refresh=first_call)
             if estimated > remaining:
                 lightweight = ["gpt-5-nano", "gpt-5-mini", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o-mini"]
-                models = self._dedupe([model for model in lightweight if model in models] + lightweight)
+                models = self._dedupe(lightweight + models)
                 reason = "budget_guard_lightweight"
 
         blocked = self._session_blocked_models.get(session_id, set())

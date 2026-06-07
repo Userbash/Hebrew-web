@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -368,6 +369,14 @@ class APIBridgeModule:
     def _run_server(self) -> None:
         app = FastAPI(title="AI Orchestrator Kernel API")
 
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
         @app.get("/health")
         async def health_endpoint():
             return {"status": "ok"}
@@ -471,7 +480,9 @@ class APIBridgeModule:
             return await self._chat_payload(request, source_label=source_label, provider_label=provider_label)
 
         async def _chat_websocket_handler(websocket: WebSocket):
-            await websocket.accept(subprotocol="chat.json")
+            requested_subprotocols = websocket.headers.get("sec-websocket-protocol", "").split(",")
+            subprotocol = "chat.json" if "chat.json" in [s.strip() for s in requested_subprotocols] else None
+            await websocket.accept(subprotocol=subprotocol)
             try:
                 while True:
                     data = await websocket.receive_json()

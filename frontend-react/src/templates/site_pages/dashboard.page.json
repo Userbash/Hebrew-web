@@ -1,0 +1,29 @@
+{
+  "page": "dashboard",
+  "surface": "main_app",
+  "goal": "Show learning progress, system status, and next actions.",
+  "layout": "two_column_overview",
+  "hero": {
+    "title": "Continue learning without losing system context",
+    "subtitle": "One glance for progress, one action to continue, one panel for status."
+  },
+  "components": [
+    "hero_status_band",
+    "continue_lesson_card",
+    "progress_stats_grid",
+    "recent_activity_timeline",
+    "environment_health_panel"
+  ],
+  "backend_dependencies": [
+    "/api/auth/me",
+    "/api/users/profile",
+    "/api/users/preferences",
+    "/api/progress",
+    "/api/system/health"
+  ],
+  "ux_rules": [
+    "Primary action is resume/continue.",
+    "Progress cards must be compact and readable at a glance.",
+    "Show environment issues only when relevant."
+  ]
+}

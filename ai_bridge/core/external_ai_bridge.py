@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover
     stop_after_attempt = None  # type: ignore
     wait_exponential_jitter = None  # type: ignore
 
-from ai_bridge.core.gemini_runtime_router import GeminiRuntimeRouter
+from ai_bridge.core.gemini_runtime_router import AntigravityRuntimeRouter
 from ai_bridge.core.host_bridge import HostBridge
 from ai_bridge.core.models import Task
 
@@ -34,7 +34,7 @@ class BridgeExecResult:
 class ExternalAIBridge:
     def __init__(self, host_bridge: HostBridge | None = None) -> None:
         self.host_bridge = host_bridge
-        self.router = GeminiRuntimeRouter()
+        self.router = AntigravityRuntimeRouter()
 
     @staticmethod
     def resolve_antigravity_cli_command() -> list[str] | None:
@@ -52,6 +52,7 @@ class ExternalAIBridge:
 
     @staticmethod
     def resolve_gemini_cli_command() -> list[str] | None:
+        # Legacy compatibility path retained for older call sites.
         return ExternalAIBridge.resolve_antigravity_cli_command()
 
     @staticmethod
@@ -63,13 +64,14 @@ class ExternalAIBridge:
             current_path = env.get("PATH", "")
             if local_bin and local_bin not in current_path.split(os.pathsep):
                 env["PATH"] = f"{local_bin}{os.pathsep}{current_path}" if current_path else local_bin
-        gemini_key = env.get("GEMINI_API_KEY", "").strip()
-        if gemini_key and not env.get("GOOGLE_API_KEY", "").strip():
-            env["GOOGLE_API_KEY"] = gemini_key
+        antigravity_key = env.get("GEMINI_API_KEY", "").strip()
+        if antigravity_key and not env.get("GOOGLE_API_KEY", "").strip():
+            env["GOOGLE_API_KEY"] = antigravity_key
         return env
 
     @staticmethod
     def _gemini_runtime_env() -> dict[str, str]:
+        # Legacy compatibility path retained for older call sites.
         return ExternalAIBridge._antigravity_runtime_env()
 
     @staticmethod
@@ -102,7 +104,7 @@ class ExternalAIBridge:
     @staticmethod
     def antigravity_auth_diagnostics() -> dict[str, object]:
         home = os.getenv("HOME", "")
-        app_dir = os.path.join(home, ".gemini", "antigravity-cli") if home else ""
+        app_dir = os.path.join(home, ".antigravity", "antigravity-cli") if home else ""
         settings = os.path.join(app_dir, "settings.json") if app_dir else ""
         return {
             "app_data_dir_present": bool(app_dir and os.path.isdir(app_dir)),
@@ -158,17 +160,12 @@ class ExternalAIBridge:
                 if self.host_bridge is not None:
                     try:
                         res = self.host_bridge.execute(cmd, timeout=timeout_sec, capture_output=True, text=True, check=False)
-                        # If command not found on host (exit code 1 from flatpak-spawn or 127 from shell), fallback to local
-                        # We also check for 'npx' or command name in stderr if it failed
-                        if res.returncode in (1, 127):
-                            stderr = (res.stderr or "").lower()
-                            # Common error markers for missing binary
-                            if any(marker in stderr for marker in ["нет такого файла", "no such file", "not found", "failed to start command"]):
-                                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env(), cwd=repo_path)
+                        if res.returncode in (1, 127) and any(marker in (res.stderr or "").lower() for marker in ["нет такого файла", "no such file", "not found", "failed to start command"]):
+                            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._antigravity_runtime_env(), cwd=repo_path)
                         return res
                     except Exception:
-                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env(), cwd=repo_path)
-                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._gemini_runtime_env(), cwd=repo_path)
+                        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._antigravity_runtime_env(), cwd=repo_path)
+                return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_sec, env=self._antigravity_runtime_env(), cwd=repo_path)
 
             if Retrying is not None:
                 try:
@@ -238,4 +235,5 @@ class ExternalAIBridge:
         return BridgeExecResult(False, "", f"routing_exhausted: {last_error}", "antigravity-cli", plan.models[-1], attempts, error_type=self.classify_error(last_error))
 
     def run_gemini_cli(self, task: Task, prompt: str, timeout_sec: int = 120) -> BridgeExecResult:
+        # Legacy compatibility path retained for older call sites.
         return self.run_antigravity_cli(task, prompt, timeout_sec=timeout_sec)

@@ -1,0 +1,21 @@
+{
+  "page": "admin_audit",
+  "surface": "admin_panel",
+  "goal": "Track who changed what, when, and with which outcome.",
+  "layout": "timeline_plus_map",
+  "components": [
+    "audit_summary_cards",
+    "mutation_timeline",
+    "actor_target_map",
+    "audit_event_table",
+    "event_metadata_drawer"
+  ],
+  "backend_dependencies": [
+    "/api/admin/audit/events"
+  ],
+  "ux_rules": [
+    "Default to chronological truth.",
+    "Keep actor, target, and action visible at table level.",
+    "Show outcome and duration as first-class fields."
+  ]
+}
