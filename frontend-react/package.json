@@ -6,7 +6,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "^4.3.0",
+    "@tailwindcss/postcss": "^4.3.2",
     "axios": "latest",
     "lucide-react": "latest",
     "react": "latest",
